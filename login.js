@@ -1,44 +1,13 @@
 import { People } from "./db.js";
-import { setSessionPersonId, isSiteUnlocked, tryUnlockSite } from "./session.js";
+import { setSessionPersonId } from "./session.js";
 
 let people = [];
 let selectedPersonId = null;
-
-const passwordGate = document.getElementById("passwordGate");
-const personSection = document.getElementById("personSection");
-const sitePassword = document.getElementById("sitePassword");
-const passwordError = document.getElementById("passwordError");
-const unlockBtn = document.getElementById("unlockBtn");
 
 const personCardsEl = document.getElementById("personCards");
 const personCardsEmpty = document.getElementById("personCardsEmpty");
 const loginAction = document.getElementById("loginAction");
 const loginName = document.getElementById("loginName");
-
-function showPersonSection() {
-  passwordGate.style.display = "none";
-  personSection.style.display = "block";
-}
-
-if (isSiteUnlocked()) {
-  showPersonSection();
-} else {
-  sitePassword.focus();
-}
-
-function attemptUnlock() {
-  if (tryUnlockSite(sitePassword.value)) {
-    passwordError.style.display = "none";
-    showPersonSection();
-  } else {
-    passwordError.style.display = "block";
-  }
-}
-
-unlockBtn.addEventListener("click", attemptUnlock);
-sitePassword.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") attemptUnlock();
-});
 
 People.listen((data) => {
   people = data;
