@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Place Builders</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <img src="Place%20Builder%20Logo.png" alt="Place Builders" class="login-logo" />
+    <p>Select your name to continue</p>
+
+    <div id="personCards" class="project-card-row login-cards"></div>
+    <div id="personCardsEmpty" class="empty" style="display:none;">No people set up yet — add your team in Admin.</div>
+
+    <div id="loginAction" style="display:none;">
+      <button id="loginBtn" class="login-btn">Log In as <span id="loginName"></span></button>
+    </div>
+  </div>
+
+<script type="module" src="login.js"></script>
+</body>
+</html>

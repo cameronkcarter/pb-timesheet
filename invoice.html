@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Invoices — Place Builders</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<nav>
+  <a href="index.html" class="brand">Place Builders</a>
+  <a href="dashboard.html">Dashboard</a>
+  <a href="timesheet.html">Timesheet</a>
+  <a href="admin.html">Admin</a>
+  <a href="invoice.html" class="active">Invoices</a>
+  <a href="#" id="logoutLink" style="margin-left:auto;">Log Out</a>
+</nav>
+
+<main>
+  <h1>Invoices</h1>
+
+  <div class="card">
+    <h2>Project</h2>
+    <div id="projectCards" class="project-card-row"></div>
+    <div id="projectCardsEmpty" class="empty" style="display:none;">No projects yet — add one in Admin.</div>
+  </div>
+
+  <div class="card" id="monthCard" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <button id="prevMonth" class="secondary small">&larr; Prev month</button>
+      <h2 id="monthLabel" style="margin:0;"></h2>
+      <button id="nextMonth" class="secondary small">Next month &rarr;</button>
+    </div>
+
+    <table id="laborTable" style="margin-top:16px;">
+      <thead><tr><th>Person</th><th>Hours</th><th>Rate</th><th>Total</th></tr></thead>
+      <tbody></tbody>
+      <tfoot><tr><td>Total</td><td></td><td></td><td id="laborGrandTotal">$0.00</td></tr></tfoot>
+    </table>
+    <div id="laborEmpty" class="empty" style="display:none;">No uninvoiced hours for this project in this month.</div>
+
+    <div class="row-actions" style="margin-top:16px;">
+      <button id="previewInvoice" class="secondary" disabled>Preview PDF (Test)</button>
+      <button id="generateInvoice" disabled>Generate Invoice</button>
+    </div>
+  </div>
+
+  <div class="card" id="historyCard" style="display:none;">
+    <h2>Previous Invoices</h2>
+    <table id="historyTable">
+      <thead><tr><th>Period</th><th>Invoice #</th><th>Date</th><th>Total</th><th>Status</th><th style="width:160px;"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="historyEmpty" class="empty" style="display:none;">No invoices generated for this project yet.</div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script type="module" src="invoice.js"></script>
+</body>
+</html>

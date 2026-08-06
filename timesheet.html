@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Timesheet — Place Builders</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<nav>
+  <a href="index.html" class="brand">Place Builders</a>
+  <a href="dashboard.html">Dashboard</a>
+  <a href="timesheet.html" class="active">Timesheet</a>
+  <a href="admin.html" id="navAdminLink" style="display:none;">Admin</a>
+  <a href="invoice.html" id="navInvoiceLink" style="display:none;">Invoices</a>
+  <a href="#" id="logoutLink" style="margin-left:auto;">Log Out</a>
+</nav>
+
+<main>
+  <h1>Log Hours</h1>
+
+  <div class="card" id="projectCardSection">
+    <h2>Project</h2>
+    <div id="projectCards" class="project-card-row"></div>
+    <div id="projectCardsEmpty" class="empty" style="display:none;">No projects assigned to you yet.</div>
+  </div>
+
+  <div class="card" id="weekCard" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <button id="prevWeek" class="secondary small">&larr; Prev week</button>
+      <h2 id="weekRangeLabel" style="margin:0;"></h2>
+      <button id="nextWeek" class="secondary small">Next week &rarr;</button>
+    </div>
+
+    <div class="stat-row" style="margin-top:16px;">
+      <div class="stat">
+        <div class="label">Logged this week</div>
+        <div class="value" id="weekLoggedHours">0</div>
+      </div>
+      <div class="stat">
+        <div class="label" id="monthLabel">Logged this month</div>
+        <div class="value" id="monthLoggedHours">0</div>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table id="weekGridTable">
+        <thead>
+          <tr id="taskHeaderRow"></tr>
+        </thead>
+        <tbody id="weekGridBody"></tbody>
+        <tfoot>
+          <tr id="taskTotalRow"></tr>
+        </tfoot>
+      </table>
+    </div>
+    <div id="weekGridEmpty" class="empty" style="display:none;">You're not assigned to any tasks on this project yet.</div>
+
+    <button id="saveWeek">Save Week</button>
+  </div>
+
+  <div class="card">
+    <h2>Your Recent Entries</h2>
+    <table id="entriesTable">
+      <thead>
+        <tr><th>Date</th><th>Project</th><th>Task</th><th>Hours</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div id="entriesEmpty" class="empty" style="display:none;">No entries logged yet.</div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module" src="timesheet.js"></script>
+</body>
+</html>
