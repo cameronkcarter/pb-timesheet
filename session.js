@@ -1,4 +1,6 @@
 const KEY = "pb_session_person_id";
+const SITE_KEY = "pb_site_unlocked";
+const SITE_PASSWORD = "placebuilders";
 
 export function getSessionPersonId() {
   return localStorage.getItem(KEY);
@@ -12,9 +14,23 @@ export function clearSession() {
   localStorage.removeItem(KEY);
 }
 
+export function isSiteUnlocked() {
+  return localStorage.getItem(SITE_KEY) === "true";
+}
+
+export function tryUnlockSite(password) {
+  if (password !== SITE_PASSWORD) return false;
+  localStorage.setItem(SITE_KEY, "true");
+  return true;
+}
+
 // Call at the top of any page that requires someone to be logged in.
 // Redirects to the login page and returns null if no one is logged in.
 export function requireSession() {
+  if (!isSiteUnlocked()) {
+    window.location.href = "index.html";
+    return null;
+  }
   const id = getSessionPersonId();
   if (!id) {
     window.location.href = "index.html";

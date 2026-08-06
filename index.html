@@ -9,13 +9,23 @@
 <body class="login-page">
   <div class="login-card">
     <img src="Place%20Builder%20Logo.png" alt="Place Builders" class="login-logo" />
-    <p>Select your name to continue</p>
 
-    <div id="personCards" class="project-card-row login-cards"></div>
-    <div id="personCardsEmpty" class="empty" style="display:none;">No people set up yet — add your team in Admin.</div>
+    <div id="passwordGate">
+      <p>Enter the site password to continue</p>
+      <input type="password" id="sitePassword" placeholder="Password" style="text-align:center;" />
+      <div id="passwordError" style="display:none; color:var(--red); font-size:13px; margin-top:8px;">Incorrect password.</div>
+      <button id="unlockBtn" class="login-btn">Continue</button>
+    </div>
 
-    <div id="loginAction" style="display:none;">
-      <button id="loginBtn" class="login-btn">Log In as <span id="loginName"></span></button>
+    <div id="personSection" style="display:none;">
+      <p>Select your name to continue</p>
+
+      <div id="personCards" class="project-card-row login-cards"></div>
+      <div id="personCardsEmpty" class="empty" style="display:none;">No people set up yet — add your team in Admin.</div>
+
+      <div id="loginAction" style="display:none;">
+        <button id="loginBtn" class="login-btn">Log In as <span id="loginName"></span></button>
+      </div>
     </div>
   </div>
 
