@@ -266,7 +266,6 @@ async function buildPdf(data) {
   billLines.forEach((line, i) => doc.text(line, marginX, y + i * 5));
 
   const detailsLabelX = marginX + 100;
-  const detailsValueX = detailsLabelX + 12;
   const details = [
     ["Inv. #", data.invoiceNumber],
     ["Date", formatShortMDY(data.invoiceDate)],
@@ -276,6 +275,9 @@ async function buildPdf(data) {
   if (data.project.projectNumber) {
     details.push(["Project #", data.project.projectNumber]);
   }
+  doc.setFont(undefined, "bold");
+  const maxLabelWidth = Math.max(...details.map(([label]) => doc.getTextWidth(label)));
+  const detailsValueX = detailsLabelX + maxLabelWidth + 3;
   details.forEach(([label, value], i) => {
     doc.setFont(undefined, "bold");
     doc.text(label, detailsLabelX, y + i * 5);
