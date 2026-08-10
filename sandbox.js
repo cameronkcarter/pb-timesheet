@@ -56,8 +56,11 @@ export function listenTest(name, cb, orderByField) {
   const entry = { cb, orderByField };
   listeners[name].push(entry);
 
-  cb(sortItems(readData(name), orderByField));
-  seedIfNeeded(name).then(() => notifyAll(name));
+  if (sessionStorage.getItem(seededKey(name))) {
+    cb(sortItems(readData(name), orderByField));
+  } else {
+    seedIfNeeded(name).then(() => notifyAll(name));
+  }
 
   return () => {
     listeners[name] = listeners[name].filter((l) => l !== entry);

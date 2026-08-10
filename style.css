@@ -646,6 +646,10 @@ body.login-page {
 
 #loginAction {
   margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
 }
 
 .login-btn {
@@ -665,18 +669,9 @@ body.login-page {
 }
 
 .login-btn.test-btn {
-  background: transparent;
-  color: var(--navy);
-  border: 1px solid var(--navy);
-  margin-left: 10px;
+  background: var(--accent);
 }
 
 .login-btn.test-btn:hover {
-  background: #f5eef8;
-}
-
-.test-btn-hint {
-  color: var(--text-muted);
-  font-size: 12px;
-  margin: 10px 0 0;
+  background: #c47a2c;
 }

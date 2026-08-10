@@ -29,6 +29,11 @@ export function getSessionPersonId() {
 }
 
 export function setSessionPersonId(id) {
+  // A real login must always fully exit test mode, even if a previous test
+  // session in this tab was left active without logging out first.
+  sessionStorage.removeItem(TEST_ACTIVE_KEY);
+  sessionStorage.removeItem(TEST_PERSON_KEY);
+  clearTestSandboxData();
   localStorage.setItem(KEY, id);
 }
 

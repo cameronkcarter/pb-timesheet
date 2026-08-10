@@ -34,7 +34,7 @@ personCardsEl.addEventListener("click", (e) => {
   selectedPersonId = card.dataset.personCard;
   const person = people.find((p) => p.id === selectedPersonId);
   loginName.textContent = person ? person.name : "";
-  loginAction.style.display = "block";
+  loginAction.style.display = "flex";
   render();
 });
 
