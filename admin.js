@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import { formatCurrency, formatDate, dueLabel, showToast } from "./util.js";
-import { requireSession, clearSession, enforceAdmin } from "./session.js";
+import { requireSession, wireLogout, enforceAdmin } from "./session.js";
 
 const sessionPersonId = requireSession();
 
@@ -20,11 +20,7 @@ let selectedProjectId = null;
 let modalEditingProjectId = null;
 let pendingTaskDeletions = new Set();
 
-document.getElementById("logoutLink").addEventListener("click", (e) => {
-  e.preventDefault();
-  clearSession();
-  window.location.href = "index.html";
-});
+wireLogout("logoutLink", "navBrandLink");
 
 if (sessionPersonId) {
   People.listen((d) => {

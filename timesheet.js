@@ -3,7 +3,7 @@ import {
   formatDate, formatShortDate, formatWeekday,
   todayISO, toISODate, getWeekStart, addDays, suggestedWeeklyHours, showToast,
 } from "./util.js";
-import { requireSession, clearSession, applyAdminNavVisibility } from "./session.js";
+import { requireSession, wireLogout, applyAdminNavVisibility } from "./session.js";
 
 const selectedPersonId = requireSession();
 
@@ -32,11 +32,7 @@ const weekGridEmpty = document.getElementById("weekGridEmpty");
 const tbody = document.querySelector("#entriesTable tbody");
 const entriesEmpty = document.getElementById("entriesEmpty");
 
-document.getElementById("logoutLink").addEventListener("click", (e) => {
-  e.preventDefault();
-  clearSession();
-  window.location.href = "index.html";
-});
+wireLogout("logoutLink", "navBrandLink");
 
 if (selectedPersonId) {
   People.listen((data) => {

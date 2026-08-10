@@ -1,5 +1,5 @@
 import { People, Projects, Tasks, TimeEntries, Invoices } from "./db.js";
-import { requireSession, clearSession, enforceAdmin } from "./session.js";
+import { requireSession, wireLogout, enforceAdmin } from "./session.js";
 import {
   formatCurrency, formatDate, daysAgo, showToast,
   firstOfMonth, addMonths, lastDayOfMonth, monthKey,
@@ -43,11 +43,7 @@ const historyCard = document.getElementById("historyCard");
 const historyTbody = document.querySelector("#historyTable tbody");
 const historyEmpty = document.getElementById("historyEmpty");
 
-document.getElementById("logoutLink").addEventListener("click", (e) => {
-  e.preventDefault();
-  clearSession();
-  window.location.href = "index.html";
-});
+wireLogout("logoutLink", "navBrandLink");
 
 if (sessionPersonId) {
   People.listen((d) => {

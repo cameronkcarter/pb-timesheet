@@ -3,7 +3,7 @@ import {
   formatCurrency, formatDate, daysAgo, dueLabel,
   todayISO, toISODate, getWeekStart, addDays, monthKey,
 } from "./util.js";
-import { requireSession, clearSession, applyAdminNavVisibility } from "./session.js";
+import { requireSession, wireLogout, applyAdminNavVisibility } from "./session.js";
 
 const selectedPersonId = requireSession();
 
@@ -19,11 +19,7 @@ const projectSummaryCards = document.getElementById("projectSummaryCards");
 const dueDatesTbody = document.querySelector("#dueDatesTable tbody");
 const dueDatesEmpty = document.getElementById("dueDatesEmpty");
 
-document.getElementById("logoutLink").addEventListener("click", (e) => {
-  e.preventDefault();
-  clearSession();
-  window.location.href = "index.html";
-});
+wireLogout("logoutLink", "navBrandLink");
 
 if (selectedPersonId) {
   People.listen((d) => {

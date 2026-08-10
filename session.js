@@ -37,6 +37,21 @@ export function setSessionPersonId(id) {
   localStorage.setItem(KEY, id);
 }
 
+// Wires up any elements that should act as a logout button (e.g. the
+// "Log Out" link and the brand/logo link, since people often click that
+// to get back to the login screen instead of the explicit logout link).
+export function wireLogout(...ids) {
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      clearSession();
+      window.location.href = "index.html";
+    });
+  });
+}
+
 export function clearSession() {
   localStorage.removeItem(KEY);
   sessionStorage.removeItem(TEST_ACTIVE_KEY);
