@@ -1,5 +1,5 @@
 import { People } from "./db.js";
-import { setSessionPersonId } from "./session.js";
+import { setSessionPersonId, startTestSession } from "./session.js";
 
 let people = [];
 let selectedPersonId = null;
@@ -41,5 +41,11 @@ personCardsEl.addEventListener("click", (e) => {
 document.getElementById("loginBtn").addEventListener("click", () => {
   if (!selectedPersonId) return;
   setSessionPersonId(selectedPersonId);
+  window.location.href = "dashboard.html";
+});
+
+document.getElementById("testLoginBtn").addEventListener("click", () => {
+  if (!selectedPersonId) return;
+  startTestSession(selectedPersonId);
   window.location.href = "dashboard.html";
 });

@@ -11,8 +11,18 @@ import {
   writeBatch,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { isTestMode } from "./session.js";
+import {
+  listenTest,
+  addTest,
+  updateTest,
+  removeTest,
+  markInvoicedTest,
+  markPaidTest,
+} from "./sandbox.js";
 
 function listenCollection(name, callback, orderByField) {
+  if (isTestMode()) return listenTest(name, callback, orderByField);
   const ref = collection(db, name);
   const q = orderByField ? query(ref, orderBy(orderByField)) : ref;
   return onSnapshot(q, (snap) => {
@@ -21,18 +31,22 @@ function listenCollection(name, callback, orderByField) {
 }
 
 function add(name, data) {
+  if (isTestMode()) return addTest(name, { ...data, createdAt: new Date().toISOString() });
   return addDoc(collection(db, name), { ...data, createdAt: serverTimestamp() });
 }
 
 function update(name, id, data) {
+  if (isTestMode()) return updateTest(name, id, data);
   return updateDoc(doc(db, name, id), data);
 }
 
 function remove(name, id) {
+  if (isTestMode()) return removeTest(name, id);
   return deleteDoc(doc(db, name, id));
 }
 
 async function markInvoiced(ids, invoiceId) {
+  if (isTestMode()) return markInvoicedTest(ids, invoiceId);
   const batch = writeBatch(db);
   const invoicedDate = new Date().toISOString();
   ids.forEach((id) => {
@@ -42,6 +56,7 @@ async function markInvoiced(ids, invoiceId) {
 }
 
 async function markPaid(ids) {
+  if (isTestMode()) return markPaidTest(ids);
   const batch = writeBatch(db);
   const paidDate = new Date().toISOString();
   ids.forEach((id) => {

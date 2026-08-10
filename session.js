@@ -1,6 +1,30 @@
 const KEY = "pb_session_person_id";
+const TEST_ACTIVE_KEY = "pb_test_active";
+const TEST_PERSON_KEY = "pb_test_person_id";
+
+function clearTestSandboxData() {
+  Object.keys(sessionStorage).forEach((k) => {
+    if (k.startsWith("pb_test_data_") || k.startsWith("pb_test_seeded_")) {
+      sessionStorage.removeItem(k);
+    }
+  });
+}
+
+export function isTestMode() {
+  return sessionStorage.getItem(TEST_ACTIVE_KEY) === "true";
+}
+
+// Starts a fresh test session for the given person. Test data lives only in
+// sessionStorage (this tab only) and is wiped every time a new test session
+// starts, so nothing carries over between tries.
+export function startTestSession(personId) {
+  clearTestSandboxData();
+  sessionStorage.setItem(TEST_ACTIVE_KEY, "true");
+  sessionStorage.setItem(TEST_PERSON_KEY, personId);
+}
 
 export function getSessionPersonId() {
+  if (isTestMode()) return sessionStorage.getItem(TEST_PERSON_KEY);
   return localStorage.getItem(KEY);
 }
 
@@ -10,6 +34,19 @@ export function setSessionPersonId(id) {
 
 export function clearSession() {
   localStorage.removeItem(KEY);
+  sessionStorage.removeItem(TEST_ACTIVE_KEY);
+  sessionStorage.removeItem(TEST_PERSON_KEY);
+  clearTestSandboxData();
+}
+
+function renderTestModeBanner() {
+  if (!isTestMode() || document.getElementById("testModeBanner")) return;
+  const banner = document.createElement("div");
+  banner.id = "testModeBanner";
+  banner.textContent = "TEST MODE — nothing you do here is saved. Log out to exit.";
+  banner.style.cssText =
+    "background:#d98936;color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;letter-spacing:0.2px;";
+  document.body.insertBefore(banner, document.body.firstChild);
 }
 
 // Call at the top of any page that requires someone to be logged in.
@@ -20,6 +57,7 @@ export function requireSession() {
     window.location.href = "index.html";
     return null;
   }
+  renderTestModeBanner();
   return id;
 }
 

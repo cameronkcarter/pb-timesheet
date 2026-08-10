@@ -663,3 +663,20 @@ body.login-page {
 .login-btn:hover {
   background: var(--navy-light);
 }
+
+.login-btn.test-btn {
+  background: transparent;
+  color: var(--navy);
+  border: 1px solid var(--navy);
+  margin-left: 10px;
+}
+
+.login-btn.test-btn:hover {
+  background: #f5eef8;
+}
+
+.test-btn-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 10px 0 0;
+}
