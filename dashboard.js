@@ -113,16 +113,11 @@ function render() {
       const remaining = (a.capValue || 0) - used;
       const pct = a.capValue > 0 ? Math.min(100, (used / a.capValue) * 100) : 0;
       const over = used > a.capValue;
-      const usedLabel = `${formatCurrency(used)} / ${formatCurrency(a.capValue)}`;
-      const remainingLabel = `${formatCurrency(remaining)} remaining`;
-      return `<tr>
-        <td>${task ? task.name : "—"}</td>
-        <td>${usedLabel}</td>
-        <td>
-          <div class="progress-bar"><div class="fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
-          <div class="empty" style="padding:2px 0 0;">${remainingLabel}</div>
-        </td>
-      </tr>`;
+      return `<div class="task-progress-row">
+        <div class="task-progress-name">${task ? task.name : "—"}</div>
+        <div class="progress-bar"><div class="fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
+        <div class="empty" style="padding-top:2px;">${formatCurrency(used)} spent &middot; ${formatCurrency(remaining)} remaining</div>
+      </div>`;
     }).join("");
 
     const totalPct = totalAssigned > 0 ? Math.min(100, (totalEarned / totalAssigned) * 100) : 0;
@@ -137,14 +132,10 @@ function render() {
       ${taskRows ? `
         <div style="margin-top:12px;">
           <div class="summary-label">Overall Progress</div>
-          <div class="summary-value">${formatCurrency(totalEarned)} / ${formatCurrency(totalAssigned)}</div>
-          <div class="progress-bar large"><div class="fill ${totalOver ? "over" : ""}" style="width:${totalPct}%"></div></div>
-          <div class="empty" style="padding-top:4px;">${formatCurrency(totalRemaining)} remaining</div>
+          <div class="progress-bar large" style="margin-top:6px;"><div class="fill ${totalOver ? "over" : ""}" style="width:${totalPct}%"></div></div>
+          <div class="empty" style="padding-top:4px;">${formatCurrency(totalEarned)} spent &middot; ${formatCurrency(totalRemaining)} remaining</div>
         </div>
-        <table style="margin-top:14px;">
-          <thead><tr><th>Task</th><th>Earned / Assigned</th><th>Remaining</th></tr></thead>
-          <tbody>${taskRows}</tbody>
-        </table>` : '<div class="empty">No hour assignment set for this project.</div>'}
+        <div style="margin-top:16px;">${taskRows}</div>` : '<div class="empty">No hour assignment set for this project.</div>'}
     </div>`;
   }).join("");
 }

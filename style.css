@@ -293,6 +293,20 @@ th {
   margin-top: 2px;
 }
 
+.task-progress-row {
+  margin-bottom: 14px;
+}
+
+.task-progress-row:last-child {
+  margin-bottom: 0;
+}
+
+.task-progress-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
 .pill {
   display: inline-block;
   padding: 2px 9px;
