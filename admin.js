@@ -1,5 +1,5 @@
-import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
-import { formatCurrency, formatDate, dueLabel, showToast } from "./util.js";
+import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
+import { formatCurrency, formatDate, showToast } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin } from "./session.js";
 
 const sessionPersonId = requireSession();
@@ -9,11 +9,9 @@ let projects = [];
 let tasks = [];
 let assignments = [];
 let timeEntries = [];
-let dueDates = [];
 let adminCheckDone = false;
 
 let editingAssignmentId = null;
-let editingDueDateId = null;
 let modalEditingPersonId = null;
 let expandedTaskId = null;
 let selectedProjectId = null;
@@ -32,14 +30,12 @@ if (sessionPersonId) {
     }
     renderPeople();
     renderTasks();
-    renderDueDates();
     renderPendingApproval();
   });
   Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); });
   Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
   Assignments.listen((d) => { assignments = d; renderTasks(); });
   TimeEntries.listen((d) => { timeEntries = d; renderTasks(); renderPendingApproval(); });
-  DueDates.listen((d) => { dueDates = d; renderDueDates(); });
 }
 
 function esc(str) {
@@ -173,7 +169,6 @@ function renderProjectCards() {
   tasksSection.style.display = "block";
   selectedProjectHeading.textContent = selected ? selected.name : "";
   renderTasks();
-  renderDueDates();
 }
 
 projectCardsEl.addEventListener("click", async (e) => {
@@ -184,7 +179,6 @@ projectCardsEl.addEventListener("click", async (e) => {
     if (card) {
       selectedProjectId = card.dataset.projectCard;
       expandedTaskId = null;
-      editingDueDateId = null;
       renderProjectCards();
     }
     return;
@@ -480,136 +474,6 @@ tasksTbody.addEventListener("click", async (e) => {
       await Assignments.add({ projectId, taskId, personId, capValue });
       showToast("Assigned.");
     } catch (err) { showToast("Error: " + err.message); }
-  }
-});
-
-// ---------- Due Dates (table + modal) ----------
-const dueDatesTbody = document.querySelector("#dueDatesTable tbody");
-const dueDatesEmpty = document.getElementById("dueDatesEmpty");
-
-const dueDateModal = document.getElementById("dueDateModal");
-const dueDateModalTitle = document.getElementById("dueDateModalTitle");
-const modalDueDateRows = document.getElementById("modalDueDateRows");
-const modalAddDueDateRow = document.getElementById("modalAddDueDateRow");
-
-function renderDueDates() {
-  const projectDueDates = dueDates
-    .filter((d) => d.projectId === selectedProjectId)
-    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
-
-  if (projectDueDates.length === 0) {
-    dueDatesTbody.innerHTML = "";
-    dueDatesEmpty.style.display = "block";
-    return;
-  }
-  dueDatesEmpty.style.display = "none";
-
-  dueDatesTbody.innerHTML = projectDueDates.map((d) => {
-    const names = (d.personIds || []).map((id) => people.find((p) => p.id === id)?.name).filter(Boolean);
-    return `<tr>
-      <td>${d.title}</td>
-      <td>${names.length > 0 ? names.join(", ") : "Unassigned"}</td>
-      <td>${formatDate(d.dueDate)} <span class="empty">(${dueLabel(d.dueDate)})</span></td>
-      <td class="row-actions">
-        <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
-        <button class="danger small" data-action="remove-duedate" data-id="${d.id}">Remove</button>
-      </td>
-    </tr>`;
-  }).join("");
-}
-
-dueDatesTbody.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
-  const { action, id } = btn.dataset;
-
-  if (action === "edit-duedate") {
-    const d = dueDates.find((dd) => dd.id === id);
-    openDueDateModal(d);
-  }
-  if (action === "remove-duedate") {
-    if (!confirm("Remove this due date?")) return;
-    try { await DueDates.remove(id); } catch (err) { showToast("Error: " + err.message); }
-  }
-});
-
-function dueDateRowHtml(title, dueDate, personIds) {
-  const checked = personIds || [];
-  return `<div class="modal-duedate-row">
-    <div class="modal-duedate-row-main">
-      <input type="text" class="ddTitle" placeholder="Community Workshop" value="${esc(title || "")}" />
-      <input type="date" class="ddDate" value="${dueDate || ""}" />
-      <button type="button" class="danger small removeDueDateRow">&times;</button>
-    </div>
-    <div class="dd-people-pills">
-      ${people.map((p) => `<label>
-        <input type="checkbox" class="ddPerson" value="${p.id}" ${checked.includes(p.id) ? "checked" : ""} />
-        ${p.name}
-      </label>`).join("")}
-    </div>
-  </div>`;
-}
-
-function openDueDateModal(dueDateRecord) {
-  editingDueDateId = dueDateRecord ? dueDateRecord.id : null;
-  dueDateModalTitle.textContent = dueDateRecord ? "Edit Due Date" : "Add Due Dates";
-  modalAddDueDateRow.style.display = dueDateRecord ? "none" : "inline-block";
-  modalDueDateRows.innerHTML = dueDateRecord
-    ? dueDateRowHtml(dueDateRecord.title, dueDateRecord.dueDate, dueDateRecord.personIds)
-    : dueDateRowHtml();
-  dueDateModal.style.display = "flex";
-}
-
-function closeDueDateModal() {
-  dueDateModal.style.display = "none";
-}
-
-document.getElementById("openAddDueDate").addEventListener("click", () => openDueDateModal(null));
-modalAddDueDateRow.addEventListener("click", () => {
-  modalDueDateRows.insertAdjacentHTML("beforeend", dueDateRowHtml());
-});
-modalDueDateRows.addEventListener("click", (e) => {
-  const btn = e.target.closest(".removeDueDateRow");
-  if (!btn) return;
-  if (modalDueDateRows.querySelectorAll(".modal-duedate-row").length > 1) {
-    btn.closest(".modal-duedate-row").remove();
-  }
-});
-document.getElementById("modalCancelDueDate").addEventListener("click", closeDueDateModal);
-dueDateModal.addEventListener("click", (e) => {
-  if (e.target === dueDateModal) closeDueDateModal();
-});
-
-document.getElementById("modalSaveDueDate").addEventListener("click", async () => {
-  const projectId = selectedProjectId;
-  if (!projectId) return showToast("Select a project first.");
-
-  const rows = [...modalDueDateRows.querySelectorAll(".modal-duedate-row")];
-  try {
-    if (editingDueDateId) {
-      const row = rows[0];
-      const title = row.querySelector(".ddTitle").value.trim();
-      const dueDate = row.querySelector(".ddDate").value;
-      const personIds = [...row.querySelectorAll(".ddPerson:checked")].map((cb) => cb.value);
-      if (!title || !dueDate) return showToast("Enter an event name and due date.");
-      await DueDates.update(editingDueDateId, { title, dueDate, personIds });
-      showToast("Due date updated.");
-    } else {
-      let added = 0;
-      for (const row of rows) {
-        const title = row.querySelector(".ddTitle").value.trim();
-        const dueDate = row.querySelector(".ddDate").value;
-        const personIds = [...row.querySelectorAll(".ddPerson:checked")].map((cb) => cb.value);
-        if (!title || !dueDate) continue;
-        await DueDates.add({ projectId, title, dueDate, personIds });
-        added++;
-      }
-      if (added === 0) return showToast("Enter at least one event name and due date.");
-      showToast(added === 1 ? "Due date added." : `${added} due dates added.`);
-    }
-    closeDueDateModal();
-  } catch (err) {
-    showToast("Error: " + err.message);
   }
 });
 

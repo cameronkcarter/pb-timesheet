@@ -122,10 +122,11 @@ export const TimeEntries = {
   approve,
 };
 
-// DueDate documents look like: { projectId, personIds: [], title, dueDate }
+// DueDate documents look like:
+// { projectId, taskId, personIds: [], title, dueDate, estimatedHours, createdByPersonId }
 export const DueDates = {
   listen: (cb) => listenCollection("dueDates", cb, "dueDate"),
-  add: (data) => add("dueDates", data),
+  add: (data) => add("dueDates", { taskId: null, estimatedHours: null, ...data }),
   update: (id, data) => update("dueDates", id, data),
   remove: (id) => remove("dueDates", id),
 };

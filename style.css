@@ -477,6 +477,146 @@ th {
   margin-top: 8px;
 }
 
+/* ---------- Gantt chart (Planning page) ---------- */
+.gantt-inner {
+  display: inline-block;
+  min-width: 100%;
+}
+
+.gantt-row {
+  display: flex;
+  align-items: center;
+  height: 32px;
+}
+
+.gantt-header-row {
+  height: 36px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.gantt-project-row {
+  height: 28px;
+}
+
+.gantt-label-col {
+  width: 220px;
+  min-width: 220px;
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  background: var(--card);
+  z-index: 2;
+  font-size: 13px;
+  padding-right: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-project-row .gantt-label-col {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.gantt-task-label {
+  padding-left: 14px;
+  color: var(--text);
+}
+
+.gantt-header-row .gantt-label-col {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.gantt-track {
+  position: relative;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.gantt-ruler {
+  position: relative;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.gantt-tick {
+  position: absolute;
+  top: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-left: 1px solid var(--border);
+  padding-left: 4px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.gantt-today-tick {
+  position: absolute;
+  top: 0;
+  bottom: -1000px;
+  border-left: 2px solid var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  padding-left: 3px;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 6px;
+  height: 16px;
+  background: var(--navy-light);
+  border-radius: 4px;
+}
+
+.gantt-dot {
+  position: absolute;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card);
+  cursor: help;
+}
+
+/* ---------- Hours projection (Planning page) ---------- */
+.projection-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.projection-row:last-child {
+  border-bottom: none;
+}
+
+.projection-task {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.projection-stats {
+  display: flex;
+  gap: 28px;
+  margin-top: 8px;
+}
+
+.projection-items {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 #weekGridTable {
   min-width: 100%;
 }

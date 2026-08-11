@@ -43,6 +43,13 @@ export function addDays(date, n) {
   return d;
 }
 
+// Whole days between two "YYYY-MM-DD" strings (can be negative).
+export function daysBetween(startStr, endStr) {
+  const start = new Date(startStr + "T00:00:00");
+  const end = new Date(endStr + "T00:00:00");
+  return Math.round((end - start) / 86400000);
+}
+
 export function formatShortDate(date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }

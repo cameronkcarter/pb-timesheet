@@ -12,6 +12,7 @@
   <a href="index.html" id="navBrandLink" class="brand">Place Builders</a>
   <a href="dashboard.html">Dashboard</a>
   <a href="timesheet.html">Timesheet</a>
+  <a href="planning.html">Planning</a>
   <a href="admin.html" class="active">Admin</a>
   <a href="invoice.html">Invoices</a>
   <a href="#" id="logoutLink" style="margin-left:auto;">Log Out</a>
@@ -48,17 +49,6 @@
         <tbody></tbody>
       </table>
       <div id="tasksEmpty" class="empty" style="display:none;">No tasks for this project yet. Click "Edit" on the project card above to add some.</div>
-
-      <hr class="divider" />
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="margin:0;">Due Dates</h2>
-        <button id="openAddDueDate" class="secondary small">+ Add Due Date</button>
-      </div>
-      <table id="dueDatesTable" style="margin-top:12px;">
-        <thead><tr><th>Event</th><th>Assigned To</th><th>Due Date</th><th style="width:130px;"></th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div id="dueDatesEmpty" class="empty" style="display:none;">No due dates for this project yet.</div>
     </div>
   </div>
 
@@ -134,19 +124,6 @@
     <div class="row-actions" style="margin-top:18px; justify-content:flex-end;">
       <button id="modalCancelPerson" class="secondary">Cancel</button>
       <button id="modalSavePerson">Save</button>
-    </div>
-  </div>
-</div>
-
-<div id="dueDateModal" class="modal-overlay" style="display:none;">
-  <div class="modal" style="max-width:520px;">
-    <h2 id="dueDateModalTitle">Add Due Dates</h2>
-    <div id="modalDueDateRows"></div>
-    <button type="button" id="modalAddDueDateRow" class="secondary small" style="margin-top:4px;">+ Add Another</button>
-
-    <div class="row-actions" style="margin-top:20px; justify-content:flex-end;">
-      <button id="modalCancelDueDate" class="secondary">Cancel</button>
-      <button id="modalSaveDueDate">Save</button>
     </div>
   </div>
 </div>
