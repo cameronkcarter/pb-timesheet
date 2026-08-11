@@ -618,45 +618,89 @@ const pendingApprovalCard = document.getElementById("pendingApprovalCard");
 const pendingApprovalTbody = document.querySelector("#pendingApprovalTable tbody");
 const approveAllBtn = document.getElementById("approveAllBtn");
 
+let expandedApprovalPersonId = null;
+
 function pendingEntries() {
   return timeEntries
     .filter((e) => !e.approved && !e.invoiced)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+function pendingByPerson() {
+  const byPerson = {};
+  pendingEntries().forEach((e) => {
+    if (!byPerson[e.personId]) byPerson[e.personId] = [];
+    byPerson[e.personId].push(e);
+  });
+  return Object.entries(byPerson).map(([personId, entries]) => {
+    const person = people.find((p) => p.id === personId);
+    const totalHours = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+    return { personId, name: person ? person.name : "—", entries, totalHours };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function renderPendingApproval() {
-  const pending = pendingEntries();
-  if (pending.length === 0) {
+  const groups = pendingByPerson();
+  if (groups.length === 0) {
     pendingApprovalCard.style.display = "none";
     return;
   }
   pendingApprovalCard.style.display = "block";
 
-  pendingApprovalTbody.innerHTML = pending.map((e) => {
-    const person = people.find((p) => p.id === e.personId);
-    const project = projects.find((p) => p.id === e.projectId);
-    const task = tasks.find((t) => t.id === e.taskId);
-    return `<tr>
-      <td>${formatDate(e.date)}</td>
-      <td>${person ? person.name : "—"}</td>
-      <td>${project ? project.name : "—"}</td>
-      <td>${task ? task.name : "—"}</td>
-      <td>${e.hours}</td>
+  pendingApprovalTbody.innerHTML = groups.map((g) => {
+    const expanded = g.personId === expandedApprovalPersonId;
+    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-person-row="${g.personId}">
+      <td colspan="4">${g.name} <span class="empty" style="padding:0;">(${g.entries.length} ${g.entries.length === 1 ? "entry" : "entries"})</span></td>
+      <td>${g.totalHours.toFixed(2)}</td>
       <td class="row-actions">
-        <button class="small" data-action="approve-entry" data-id="${e.id}">Approve</button>
+        <button class="small" data-action="approve-person" data-id="${g.personId}">Approve All</button>
       </td>
     </tr>`;
+
+    if (!expanded) return mainRow;
+
+    const subRows = g.entries.map((e) => {
+      const project = projects.find((p) => p.id === e.projectId);
+      const task = tasks.find((t) => t.id === e.taskId);
+      return `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--border);">
+        <div>${formatDate(e.date)} — ${project ? project.name : "—"} / ${task ? task.name : "—"}</div>
+        <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+          <span>${e.hours} hrs</span>
+          <button class="small" data-action="approve-entry" data-id="${e.id}">Approve</button>
+        </div>
+      </div>`;
+    }).join("");
+
+    return mainRow + `<tr><td colspan="6" class="accordion-cell">${subRows}</td></tr>`;
   }).join("");
 }
 
 pendingApprovalTbody.addEventListener("click", async (e) => {
   const btn = e.target.closest("button");
-  if (!btn) return;
+  if (!btn) {
+    const row = e.target.closest("tr.task-row");
+    if (row) {
+      const id = row.dataset.personRow;
+      expandedApprovalPersonId = expandedApprovalPersonId === id ? null : id;
+      renderPendingApproval();
+    }
+    return;
+  }
   const { action, id } = btn.dataset;
   if (action === "approve-entry") {
     try {
       await TimeEntries.approve([id]);
       showToast("Entry approved.");
+    } catch (err) {
+      showToast("Error: " + err.message);
+    }
+  }
+  if (action === "approve-person") {
+    const group = pendingByPerson().find((g) => g.personId === id);
+    if (!group) return;
+    try {
+      await TimeEntries.approve(group.entries.map((e) => e.id));
+      showToast(`${group.name}'s hours approved.`);
     } catch (err) {
       showToast("Error: " + err.message);
     }
