@@ -15,6 +15,7 @@ let timeEntries = [];
 let selectedProjectId = null;
 let currentWeekStart = getWeekStart(todayISO());
 let navChecked = false;
+let isDirty = false;
 
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
@@ -73,9 +74,17 @@ function renderProjectCards() {
   renderWeekGrid();
 }
 
+function confirmDiscardIfDirty() {
+  if (!isDirty) return true;
+  if (!confirm("You have unsaved hours on this screen. Discard them?")) return false;
+  isDirty = false;
+  return true;
+}
+
 projectCardsEl.addEventListener("click", (e) => {
   const card = e.target.closest(".project-card");
   if (!card) return;
+  if (!confirmDiscardIfDirty()) return;
   selectedProjectId = card.dataset.projectCard;
   currentWeekStart = getWeekStart(todayISO());
   renderProjectCards();
@@ -83,12 +92,20 @@ projectCardsEl.addEventListener("click", (e) => {
 
 // ---------- Week grid ----------
 document.getElementById("prevWeek").addEventListener("click", () => {
+  if (!confirmDiscardIfDirty()) return;
   currentWeekStart = addDays(currentWeekStart, -7);
   renderWeekGrid();
 });
 document.getElementById("nextWeek").addEventListener("click", () => {
+  if (!confirmDiscardIfDirty()) return;
   currentWeekStart = addDays(currentWeekStart, 7);
   renderWeekGrid();
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (!isDirty) return;
+  e.preventDefault();
+  e.returnValue = "";
 });
 
 function weekDays() {
@@ -195,7 +212,10 @@ function recomputeGridTotals() {
 }
 
 weekGridBody.addEventListener("input", (e) => {
-  if (e.target.classList.contains("hourCell")) recomputeGridTotals();
+  if (e.target.classList.contains("hourCell")) {
+    isDirty = true;
+    recomputeGridTotals();
+  }
 });
 
 function updateMonthTotal(columns) {
@@ -245,7 +265,9 @@ document.getElementById("saveWeek").addEventListener("click", async () => {
       );
       if (hours > 0) {
         if (existing) {
-          if (Number(existing.hours) !== hours) await TimeEntries.update(existing.id, { hours });
+          if (Number(existing.hours) !== hours) {
+            await TimeEntries.update(existing.id, { hours, approved: false, approvedDate: null });
+          }
         } else {
           await TimeEntries.add({ personId, projectId, taskId, date, hours });
         }
@@ -253,6 +275,7 @@ document.getElementById("saveWeek").addEventListener("click", async () => {
         await TimeEntries.remove(existing.id);
       }
     }
+    isDirty = false;
     showToast("Week saved.");
   } catch (err) {
     showToast("Error: " + err.message);
@@ -288,7 +311,9 @@ function renderEntries() {
       ? '<span class="pill green">Paid</span>'
       : e.invoiced
       ? '<span class="pill blue">Invoiced</span>'
-      : '<span class="pill orange">Pending</span>';
+      : e.approved
+      ? '<span class="pill teal">Approved</span>'
+      : '<span class="pill orange">Pending Approval</span>';
     const deleteBtn = e.invoiced
       ? ""
       : `<button class="danger small" data-id="${e.id}">Delete</button>`;

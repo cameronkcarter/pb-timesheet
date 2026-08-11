@@ -116,3 +116,15 @@ export function markPaidTest(ids) {
   notifyAll("timeEntries");
   return Promise.resolve();
 }
+
+export function approveTest(ids) {
+  const items = readData("timeEntries");
+  const approvedDate = new Date().toISOString();
+  ids.forEach((id) => {
+    const idx = items.findIndex((i) => i.id === id);
+    if (idx !== -1) items[idx] = { ...items[idx], approved: true, approvedDate };
+  });
+  writeData("timeEntries", items);
+  notifyAll("timeEntries");
+  return Promise.resolve();
+}

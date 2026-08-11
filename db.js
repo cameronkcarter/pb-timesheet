@@ -19,6 +19,7 @@ import {
   removeTest,
   markInvoicedTest,
   markPaidTest,
+  approveTest,
 } from "./sandbox.js";
 
 function listenCollection(name, callback, orderByField) {
@@ -65,6 +66,16 @@ async function markPaid(ids) {
   await batch.commit();
 }
 
+async function approve(ids) {
+  if (isTestMode()) return approveTest(ids);
+  const batch = writeBatch(db);
+  const approvedDate = new Date().toISOString();
+  ids.forEach((id) => {
+    batch.update(doc(db, "timeEntries", id), { approved: true, approvedDate });
+  });
+  await batch.commit();
+}
+
 export const People = {
   listen: (cb) => listenCollection("people", cb, "name"),
   add: (data) => add("people", data),
@@ -96,16 +107,19 @@ export const Assignments = {
 };
 
 // TimeEntry documents look like:
-// { personId, taskId, projectId, date, hours, invoiced, invoicedDate, invoiceId, paid, paidDate }
+// { personId, taskId, projectId, date, hours, approved, approvedDate,
+//   invoiced, invoicedDate, invoiceId, paid, paidDate }
 export const TimeEntries = {
   listen: (cb) => listenCollection("timeEntries", cb, "date"),
   add: (data) => add("timeEntries", {
+    approved: false, approvedDate: null,
     invoiced: false, invoicedDate: null, invoiceId: null, paid: false, paidDate: null, ...data,
   }),
   update: (id, data) => update("timeEntries", id, data),
   remove: (id) => remove("timeEntries", id),
   markInvoiced,
   markPaid,
+  approve,
 };
 
 // DueDate documents look like: { projectId, personIds: [], title, dueDate }

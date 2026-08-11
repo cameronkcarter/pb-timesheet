@@ -33,11 +33,12 @@ if (sessionPersonId) {
     renderPeople();
     renderTasks();
     renderDueDates();
+    renderPendingApproval();
   });
-  Projects.listen((d) => { projects = d; renderProjectCards(); });
-  Tasks.listen((d) => { tasks = d; renderTasks(); });
+  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); });
+  Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
   Assignments.listen((d) => { assignments = d; renderTasks(); });
-  TimeEntries.listen((d) => { timeEntries = d; renderTasks(); });
+  TimeEntries.listen((d) => { timeEntries = d; renderTasks(); renderPendingApproval(); });
   DueDates.listen((d) => { dueDates = d; renderDueDates(); });
 }
 
@@ -607,6 +608,68 @@ document.getElementById("modalSaveDueDate").addEventListener("click", async () =
       showToast(added === 1 ? "Due date added." : `${added} due dates added.`);
     }
     closeDueDateModal();
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+});
+
+// ---------- Pending Approval ----------
+const pendingApprovalCard = document.getElementById("pendingApprovalCard");
+const pendingApprovalTbody = document.querySelector("#pendingApprovalTable tbody");
+const approveAllBtn = document.getElementById("approveAllBtn");
+
+function pendingEntries() {
+  return timeEntries
+    .filter((e) => !e.approved && !e.invoiced)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+function renderPendingApproval() {
+  const pending = pendingEntries();
+  if (pending.length === 0) {
+    pendingApprovalCard.style.display = "none";
+    return;
+  }
+  pendingApprovalCard.style.display = "block";
+
+  pendingApprovalTbody.innerHTML = pending.map((e) => {
+    const person = people.find((p) => p.id === e.personId);
+    const project = projects.find((p) => p.id === e.projectId);
+    const task = tasks.find((t) => t.id === e.taskId);
+    return `<tr>
+      <td>${formatDate(e.date)}</td>
+      <td>${person ? person.name : "—"}</td>
+      <td>${project ? project.name : "—"}</td>
+      <td>${task ? task.name : "—"}</td>
+      <td>${e.hours}</td>
+      <td class="row-actions">
+        <button class="small" data-action="approve-entry" data-id="${e.id}">Approve</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+pendingApprovalTbody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const { action, id } = btn.dataset;
+  if (action === "approve-entry") {
+    try {
+      await TimeEntries.approve([id]);
+      showToast("Entry approved.");
+    } catch (err) {
+      showToast("Error: " + err.message);
+    }
+  }
+});
+
+approveAllBtn.addEventListener("click", async () => {
+  const ids = pendingEntries().map((e) => e.id);
+  if (ids.length === 0) return;
+  if (!confirm(`Approve all ${ids.length} pending ${ids.length === 1 ? "entry" : "entries"}?`)) return;
+  try {
+    await TimeEntries.approve(ids);
+    showToast("All entries approved.");
   } catch (err) {
     showToast("Error: " + err.message);
   }

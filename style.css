@@ -309,6 +309,11 @@ th {
   color: #2a5fb0;
 }
 
+.pill.teal {
+  background: #dff3f0;
+  color: #0f766e;
+}
+
 .project-card-row {
   display: flex;
   flex-wrap: wrap;
@@ -523,6 +528,23 @@ th {
   border-top: 2px solid var(--border);
   border-bottom: none;
   padding-top: 10px;
+}
+
+.save-week-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--card);
+  margin: 20px -20px -20px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.04);
+}
+
+.save-week-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  margin: 0;
 }
 
 tr.task-row {

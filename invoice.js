@@ -115,7 +115,7 @@ function monthEntries() {
   if (!selectedProjectId) return [];
   const prefix = monthKey(currentMonth);
   return timeEntries.filter((e) =>
-    e.projectId === selectedProjectId && !e.invoiced && e.date.startsWith(prefix)
+    e.projectId === selectedProjectId && e.approved && !e.invoiced && e.date.startsWith(prefix)
   );
 }
 
