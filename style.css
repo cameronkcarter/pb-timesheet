@@ -312,7 +312,7 @@ th {
   font-size: 15px;
   font-weight: 600;
   flex-shrink: 0;
-  width: 220px;
+  width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -677,6 +677,18 @@ th {
 
 .gantt-dot-assignment {
   background: #0f766e;
+}
+
+.gantt-dot-hollow {
+  background: #fff !important;
+}
+
+.gantt-dot-event.gantt-dot-hollow {
+  border-color: var(--accent);
+}
+
+.gantt-dot-assignment.gantt-dot-hollow {
+  border-color: #0f766e;
 }
 
 .gantt-legend {

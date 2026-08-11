@@ -133,7 +133,7 @@ function renderGantt() {
   ganttEmpty.style.display = "none";
 
   const scheduledTasks = tasks.filter((t) => t.startDate && t.endDate);
-  const dueDatesWithDates = dueDates.filter((d) => d.dueDate && !d.completed);
+  const dueDatesWithDates = dueDates.filter((d) => d.dueDate);
 
   const allStarts = scheduledTasks.map((t) => t.startDate);
   const allEnds = scheduledTasks.map((t) => t.endDate);
@@ -164,8 +164,10 @@ function renderGantt() {
 
   function dotHtml(d) {
     const dx = xFor(d.dueDate);
-    const kind = isAssignment(d) ? "gantt-dot-assignment" : "gantt-dot-event";
-    return `<div class="gantt-dot ${kind}" style="left:${dx}px;" data-dot-id="${d.id}" title="${esc(d.title)} — ${formatDate(d.dueDate)}"></div>`;
+    const assignment = isAssignment(d);
+    const kind = assignment ? "gantt-dot-assignment" : "gantt-dot-event";
+    const hollow = assignment ? d.completed : d.dueDate < today;
+    return `<div class="gantt-dot ${kind} ${hollow ? "gantt-dot-hollow" : ""}" style="left:${dx}px;" data-dot-id="${d.id}" title="${esc(d.title)} — ${formatDate(d.dueDate)}"></div>`;
   }
 
   const rulerHtml = `<div class="gantt-ruler" style="width:${timelineWidth}px;">
