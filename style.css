@@ -824,6 +824,14 @@ th {
   padding: 10px 0 0 0;
 }
 
+.assignment-item-completed {
+  opacity: 0.55;
+}
+
+.assignment-item-completed .assignment-item-title {
+  text-decoration: line-through;
+}
+
 .assignment-item-main {
   display: flex;
   align-items: center;

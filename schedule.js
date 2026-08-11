@@ -18,6 +18,7 @@ let editingDueDateId = null;
 let modalMode = "event"; // "event" | "assignment"
 let openDotId = null;
 let editingTimelineProjectId = null;
+let showCompleted = false;
 
 const PX_PER_DAY = 4;
 const LABEL_COL_WIDTH = 200;
@@ -285,7 +286,7 @@ document.body.addEventListener("click", async (e) => {
 
 // ---------- Assignments (due dates with at least one assigned person) ----------
 function assignmentItems() {
-  return dueDates.filter((d) => isAssignment(d) && !d.completed);
+  return dueDates.filter((d) => isAssignment(d) && (showCompleted || !d.completed));
 }
 
 function assignmentGroups() {
@@ -313,7 +314,7 @@ function renderAssignments() {
           const task = tasks.find((t) => t.id === d.taskId);
           const creator = people.find((p) => p.id === d.createdByPersonId);
           const manageable = canManage(d);
-          return `<div class="assignment-item">
+          return `<div class="assignment-item ${d.completed ? "assignment-item-completed" : ""}">
             <div class="assignment-item-main">
               <span class="creator-tag" style="background:${colorForPerson(d.createdByPersonId)};" title="Added by ${creator ? esc(creator.name) : "someone no longer on the team"}">${initialsFor(creator)}</span>
               <div>
@@ -321,10 +322,12 @@ function renderAssignments() {
                 <div class="empty" style="padding:0;">${project ? project.name : "—"}${task ? ` / ${task.name}` : ""} &middot; ${formatDate(d.dueDate)} (${dueLabel(d.dueDate)})</div>
               </div>
             </div>
-            ${manageable ? `<div class="row-actions">
-              <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
-              <button class="small complete-btn" data-action="complete-duedate" data-id="${d.id}">Complete</button>
-            </div>` : ""}
+            ${d.completed
+              ? `<span class="pill green">Completed</span>`
+              : manageable ? `<div class="row-actions">
+                  <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
+                  <button class="small complete-btn" data-action="complete-duedate" data-id="${d.id}">Complete</button>
+                </div>` : ""}
           </div>`;
         }).join("");
 
@@ -413,6 +416,13 @@ function closeDueDateModal() {
 
 document.getElementById("openAddEvent").addEventListener("click", () => openDueDateModal(null, "event"));
 document.getElementById("openAddAssignment").addEventListener("click", () => openDueDateModal(null, "assignment"));
+
+const toggleCompletedBtn = document.getElementById("toggleCompletedBtn");
+toggleCompletedBtn.addEventListener("click", () => {
+  showCompleted = !showCompleted;
+  toggleCompletedBtn.textContent = showCompleted ? "Hide Completed" : "Show Completed";
+  renderAssignments();
+});
 document.getElementById("modalCancelDueDate").addEventListener("click", closeDueDateModal);
 dueDateModal.addEventListener("click", (e) => {
   if (e.target === dueDateModal) closeDueDateModal();
