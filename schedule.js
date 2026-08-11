@@ -16,28 +16,30 @@ let dueDates = [];
 let navChecked = false;
 let editingDueDateId = null;
 let modalMode = "event"; // "event" | "assignment"
-let expandedAssignmentPersonId = null;
 let openDotId = null;
+let editingTimelineProjectId = null;
 
 const PX_PER_DAY = 4;
 const LABEL_COL_WIDTH = 200;
 
 const ganttChart = document.getElementById("ganttChart");
 const ganttEmpty = document.getElementById("ganttEmpty");
-const assignmentsTbody = document.querySelector("#assignmentsTable tbody");
+const assignmentsList = document.getElementById("assignmentsList");
 
 const dueDateModal = document.getElementById("dueDateModal");
 const dueDateModalTitle = document.getElementById("dueDateModalTitle");
 const ddProject = document.getElementById("ddProject");
 const ddTaskRow = document.getElementById("ddTaskRow");
-const ddTaskLabel = document.getElementById("ddTaskLabel");
 const ddTask = document.getElementById("ddTask");
 const ddTitle = document.getElementById("ddTitle");
 const ddDate = document.getElementById("ddDate");
-const ddHoursField = document.getElementById("ddHoursField");
-const ddHours = document.getElementById("ddHours");
 const ddPeopleField = document.getElementById("ddPeopleField");
 const ddPeoplePills = document.getElementById("ddPeoplePills");
+const modalDeleteDueDate = document.getElementById("modalDeleteDueDate");
+
+const timelineModal = document.getElementById("timelineModal");
+const timelineModalTitle = document.getElementById("timelineModalTitle");
+const timelineModalRows = document.getElementById("timelineModalRows");
 
 wireLogout("logoutLink", "navBrandLink");
 
@@ -53,6 +55,10 @@ function canManage(dueDateRecord) {
   const me = currentPerson();
   if (!me) return false;
   return me.isAdmin || dueDateRecord.createdByPersonId === sessionPersonId;
+}
+
+function isAssignment(d) {
+  return !!(d.personIds && d.personIds.length > 0);
 }
 
 function colorForPerson(personId) {
@@ -119,7 +125,7 @@ function renderGantt() {
   ganttEmpty.style.display = "none";
 
   const scheduledTasks = tasks.filter((t) => t.startDate && t.endDate);
-  const dueDatesWithDates = dueDates.filter((d) => d.dueDate);
+  const dueDatesWithDates = dueDates.filter((d) => d.dueDate && !d.completed);
 
   const allStarts = scheduledTasks.map((t) => t.startDate);
   const allEnds = scheduledTasks.map((t) => t.endDate);
@@ -150,7 +156,8 @@ function renderGantt() {
 
   function dotHtml(d) {
     const dx = xFor(d.dueDate);
-    return `<div class="gantt-dot" style="left:${dx}px;" data-dot-id="${d.id}" title="${esc(d.title)} — ${formatDate(d.dueDate)}"></div>`;
+    const kind = isAssignment(d) ? "gantt-dot-assignment" : "gantt-dot-event";
+    return `<div class="gantt-dot ${kind}" style="left:${dx}px;" data-dot-id="${d.id}" title="${esc(d.title)} — ${formatDate(d.dueDate)}"></div>`;
   }
 
   const rulerHtml = `<div class="gantt-ruler" style="width:${timelineWidth}px;">
@@ -167,6 +174,7 @@ function renderGantt() {
 
     const projectDueDates = dueDatesWithDates.filter((d) => d.projectId === project.id && !d.taskId);
     const projectDotsHtml = projectDueDates.map(dotHtml).join("");
+    const canEditTimeline = currentPerson() && currentPerson().isAdmin;
 
     const taskRowsHtml = projectTasks.map((t) => {
       const hasDates = t.startDate && t.endDate;
@@ -188,7 +196,7 @@ function renderGantt() {
     }).join("");
 
     return `<div class="gantt-row gantt-project-row">
-        <div class="gantt-label-col">${project.name}</div>
+        <div class="gantt-label-col ${canEditTimeline ? "gantt-project-clickable" : ""}" ${canEditTimeline ? `data-edit-timeline="${project.id}" title="Click to edit this project's timeline"` : ""}>${project.name}</div>
         <div class="gantt-track" style="width:${timelineWidth}px;">${projectDotsHtml}</div>
         <div class="gantt-remaining-col gantt-project-remaining">${formatCurrency(projectRemaining)}</div>
       </div>
@@ -215,6 +223,12 @@ function renderGantt() {
 }
 
 ganttChart.addEventListener("click", (e) => {
+  const projectLabel = e.target.closest("[data-edit-timeline]");
+  if (projectLabel) {
+    openTimelineModal(projectLabel.dataset.editTimeline);
+    return;
+  }
+
   const dot = e.target.closest(".gantt-dot");
   if (!dot) return;
   e.stopPropagation();
@@ -239,7 +253,6 @@ ganttChart.addEventListener("click", (e) => {
     ${names.length > 0 ? `<div>Assigned: ${names.join(", ")}</div>` : ""}
     ${manageable ? `<div class="gantt-dot-popover-actions">
       <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
-      <button class="danger small" data-action="remove-duedate" data-id="${d.id}">Remove</button>
     </div>` : ""}
   `;
   const rect = dot.getBoundingClientRect();
@@ -257,88 +270,71 @@ document.body.addEventListener("click", async (e) => {
   await handleDueDateAction(action, id);
 });
 
-// ---------- Assignments (due dates linked to a task), grouped by person ----------
+// ---------- Assignments (due dates with at least one assigned person) ----------
 function assignmentItems() {
-  return dueDates.filter((d) => d.taskId);
+  return dueDates.filter((d) => isAssignment(d) && !d.completed);
 }
 
 function assignmentGroups() {
   const items = assignmentItems();
   const byPerson = {};
   items.forEach((d) => {
-    const ids = d.personIds && d.personIds.length > 0 ? d.personIds : [""];
-    ids.forEach((pid) => {
+    (d.personIds || []).forEach((pid) => {
       if (!byPerson[pid]) byPerson[pid] = [];
       byPerson[pid].push(d);
     });
   });
-  const groups = people.map((p) => ({
+  return people.map((p) => ({
     personId: p.id, name: p.name, items: (byPerson[p.id] || []).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)),
   }));
-  if (byPerson[""]) {
-    groups.push({ personId: "", name: "Unassigned", items: byPerson[""].sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)) });
-  }
-  return groups;
 }
 
 function renderAssignments() {
   const groups = assignmentGroups();
 
-  assignmentsTbody.innerHTML = groups.map((g) => {
-    const expanded = g.personId === expandedAssignmentPersonId;
-    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-assign-person-row="${g.personId}">
-      <td colspan="4">${g.name} <span class="empty" style="padding:0;">(${g.items.length} ${g.items.length === 1 ? "item" : "items"})</span></td>
-      <td class="row-actions">
+  assignmentsList.innerHTML = groups.map((g) => {
+    const itemsHtml = g.items.length === 0
+      ? `<div class="empty">No items assigned yet.</div>`
+      : g.items.map((d) => {
+          const project = projects.find((p) => p.id === d.projectId);
+          const task = tasks.find((t) => t.id === d.taskId);
+          const creator = people.find((p) => p.id === d.createdByPersonId);
+          const manageable = canManage(d);
+          return `<div class="assignment-item">
+            <div class="assignment-item-main">
+              <span class="creator-tag" style="background:${colorForPerson(d.createdByPersonId)};" title="Added by ${creator ? esc(creator.name) : "someone no longer on the team"}">${initialsFor(creator)}</span>
+              <div>
+                <div class="assignment-item-title">${d.title}</div>
+                <div class="empty" style="padding:0;">${project ? project.name : "—"}${task ? ` / ${task.name}` : ""} &middot; ${formatDate(d.dueDate)} (${dueLabel(d.dueDate)})</div>
+              </div>
+            </div>
+            ${manageable ? `<div class="row-actions">
+              <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
+              <button class="small complete-btn" data-action="complete-duedate" data-id="${d.id}">Complete</button>
+            </div>` : ""}
+          </div>`;
+        }).join("");
+
+    return `<div class="assignment-group">
+      <div class="assignment-group-header">
+        ${g.name} <span class="empty" style="padding:0;">(${g.items.length} ${g.items.length === 1 ? "item" : "items"})</span>
         <button class="small secondary" data-action="quick-assign" data-id="${g.personId}">+ Assign</button>
-      </td>
-    </tr>`;
-
-    if (!expanded) return mainRow;
-
-    if (g.items.length === 0) {
-      return mainRow + `<tr><td colspan="5" class="accordion-cell"><div class="empty">No items assigned yet.</div></td></tr>`;
-    }
-
-    const subRowsWithActions = g.items.map((d) => {
-      const project = projects.find((p) => p.id === d.projectId);
-      const task = tasks.find((t) => t.id === d.taskId);
-      const creator = people.find((p) => p.id === d.createdByPersonId);
-      const manageable = canManage(d);
-      return `<tr class="assignment-sub-row">
-        <td></td>
-        <td>
-          <span class="creator-tag" style="background:${colorForPerson(d.createdByPersonId)};" title="Added by ${creator ? esc(creator.name) : "someone no longer on the team"}">${initialsFor(creator)}</span>
-          ${d.title}
-        </td>
-        <td>${project ? project.name : "—"}${task ? ` / ${task.name}` : ""}</td>
-        <td>${formatDate(d.dueDate)} <span class="empty">(${dueLabel(d.dueDate)})</span></td>
-        <td class="row-actions">
-          ${manageable ? `
-            <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
-            <button class="danger small" data-action="remove-duedate" data-id="${d.id}">Remove</button>
-          ` : ""}
-        </td>
-      </tr>`;
-    }).join("");
-
-    return mainRow + subRowsWithActions;
+      </div>
+      ${itemsHtml}
+    </div>`;
   }).join("");
 }
 
-assignmentsTbody.addEventListener("click", async (e) => {
+assignmentsList.addEventListener("click", async (e) => {
   const btn = e.target.closest("button");
-  if (!btn) {
-    const row = e.target.closest("tr.task-row");
-    if (row) {
-      const id = row.dataset.assignPersonRow;
-      expandedAssignmentPersonId = expandedAssignmentPersonId === id ? null : id;
-      renderAssignments();
-    }
-    return;
-  }
+  if (!btn) return;
   const { action, id } = btn.dataset;
   if (action === "quick-assign") {
     openDueDateModal(null, "assignment", id || null);
+    return;
+  }
+  if (action === "complete-duedate") {
+    try { await DueDates.update(id, { completed: true, completedDate: new Date().toISOString() }); } catch (err) { showToast("Error: " + err.message); }
     return;
   }
   await handleDueDateAction(action, id);
@@ -347,17 +343,13 @@ assignmentsTbody.addEventListener("click", async (e) => {
 async function handleDueDateAction(action, id) {
   const d = dueDates.find((dd) => dd.id === id);
   if (!d || !canManage(d)) return;
-  if (action === "edit-duedate") openDueDateModal(d, d.taskId ? "assignment" : "event");
-  if (action === "remove-duedate") {
-    if (!confirm("Remove this item?")) return;
-    try { await DueDates.remove(id); } catch (err) { showToast("Error: " + err.message); }
-  }
+  if (action === "edit-duedate") openDueDateModal(d, isAssignment(d) ? "assignment" : "event");
 }
 
-// ---------- Modal ----------
+// ---------- Due date / assignment modal ----------
 function populateTaskOptions(projectId, selectedTaskId) {
   const projectTasks = tasks.filter((t) => t.projectId === projectId);
-  ddTask.innerHTML = (modalMode === "event" ? `<option value="">No specific task</option>` : "") +
+  ddTask.innerHTML = `<option value="">No specific task</option>` +
     projectTasks.map((t) => `<option value="${t.id}" ${t.id === selectedTaskId ? "selected" : ""}>${t.name}</option>`).join("");
 }
 
@@ -372,12 +364,17 @@ function renderPeoplePills(selectedIds) {
 function openDueDateModal(dueDateRecord, mode, presetPersonId) {
   modalMode = mode;
   editingDueDateId = dueDateRecord ? dueDateRecord.id : null;
-  dueDateModalTitle.textContent = dueDateRecord
+  const isEditing = !!dueDateRecord;
+  dueDateModalTitle.textContent = isEditing
     ? (mode === "event" ? "Edit Event" : "Edit Assignment")
     : (mode === "event" ? "Add Event" : "Add Assignment");
 
-  ddTaskLabel.textContent = mode === "event" ? "Task (optional)" : "Task";
-  ddPeopleField.style.display = "block";
+  // Fresh "Add Event" is a minimal form: no task, no people. Everything
+  // else (Add Assignment, or editing anything) shows the full form so
+  // items can be reclassified or linked to a task later.
+  const showTaskAndPeople = isEditing || mode === "assignment";
+  ddTaskRow.style.display = showTaskAndPeople ? "block" : "none";
+  ddPeopleField.style.display = showTaskAndPeople ? "block" : "none";
 
   ddProject.innerHTML = projects.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
   const projectId = dueDateRecord ? dueDateRecord.projectId : (projects[0] && projects[0].id);
@@ -386,12 +383,13 @@ function openDueDateModal(dueDateRecord, mode, presetPersonId) {
 
   ddTitle.value = dueDateRecord ? dueDateRecord.title : "";
   ddDate.value = dueDateRecord ? dueDateRecord.dueDate : "";
-  ddHours.value = dueDateRecord && dueDateRecord.estimatedHours ? dueDateRecord.estimatedHours : "";
 
   const defaultPeople = dueDateRecord
     ? dueDateRecord.personIds
     : (presetPersonId ? [presetPersonId] : (mode === "event" ? [] : [sessionPersonId]));
   renderPeoplePills(defaultPeople);
+
+  modalDeleteDueDate.style.display = (isEditing && canManage(dueDateRecord)) ? "inline-block" : "none";
 
   dueDateModal.style.display = "flex";
   ddTitle.focus();
@@ -409,31 +407,97 @@ dueDateModal.addEventListener("click", (e) => {
 });
 ddProject.addEventListener("change", () => populateTaskOptions(ddProject.value, ""));
 
+modalDeleteDueDate.addEventListener("click", async () => {
+  if (!editingDueDateId) return;
+  if (!confirm("Delete this item?")) return;
+  try {
+    await DueDates.remove(editingDueDateId);
+    closeDueDateModal();
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+});
+
 document.getElementById("modalSaveDueDate").addEventListener("click", async () => {
   const projectId = ddProject.value;
-  const taskId = ddTask.value || null;
+  const taskId = ddTaskRow.style.display !== "none" ? (ddTask.value || null) : null;
   const title = ddTitle.value.trim();
   const dueDate = ddDate.value;
-  const estimatedHours = ddHours.value ? Number(ddHours.value) : null;
-  const personIds = [...ddPeoplePills.querySelectorAll(".ddPerson:checked")].map((cb) => cb.value);
+  const personIds = ddPeopleField.style.display !== "none"
+    ? [...ddPeoplePills.querySelectorAll(".ddPerson:checked")].map((cb) => cb.value)
+    : [];
 
   if (!projectId) return showToast("Select a project.");
   if (!title || !dueDate) return showToast("Enter a name and date.");
-  if (modalMode === "assignment" && !taskId) return showToast("Select a task for this assignment.");
-  if (modalMode === "assignment" && personIds.length === 0) return showToast("Assign this to at least one person.");
+  if (modalMode === "assignment" && !editingDueDateId && !taskId) return showToast("Select a task for this assignment.");
+  if (modalMode === "assignment" && !editingDueDateId && personIds.length === 0) return showToast("Assign this to at least one person.");
 
   try {
     if (editingDueDateId) {
-      await DueDates.update(editingDueDateId, { projectId, taskId, title, dueDate, estimatedHours, personIds });
+      await DueDates.update(editingDueDateId, { projectId, taskId, title, dueDate, personIds });
       showToast("Updated.");
     } else {
       await DueDates.add({
-        projectId, taskId, title, dueDate, estimatedHours, personIds,
+        projectId, taskId, title, dueDate, personIds,
         createdByPersonId: sessionPersonId,
       });
       showToast("Added.");
     }
     closeDueDateModal();
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+});
+
+// ---------- Timeline (task dates) edit modal ----------
+function openTimelineModal(projectId) {
+  editingTimelineProjectId = projectId;
+  const project = projects.find((p) => p.id === projectId);
+  const projectTasks = tasks.filter((t) => t.projectId === projectId).sort((a, b) => a.name.localeCompare(b.name));
+
+  timelineModalTitle.textContent = project ? `Edit Timeline — ${project.name}` : "Edit Timeline";
+  timelineModalRows.innerHTML = projectTasks.map((t) => `
+    <div class="inline-form" data-task-id="${t.id}" style="margin-bottom:10px;">
+      <div>
+        <label>${t.name}</label>
+      </div>
+      <div>
+        <label>Start</label>
+        <input type="date" class="timelineStart" value="${t.startDate || ""}" />
+      </div>
+      <div>
+        <label>End</label>
+        <input type="date" class="timelineEnd" value="${t.endDate || ""}" />
+      </div>
+    </div>
+  `).join("") || `<div class="empty">This project has no tasks yet.</div>`;
+
+  timelineModal.style.display = "flex";
+}
+
+function closeTimelineModal() {
+  timelineModal.style.display = "none";
+}
+
+document.getElementById("modalCancelTimeline").addEventListener("click", closeTimelineModal);
+timelineModal.addEventListener("click", (e) => {
+  if (e.target === timelineModal) closeTimelineModal();
+});
+
+document.getElementById("modalSaveTimeline").addEventListener("click", async () => {
+  const rows = [...timelineModalRows.querySelectorAll("[data-task-id]")];
+  try {
+    for (const row of rows) {
+      const taskId = row.dataset.taskId;
+      const startDate = row.querySelector(".timelineStart").value || null;
+      const endDate = row.querySelector(".timelineEnd").value || null;
+      const task = tasks.find((t) => t.id === taskId);
+      if (task && (task.startDate !== startDate || task.endDate !== endDate)) {
+        await Tasks.update(taskId, { startDate, endDate });
+      }
+    }
+    showToast("Timeline updated.");
+    closeTimelineModal();
   } catch (err) {
     showToast("Error: " + err.message);
   }

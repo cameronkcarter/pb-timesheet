@@ -98,21 +98,6 @@ h2 {
   }
 }
 
-#projectSummaryCards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-}
-
-#projectSummaryCards .card {
-  margin-bottom: 0;
-}
-
-@media (min-width: 900px) {
-  #projectSummaryCards {
-    grid-template-columns: 1fr 1fr;
-  }
-}
 
 label {
   display: block;
@@ -574,6 +559,17 @@ th {
 
 .gantt-project-row {
   height: 24px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+.gantt-project-clickable {
+  cursor: pointer;
+}
+
+.gantt-project-clickable:hover {
+  text-decoration: underline;
 }
 
 .gantt-label-col {
@@ -663,15 +659,51 @@ th {
 
 .gantt-dot {
   position: absolute;
-  top: 3px;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
+  top: 1px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
   border-radius: 50%;
-  background: var(--accent);
   border: 2px solid var(--card);
   cursor: pointer;
   z-index: 1;
+}
+
+.gantt-dot-event {
+  background: var(--accent);
+}
+
+.gantt-dot-assignment {
+  background: #0f766e;
+}
+
+.gantt-legend {
+  display: flex;
+  gap: 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+
+.gantt-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legend-dot-event {
+  background: var(--accent);
+}
+
+.legend-dot-assignment {
+  background: #0f766e;
 }
 
 .gantt-remaining-col {
@@ -685,7 +717,7 @@ th {
   font-size: 12px;
   text-align: right;
   padding-left: 10px;
-  border-left: 2px solid var(--navy-light);
+  border-left: 1px solid var(--border);
 }
 
 .gantt-project-remaining {
@@ -730,9 +762,54 @@ th {
   vertical-align: middle;
 }
 
-tr.assignment-sub-row td:nth-child(2) {
+.assignment-group {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.assignment-group:last-child {
+  border-bottom: none;
+}
+
+.assignment-group-header {
   display: flex;
   align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.assignment-group-header button {
+  margin-left: auto;
+}
+
+.assignment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 0 0;
+}
+
+.assignment-item-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.assignment-item-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.complete-btn {
+  background: transparent;
+  color: var(--green);
+  border: 1px solid var(--green);
+}
+
+.complete-btn:hover {
+  background: #e5f3e6;
 }
 
 #weekGridTable {
