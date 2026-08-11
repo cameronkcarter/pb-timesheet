@@ -305,19 +305,18 @@ th {
 .task-progress-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
 }
 
 .task-progress-name {
   font-size: 15px;
   font-weight: 600;
+  flex-shrink: 0;
+  max-width: 35%;
 }
 
 .task-progress-bar-wrap {
-  width: 220px;
-  max-width: 50%;
-  flex-shrink: 0;
+  flex: 1;
 }
 
 .progress-bar.task-bar {
