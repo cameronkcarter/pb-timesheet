@@ -346,6 +346,7 @@ th {
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .pill.green {
@@ -419,7 +420,8 @@ th {
 }
 
 .task-card {
-  min-width: 170px;
+  width: 190px;
+  min-width: 190px;
 }
 
 .task-card-stats {
@@ -427,7 +429,16 @@ th {
   gap: 18px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--navy);
+  border-top: 1px solid var(--border);
+}
+
+.task-card:not(.active) .task-card-stats .summary-value,
+.task-card:not(.active) .task-card-stats .summary-label {
+  color: var(--text-muted);
+}
+
+.task-card.active .task-card-stats {
+  border-top-color: var(--navy);
 }
 
 .modal-overlay {

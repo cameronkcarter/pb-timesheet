@@ -176,16 +176,13 @@ function taskStatsFor({ assignment, task }) {
 function renderTaskCards(columns) {
   taskCardsEl.innerHTML = columns.map((c) => {
     const active = c.task.id === selectedTaskId;
-    const statsHtml = active ? (() => {
-      const { suggestedLabel, remainingLabel } = taskStatsFor(c);
-      return `<div class="task-card-stats">
-        <div><span class="summary-label">Suggested</span><div class="summary-value">${suggestedLabel}/wk</div></div>
-        <div><span class="summary-label">Remaining</span><div class="summary-value">${remainingLabel}</div></div>
-      </div>`;
-    })() : "";
+    const { suggestedLabel, remainingLabel } = taskStatsFor(c);
     return `<div class="project-card task-card ${active ? "active" : ""}" data-task-card="${c.task.id}">
       <div class="name">${c.task.name}</div>
-      ${statsHtml}
+      <div class="task-card-stats">
+        <div><span class="summary-label">Suggested</span><div class="summary-value">${suggestedLabel}/wk</div></div>
+        <div><span class="summary-label">Remaining</span><div class="summary-value">${remainingLabel}</div></div>
+      </div>
     </div>`;
   }).join("");
 }
