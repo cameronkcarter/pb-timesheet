@@ -127,7 +127,8 @@ label:first-child {
 select,
 input[type="text"],
 input[type="number"],
-input[type="date"] {
+input[type="date"],
+textarea {
   width: 100%;
   padding: 9px 10px;
   border: 1px solid var(--border);
@@ -135,6 +136,7 @@ input[type="date"] {
   font-size: 14px;
   background: #fff;
   color: var(--text);
+  font-family: inherit;
 }
 
 select:disabled {

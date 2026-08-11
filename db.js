@@ -107,11 +107,12 @@ export const Assignments = {
 };
 
 // TimeEntry documents look like:
-// { personId, taskId, projectId, date, hours, approved, approvedDate,
+// { personId, taskId, projectId, date, hours, note, approved, approvedDate,
 //   invoiced, invoicedDate, invoiceId, paid, paidDate }
 export const TimeEntries = {
   listen: (cb) => listenCollection("timeEntries", cb, "date"),
   add: (data) => add("timeEntries", {
+    note: null,
     approved: false, approvedDate: null,
     invoiced: false, invoicedDate: null, invoiceId: null, paid: false, paidDate: null, ...data,
   }),

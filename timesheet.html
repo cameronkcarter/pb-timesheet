@@ -27,39 +27,51 @@
     <div id="projectCardsEmpty" class="empty" style="display:none;">No projects assigned to you yet.</div>
   </div>
 
-  <div class="card" id="weekCard" style="display:none;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <button id="prevWeek" class="secondary small">&larr; Prev week</button>
-      <h2 id="weekRangeLabel" style="margin:0;"></h2>
-      <button id="nextWeek" class="secondary small">Next week &rarr;</button>
-    </div>
+  <div class="card" id="logCard" style="display:none;">
+    <h2 id="logCardHeading"></h2>
 
-    <div class="stat-row" style="margin-top:16px;">
+    <div class="stat-row">
       <div class="stat">
-        <div class="label">Logged this week</div>
-        <div class="value" id="weekLoggedHours">0</div>
+        <div class="label">Logged This Week</div>
+        <div class="value" id="statProjectWeek">0</div>
       </div>
       <div class="stat">
-        <div class="label" id="monthLabel">Logged this month</div>
-        <div class="value" id="monthLoggedHours">0</div>
+        <div class="label" id="monthLabel">Logged This Month</div>
+        <div class="value" id="statProjectMonth">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Suggested Hrs/Week</div>
+        <div class="value" id="statSuggested">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">Remaining Hours</div>
+        <div class="value" id="statRemaining">—</div>
       </div>
     </div>
 
-    <div class="table-scroll">
-      <table id="weekGridTable">
-        <thead>
-          <tr id="taskHeaderRow"></tr>
-        </thead>
-        <tbody id="weekGridBody"></tbody>
-        <tfoot>
-          <tr id="taskTotalRow"></tr>
-        </tfoot>
-      </table>
-    </div>
-    <div id="weekGridEmpty" class="empty" style="display:none;">You're not assigned to any tasks on this project yet.</div>
+    <div id="noAssignmentsEmpty" class="empty" style="display:none; margin-top:16px;">You're not assigned to any tasks on this project yet.</div>
 
-    <div class="save-week-bar">
-      <button id="saveWeek" class="save-week-btn">Save Week</button>
+    <div id="entryForm" style="margin-top:20px;">
+      <label for="taskSelect">Task</label>
+      <select id="taskSelect"></select>
+
+      <div class="inline-form">
+        <div>
+          <label for="entryDate">Date</label>
+          <input type="date" id="entryDate" />
+        </div>
+        <div>
+          <label for="entryHours">Hours</label>
+          <input type="number" id="entryHours" min="0" step="0.25" placeholder="2" />
+        </div>
+      </div>
+
+      <label for="entryNote">Note — what did you work on?</label>
+      <textarea id="entryNote" rows="3" placeholder="Briefly describe what you worked on..."></textarea>
+
+      <div class="save-week-bar">
+        <button id="submitEntry" class="save-week-btn">Log Hours</button>
+      </div>
     </div>
   </div>
 

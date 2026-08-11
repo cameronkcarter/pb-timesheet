@@ -39,7 +39,7 @@ if (sessionPersonId) {
 }
 
 function esc(str) {
-  return String(str ?? "").replace(/"/g, "&quot;");
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 // ---------- People (table + modal) ----------
@@ -526,11 +526,12 @@ function renderPendingApproval() {
     const subRows = g.entries.map((e) => {
       const project = projects.find((p) => p.id === e.projectId);
       const task = tasks.find((t) => t.id === e.taskId);
+      const noteHtml = e.note ? `<div class="empty" style="padding:2px 0 0;">${esc(e.note)}</div>` : "";
       return `<tr class="pending-sub-row">
         <td>${formatDate(e.date)}</td>
         <td></td>
         <td>${project ? project.name : "—"}</td>
-        <td>${task ? task.name : "—"}</td>
+        <td>${task ? task.name : "—"}${noteHtml}</td>
         <td>${e.hours}</td>
         <td class="row-actions">
           <button class="small" data-action="approve-entry" data-id="${e.id}">Approve</button>

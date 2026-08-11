@@ -1,7 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
-  formatDate, formatShortDate, formatWeekday,
-  todayISO, toISODate, getWeekStart, addDays, suggestedWeeklyHours, showToast,
+  formatDate, todayISO, toISODate, getWeekStart, suggestedWeeklyHours, monthKey, showToast,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility } from "./session.js";
 
@@ -13,25 +12,33 @@ let tasks = [];
 let assignments = [];
 let timeEntries = [];
 let selectedProjectId = null;
-let currentWeekStart = getWeekStart(todayISO());
+let selectedTaskId = null;
 let navChecked = false;
 let isDirty = false;
 
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
 
-const weekCard = document.getElementById("weekCard");
-const weekRangeLabel = document.getElementById("weekRangeLabel");
-const weekLoggedHoursEl = document.getElementById("weekLoggedHours");
+const logCard = document.getElementById("logCard");
+const logCardHeading = document.getElementById("logCardHeading");
+const statProjectWeek = document.getElementById("statProjectWeek");
+const statProjectMonth = document.getElementById("statProjectMonth");
 const monthLabel = document.getElementById("monthLabel");
-const monthLoggedHoursEl = document.getElementById("monthLoggedHours");
-const taskHeaderRow = document.getElementById("taskHeaderRow");
-const weekGridBody = document.getElementById("weekGridBody");
-const taskTotalRow = document.getElementById("taskTotalRow");
-const weekGridEmpty = document.getElementById("weekGridEmpty");
+const statSuggested = document.getElementById("statSuggested");
+const statRemaining = document.getElementById("statRemaining");
+const noAssignmentsEmpty = document.getElementById("noAssignmentsEmpty");
+const entryForm = document.getElementById("entryForm");
+const taskSelect = document.getElementById("taskSelect");
+const entryDate = document.getElementById("entryDate");
+const entryHours = document.getElementById("entryHours");
+const entryNote = document.getElementById("entryNote");
 
 const tbody = document.querySelector("#entriesTable tbody");
 const entriesEmpty = document.getElementById("entriesEmpty");
+
+function esc(str) {
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 wireLogout("logoutLink", "navBrandLink");
 
@@ -44,9 +51,9 @@ if (selectedPersonId) {
     }
   });
   Projects.listen((data) => { projects = data; renderProjectCards(); });
-  Tasks.listen((data) => { tasks = data; renderWeekGrid(); });
+  Tasks.listen((data) => { tasks = data; renderLogCard(); });
   Assignments.listen((data) => { assignments = data; renderProjectCards(); });
-  TimeEntries.listen((data) => { timeEntries = data; renderWeekGrid(); renderEntries(); });
+  TimeEntries.listen((data) => { timeEntries = data; renderLogCard(); renderEntries(); });
 }
 
 // ---------- Project cards ----------
@@ -59,7 +66,7 @@ function renderProjectCards() {
   if (myProjects.length === 0) {
     projectCardsEl.innerHTML = "";
     projectCardsEmpty.style.display = "block";
-    weekCard.style.display = "none";
+    logCard.style.display = "none";
     return;
   }
   projectCardsEmpty.style.display = "none";
@@ -71,12 +78,12 @@ function renderProjectCards() {
     </div>
   `).join("");
 
-  renderWeekGrid();
+  renderLogCard();
 }
 
 function confirmDiscardIfDirty() {
   if (!isDirty) return true;
-  if (!confirm("You have unsaved hours on this screen. Discard them?")) return false;
+  if (!confirm("You have an unsaved entry on this screen. Discard it?")) return false;
   isDirty = false;
   return true;
 }
@@ -86,20 +93,8 @@ projectCardsEl.addEventListener("click", (e) => {
   if (!card) return;
   if (!confirmDiscardIfDirty()) return;
   selectedProjectId = card.dataset.projectCard;
-  currentWeekStart = getWeekStart(todayISO());
+  selectedTaskId = null;
   renderProjectCards();
-});
-
-// ---------- Week grid ----------
-document.getElementById("prevWeek").addEventListener("click", () => {
-  if (!confirmDiscardIfDirty()) return;
-  currentWeekStart = addDays(currentWeekStart, -7);
-  renderWeekGrid();
-});
-document.getElementById("nextWeek").addEventListener("click", () => {
-  if (!confirmDiscardIfDirty()) return;
-  currentWeekStart = addDays(currentWeekStart, 7);
-  renderWeekGrid();
 });
 
 window.addEventListener("beforeunload", (e) => {
@@ -108,11 +103,8 @@ window.addEventListener("beforeunload", (e) => {
   e.returnValue = "";
 });
 
-function weekDays() {
-  return Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
-}
-
-function myTaskColumns() {
+// ---------- Log card ----------
+function myTaskOptions() {
   const myAssignments = assignments.filter(
     (a) => a.personId === selectedPersonId && a.projectId === selectedProjectId
   );
@@ -122,161 +114,117 @@ function myTaskColumns() {
     .sort((a, b) => a.task.name.localeCompare(b.task.name));
 }
 
-function renderWeekGrid() {
+function renderLogCard() {
   if (!selectedPersonId || !selectedProjectId) {
-    weekCard.style.display = "none";
+    logCard.style.display = "none";
     return;
   }
-  weekCard.style.display = "block";
+  logCard.style.display = "block";
 
+  const project = projects.find((p) => p.id === selectedProjectId);
+  logCardHeading.textContent = project ? project.name : "";
+
+  const weekStart = toISODate(getWeekStart(todayISO()));
+  const monthPrefix = monthKey(new Date());
+  const myProjectEntries = timeEntries.filter(
+    (e) => e.personId === selectedPersonId && e.projectId === selectedProjectId
+  );
+  const weekTotal = myProjectEntries
+    .filter((e) => e.date >= weekStart)
+    .reduce((s, e) => s + Number(e.hours || 0), 0);
+  const monthTotal = myProjectEntries
+    .filter((e) => e.date.startsWith(monthPrefix))
+    .reduce((s, e) => s + Number(e.hours || 0), 0);
+  statProjectWeek.textContent = weekTotal.toFixed(2);
+  statProjectMonth.textContent = monthTotal.toFixed(2);
+  monthLabel.textContent = `Logged This Month`;
+
+  const columns = myTaskOptions();
+  if (columns.length === 0) {
+    noAssignmentsEmpty.style.display = "block";
+    entryForm.style.display = "none";
+    return;
+  }
+  noAssignmentsEmpty.style.display = "none";
+  entryForm.style.display = "block";
+
+  if (!selectedTaskId || !columns.some((c) => c.task.id === selectedTaskId)) {
+    selectedTaskId = columns[0].task.id;
+  }
+  taskSelect.innerHTML = columns.map(({ task }) =>
+    `<option value="${task.id}" ${task.id === selectedTaskId ? "selected" : ""}>${task.name}</option>`
+  ).join("");
+
+  if (!entryDate.value) entryDate.value = todayISO();
+
+  renderTaskStats();
+}
+
+function renderTaskStats() {
+  const columns = myTaskOptions();
+  const chosen = columns.find((c) => c.task.id === selectedTaskId);
+  if (!chosen) {
+    statSuggested.textContent = "—";
+    statRemaining.textContent = "—";
+    return;
+  }
+  const { assignment, task } = chosen;
   const person = people.find((p) => p.id === selectedPersonId);
   const rate = person ? person.rate : 0;
-  const columns = myTaskColumns();
-  const days = weekDays();
-  const todayStr = todayISO();
+  const suggested = suggestedWeeklyHours(assignment.capValue, rate, task.startDate, task.endDate);
+  const allLogged = timeEntries
+    .filter((e) => e.personId === selectedPersonId && e.taskId === task.id)
+    .reduce((sum, e) => sum + Number(e.hours || 0), 0);
+  const totalHours = rate > 0 ? (assignment.capValue || 0) / rate : 0;
+  const remainingHours = totalHours - allLogged;
 
-  weekRangeLabel.textContent = `${formatShortDate(days[0])} – ${formatShortDate(days[6])}`;
-
-  if (columns.length === 0) {
-    taskHeaderRow.innerHTML = "";
-    weekGridBody.innerHTML = "";
-    taskTotalRow.innerHTML = "";
-    weekGridEmpty.style.display = "block";
-    weekLoggedHoursEl.textContent = "0.00";
-    updateMonthTotal(columns);
-    return;
-  }
-  weekGridEmpty.style.display = "none";
-
-  taskHeaderRow.innerHTML = "<th>Day</th>" + columns.map(({ assignment, task }) => {
-    const suggested = suggestedWeeklyHours(assignment.capValue, rate, task.startDate, task.endDate);
-    const allLogged = timeEntries
-      .filter((e) => e.personId === selectedPersonId && e.taskId === task.id)
-      .reduce((sum, e) => sum + Number(e.hours || 0), 0);
-    const totalHours = rate > 0 ? (assignment.capValue || 0) / rate : 0;
-    const remainingHours = totalHours - allLogged;
-    return `<th>
-      <div class="task-header-name">${task.name}</div>
-      <div class="task-header-meta">Suggested: ${suggested != null ? suggested.toFixed(1) : "—"} hrs/wk</div>
-      <div class="task-header-meta">Remaining: ${remainingHours.toFixed(1)} hrs</div>
-    </th>`;
-  }).join("") + "<th>Day Total</th>";
-
-  weekGridBody.innerHTML = days.map((d) => {
-    const iso = toISODate(d);
-    const isToday = iso === todayStr;
-    const cells = columns.map(({ task }) => {
-      const hours = timeEntries
-        .filter((e) => e.personId === selectedPersonId && e.taskId === task.id && e.date === iso)
-        .reduce((sum, e) => sum + Number(e.hours || 0), 0);
-      return `<td><input type="number" class="hourCell" data-date="${iso}" data-task-id="${task.id}" min="0" step="0.25" value="${hours || ""}" placeholder="0" /></td>`;
-    }).join("");
-    return `<tr class="${isToday ? "today-row" : ""}">
-      <td><span class="weekday">${formatWeekday(d)}</span> ${formatShortDate(d)}</td>
-      ${cells}
-      <td class="day-total" data-date="${iso}">0.00</td>
-    </tr>`;
-  }).join("");
-
-  taskTotalRow.innerHTML = "<td>Total</td>" +
-    columns.map(({ task }) => `<td class="task-total" data-task-id="${task.id}">0.00</td>`).join("") +
-    `<td class="grand-total">0.00</td>`;
-
-  recomputeGridTotals();
+  statSuggested.textContent = suggested != null ? `${suggested.toFixed(1)} hrs` : "—";
+  statRemaining.textContent = `${remainingHours.toFixed(1)} hrs`;
 }
 
-function recomputeGridTotals() {
-  const cells = [...weekGridBody.querySelectorAll(".hourCell")];
-  const dayTotals = {};
-  const taskTotals = {};
-  let grand = 0;
-
-  cells.forEach((input) => {
-    const v = Number(input.value) || 0;
-    dayTotals[input.dataset.date] = (dayTotals[input.dataset.date] || 0) + v;
-    taskTotals[input.dataset.taskId] = (taskTotals[input.dataset.taskId] || 0) + v;
-    grand += v;
-  });
-
-  weekGridBody.querySelectorAll(".day-total").forEach((td) => {
-    td.textContent = (dayTotals[td.dataset.date] || 0).toFixed(2);
-  });
-  taskTotalRow.querySelectorAll(".task-total").forEach((td) => {
-    td.textContent = (taskTotals[td.dataset.taskId] || 0).toFixed(2);
-  });
-  const grandTotalEl = taskTotalRow.querySelector(".grand-total");
-  if (grandTotalEl) grandTotalEl.textContent = grand.toFixed(2);
-
-  weekLoggedHoursEl.textContent = grand.toFixed(2);
-  updateMonthTotal(myTaskColumns());
-}
-
-weekGridBody.addEventListener("input", (e) => {
-  if (e.target.classList.contains("hourCell")) {
-    isDirty = true;
-    recomputeGridTotals();
-  }
+taskSelect.addEventListener("change", () => {
+  selectedTaskId = taskSelect.value;
+  renderTaskStats();
 });
 
-function updateMonthTotal(columns) {
-  const monthPrefix = toISODate(currentWeekStart).slice(0, 7);
-  const monthName = currentWeekStart.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  monthLabel.textContent = `Logged in ${monthName}`;
-
-  if (!selectedPersonId || !selectedProjectId) {
-    monthLoggedHoursEl.textContent = "0.00";
-    return;
-  }
-
-  const weekDateStrs = weekDays().map((d) => toISODate(d));
-
-  const savedMonthTotal = timeEntries
-    .filter((e) =>
-      e.personId === selectedPersonId &&
-      e.projectId === selectedProjectId &&
-      e.date.startsWith(monthPrefix) &&
-      !weekDateStrs.includes(e.date)
-    )
-    .reduce((sum, e) => sum + Number(e.hours || 0), 0);
-
-  let liveWeekMonthTotal = 0;
-  weekGridBody.querySelectorAll(".hourCell").forEach((input) => {
-    if (input.dataset.date.startsWith(monthPrefix)) {
-      liveWeekMonthTotal += Number(input.value) || 0;
-    }
+[entryHours, entryNote].forEach((el) => {
+  el.addEventListener("input", () => {
+    isDirty = entryHours.value.trim() !== "" || entryNote.value.trim() !== "";
   });
+});
 
-  monthLoggedHoursEl.textContent = (savedMonthTotal + liveWeekMonthTotal).toFixed(2);
-}
-
-document.getElementById("saveWeek").addEventListener("click", async () => {
+document.getElementById("submitEntry").addEventListener("click", async () => {
   const personId = selectedPersonId;
   const projectId = selectedProjectId;
-  if (!personId || !projectId) return;
+  const taskId = selectedTaskId;
+  const date = entryDate.value;
+  const hours = Number(entryHours.value);
+  const note = entryNote.value.trim();
 
-  const cells = [...weekGridBody.querySelectorAll(".hourCell")];
+  if (!projectId || !taskId) return showToast("Select a task first.");
+  if (!date) return showToast("Choose a date.");
+  if (!hours || hours <= 0) return showToast("Enter hours worked.");
+  if (!note) return showToast("Add a note describing what you worked on.");
+
+  const existing = timeEntries.find(
+    (e) => e.personId === personId && e.taskId === taskId && e.date === date
+  );
+
+  if (existing && existing.invoiced) {
+    return showToast("This day/task has already been invoiced and can't be changed here.");
+  }
+
   try {
-    for (const input of cells) {
-      const date = input.dataset.date;
-      const taskId = input.dataset.taskId;
-      const hours = Number(input.value) || 0;
-      const existing = timeEntries.find(
-        (e) => e.personId === personId && e.taskId === taskId && e.date === date
-      );
-      if (hours > 0) {
-        if (existing) {
-          if (Number(existing.hours) !== hours) {
-            await TimeEntries.update(existing.id, { hours, approved: false, approvedDate: null });
-          }
-        } else {
-          await TimeEntries.add({ personId, projectId, taskId, date, hours });
-        }
-      } else if (existing) {
-        await TimeEntries.remove(existing.id);
-      }
+    if (existing) {
+      await TimeEntries.update(existing.id, { hours, note, approved: false, approvedDate: null });
+      showToast("Entry updated.");
+    } else {
+      await TimeEntries.add({ personId, projectId, taskId, date, hours, note });
+      showToast("Hours logged.");
     }
+    entryHours.value = "";
+    entryNote.value = "";
     isDirty = false;
-    showToast("Week saved.");
   } catch (err) {
     showToast("Error: " + err.message);
   }
@@ -326,10 +274,14 @@ function renderEntries() {
       ? `${formatDate(e.date)}${dayTotals[e.date] > Number(e.hours || 0) ? ` <span class="empty" style="padding:0;">(${dayTotals[e.date]} hrs)</span>` : ""}`
       : "";
 
+    const noteHtml = e.note
+      ? `<div class="empty" style="padding:2px 0 0;">${esc(e.note)}</div>`
+      : "";
+
     return `<tr class="entry-row ${shade ? "shade" : ""} ${isNewDay ? "new-day" : ""}">
       <td>${dateCell}</td>
       <td>${project ? project.name : "—"}</td>
-      <td>${task ? task.name : "—"}</td>
+      <td>${task ? task.name : "—"}${noteHtml}</td>
       <td>${e.hours}</td>
       <td>${statusPill}</td>
       <td>${deleteBtn}</td>
