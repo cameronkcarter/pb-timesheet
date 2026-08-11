@@ -681,6 +681,10 @@ th {
 
 .gantt-dot-hollow {
   background: #fff !important;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  top: 3px;
 }
 
 .gantt-dot-event.gantt-dot-hollow {
