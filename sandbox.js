@@ -56,8 +56,10 @@ export function listenTest(name, cb, orderByField) {
   const entry = { cb, orderByField };
   listeners[name].push(entry);
 
+  // Always deliver async, even when already seeded, matching Firestore's
+  // onSnapshot contract that pages rely on (never fires synchronously).
   if (sessionStorage.getItem(seededKey(name))) {
-    cb(sortItems(readData(name), orderByField));
+    Promise.resolve().then(() => cb(sortItems(readData(name), orderByField)));
   } else {
     seedIfNeeded(name).then(() => notifyAll(name));
   }
