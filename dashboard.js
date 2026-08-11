@@ -114,9 +114,16 @@ function render() {
       const pct = a.capValue > 0 ? Math.min(100, (used / a.capValue) * 100) : 0;
       const over = used > a.capValue;
       return `<div class="task-progress-row">
-        <div class="task-progress-name">${task ? task.name : "—"}</div>
-        <div class="progress-bar"><div class="fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
-        <div class="empty" style="padding-top:2px;">${formatCurrency(used)} spent &middot; ${formatCurrency(remaining)} remaining</div>
+        <div class="task-progress-header">
+          <div class="task-progress-name">${task ? task.name : "—"}</div>
+          <div class="task-progress-bar-wrap">
+            <div class="progress-bar task-bar"><div class="fill task-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
+            <div class="progress-captions">
+              <span>${formatCurrency(used)} spent</span>
+              <span>${formatCurrency(remaining)} remaining</span>
+            </div>
+          </div>
+        </div>
       </div>`;
     }).join("");
 
@@ -133,9 +140,12 @@ function render() {
         <div style="margin-top:12px;">
           <div class="summary-label">Overall Progress</div>
           <div class="progress-bar large" style="margin-top:6px;"><div class="fill ${totalOver ? "over" : ""}" style="width:${totalPct}%"></div></div>
-          <div class="empty" style="padding-top:4px;">${formatCurrency(totalEarned)} spent &middot; ${formatCurrency(totalRemaining)} remaining</div>
+          <div class="progress-captions">
+            <span>${formatCurrency(totalEarned)} spent</span>
+            <span>${formatCurrency(totalRemaining)} remaining</span>
+          </div>
         </div>
-        <div style="margin-top:16px;">${taskRows}</div>` : '<div class="empty">No hour assignment set for this project.</div>'}
+        <div style="margin-top:18px;">${taskRows}</div>` : '<div class="empty">No hour assignment set for this project.</div>'}
     </div>`;
   }).join("");
 }

@@ -526,16 +526,19 @@ function renderPendingApproval() {
     const subRows = g.entries.map((e) => {
       const project = projects.find((p) => p.id === e.projectId);
       const task = tasks.find((t) => t.id === e.taskId);
-      return `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--border);">
-        <div>${formatDate(e.date)} — ${project ? project.name : "—"} / ${task ? task.name : "—"}</div>
-        <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
-          <span>${e.hours} hrs</span>
+      return `<tr class="pending-sub-row">
+        <td>${formatDate(e.date)}</td>
+        <td></td>
+        <td>${project ? project.name : "—"}</td>
+        <td>${task ? task.name : "—"}</td>
+        <td>${e.hours}</td>
+        <td class="row-actions">
           <button class="small" data-action="approve-entry" data-id="${e.id}">Approve</button>
-        </div>
-      </div>`;
+        </td>
+      </tr>`;
     }).join("");
 
-    return mainRow + `<tr><td colspan="6" class="accordion-cell">${subRows}</td></tr>`;
+    return mainRow + subRows;
   }).join("");
 }
 
