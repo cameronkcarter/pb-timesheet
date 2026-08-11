@@ -531,7 +531,13 @@ th {
   margin-top: 8px;
 }
 
-/* ---------- Gantt chart (Planning page) ---------- */
+/* ---------- Gantt chart (Schedule page) ---------- */
+.gantt-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-top: 8px;
+}
+
 .gantt-inner {
   display: inline-block;
   min-width: 100%;
@@ -540,28 +546,28 @@ th {
 .gantt-row {
   display: flex;
   align-items: center;
-  height: 32px;
+  height: 26px;
 }
 
 .gantt-header-row {
-  height: 36px;
+  height: 30px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
 }
 
 .gantt-project-row {
-  height: 28px;
+  height: 24px;
 }
 
 .gantt-label-col {
-  width: 220px;
-  min-width: 220px;
+  width: 200px;
+  min-width: 200px;
   flex-shrink: 0;
   position: sticky;
   left: 0;
   background: var(--card);
   z-index: 2;
-  font-size: 13px;
+  font-size: 12px;
   padding-right: 10px;
   white-space: nowrap;
   overflow: hidden;
@@ -578,10 +584,11 @@ th {
   color: var(--text);
 }
 
-.gantt-header-row .gantt-label-col {
+.gantt-header-row .gantt-label-col,
+.gantt-header-row .gantt-remaining-col {
   font-weight: 600;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
@@ -601,10 +608,10 @@ th {
 .gantt-tick {
   position: absolute;
   top: 0;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   border-left: 1px solid var(--border);
-  padding-left: 4px;
+  padding-left: 3px;
   height: 100%;
   display: flex;
   align-items: center;
@@ -614,61 +621,84 @@ th {
 .gantt-today-tick {
   position: absolute;
   top: 0;
-  bottom: -1000px;
+  height: 100%;
   border-left: 2px solid var(--accent);
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--accent);
-  padding-left: 3px;
-  white-space: nowrap;
   z-index: 1;
 }
 
 .gantt-bar {
   position: absolute;
-  top: 6px;
-  height: 16px;
+  top: 5px;
+  height: 14px;
   background: var(--navy-light);
   border-radius: 4px;
 }
 
 .gantt-dot {
   position: absolute;
-  top: 10px;
+  top: 3px;
   width: 8px;
   height: 8px;
   margin-left: -4px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--card);
-  cursor: help;
+  cursor: pointer;
+  z-index: 1;
 }
 
-/* ---------- Hours projection (Planning page) ---------- */
-.projection-row {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.projection-row:last-child {
-  border-bottom: none;
-}
-
-.projection-task {
-  font-weight: 700;
-  font-size: 14px;
-}
-
-.projection-stats {
-  display: flex;
-  gap: 28px;
-  margin-top: 8px;
-}
-
-.projection-items {
-  margin-top: 8px;
+.gantt-remaining-col {
+  width: 100px;
+  min-width: 100px;
+  flex-shrink: 0;
+  position: sticky;
+  right: 0;
+  background: var(--card);
+  z-index: 2;
   font-size: 12px;
-  color: var(--text-muted);
+  text-align: right;
+  padding-left: 10px;
+}
+
+.gantt-project-remaining {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.gantt-dot-popover {
+  position: absolute;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  z-index: 200;
+  max-width: 240px;
+}
+
+.gantt-dot-popover-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.creator-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+tr.assignment-sub-row td:nth-child(2) {
+  display: flex;
+  align-items: center;
 }
 
 #weekGridTable {

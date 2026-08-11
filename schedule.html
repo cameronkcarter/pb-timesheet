@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
-<title>Planning — Place Builders</title>
+<title>Schedule — Place Builders</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -12,58 +12,63 @@
   <a href="index.html" id="navBrandLink" class="brand">Place Builders</a>
   <a href="dashboard.html">Dashboard</a>
   <a href="timesheet.html">Timesheet</a>
-  <a href="planning.html" class="active">Planning</a>
+  <a href="schedule.html" class="active">Schedule</a>
   <a href="admin.html" id="navAdminLink" style="display:none;">Admin</a>
   <a href="invoice.html" id="navInvoiceLink" style="display:none;">Invoices</a>
   <a href="#" id="logoutLink" style="margin-left:auto;">Log Out</a>
 </nav>
 
 <main>
-  <h1>Planning</h1>
-  <p class="subtitle">See how projects and tasks overlap, plan your due dates, and project your remaining hours.</p>
+  <h1>Schedule</h1>
+  <p class="subtitle">See how projects and tasks overlap, and keep track of events and assignments.</p>
 
   <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0;">Timeline</h2>
-      <div id="ganttEmpty" class="empty" style="display:none; margin:0;">No scheduled tasks yet — add start/end dates to tasks in Admin.</div>
-    </div>
-    <div id="ganttScroll" class="table-scroll" style="margin-top:14px;">
+    <h2>Timeline</h2>
+    <div id="ganttEmpty" class="empty" style="display:none;">No projects yet.</div>
+    <div id="ganttScroll" class="gantt-scroll">
       <div id="ganttChart"></div>
     </div>
   </div>
 
   <div class="card">
-    <h2>Your Hours Projection</h2>
-    <div id="projectionEmpty" class="empty">You're not assigned to any tasks yet.</div>
-    <div id="projectionRows"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Events</h2>
+      <button id="openAddEvent" class="secondary small">+ Add Event</button>
+    </div>
+    <table id="eventsTable" style="margin-top:16px;">
+      <thead><tr><th>Event</th><th>Project</th><th>Date</th><th style="width:130px;"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="eventsEmpty" class="empty" style="display:none;">No events yet.</div>
   </div>
 
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0;">Due Dates</h2>
-      <button id="openAddDueDate" class="secondary small">+ Add Due Date</button>
+      <h2 style="margin:0;">Assignments</h2>
+      <button id="openAddAssignment" class="secondary small">+ Add Assignment</button>
     </div>
-    <table id="dueDatesTable" style="margin-top:16px;">
-      <thead><tr><th>Event</th><th>Project / Task</th><th>Assigned To</th><th>Due Date</th><th>Est. Hours</th><th style="width:130px;"></th></tr></thead>
+    <table id="assignmentsTable" style="margin-top:16px;">
+      <thead><tr><th>Person</th><th>Item</th><th>Project / Task</th><th>Due Date</th><th>Est. Hours</th><th style="width:110px;"></th></tr></thead>
       <tbody></tbody>
     </table>
-    <div id="dueDatesEmpty" class="empty" style="display:none;">No due dates yet.</div>
   </div>
 </main>
 
 <div id="dueDateModal" class="modal-overlay" style="display:none;">
   <div class="modal" style="max-width:520px;">
-    <h2 id="dueDateModalTitle">Add Due Date</h2>
+    <h2 id="dueDateModalTitle">Add Event</h2>
 
     <label for="ddProject">Project</label>
     <select id="ddProject"></select>
 
-    <label for="ddTask">Task (optional — links this to a task's hour projection)</label>
-    <select id="ddTask">
-      <option value="">No specific task</option>
-    </select>
+    <div id="ddTaskRow">
+      <label for="ddTask" id="ddTaskLabel">Task</label>
+      <select id="ddTask">
+        <option value="">No specific task</option>
+      </select>
+    </div>
 
-    <label for="ddTitle">Event name</label>
+    <label for="ddTitle">Name</label>
     <input type="text" id="ddTitle" placeholder="Community Workshop" />
 
     <div class="inline-form">
@@ -71,14 +76,16 @@
         <label for="ddDate">Due date</label>
         <input type="date" id="ddDate" />
       </div>
-      <div>
+      <div id="ddHoursField">
         <label for="ddHours">Estimated hours (optional)</label>
         <input type="number" id="ddHours" min="0" step="0.25" placeholder="6" />
       </div>
     </div>
 
-    <label>Assigned to</label>
-    <div id="ddPeoplePills" class="dd-people-pills"></div>
+    <div id="ddPeopleField">
+      <label>Assigned to</label>
+      <div id="ddPeoplePills" class="dd-people-pills"></div>
+    </div>
 
     <div class="row-actions" style="margin-top:20px; justify-content:flex-end;">
       <button id="modalCancelDueDate" class="secondary">Cancel</button>
@@ -89,6 +96,6 @@
 
 <div id="toast" class="toast"></div>
 
-<script type="module" src="planning.js"></script>
+<script type="module" src="schedule.js"></script>
 </body>
 </html>
