@@ -39,23 +39,15 @@
         <div class="label" id="monthLabel">Logged This Month</div>
         <div class="value" id="statProjectMonth">0</div>
       </div>
-      <div class="stat">
-        <div class="label">Suggested Hrs/Week</div>
-        <div class="value" id="statSuggested">—</div>
-      </div>
-      <div class="stat">
-        <div class="label">Remaining Hours</div>
-        <div class="value" id="statRemaining">—</div>
-      </div>
     </div>
 
     <div id="noAssignmentsEmpty" class="empty" style="display:none; margin-top:16px;">You're not assigned to any tasks on this project yet.</div>
 
     <div id="entryForm" style="margin-top:20px;">
-      <label for="taskSelect">Task</label>
-      <select id="taskSelect"></select>
+      <label>Task</label>
+      <div id="taskCards" class="project-card-row"></div>
 
-      <div class="inline-form">
+      <div class="inline-form" style="margin-top:16px;">
         <div>
           <label for="entryDate">Date</label>
           <input type="date" id="entryDate" />
@@ -84,6 +76,7 @@
       <tbody></tbody>
     </table>
     <div id="entriesEmpty" class="empty" style="display:none;">No entries logged yet.</div>
+    <button id="loadMoreEntries" class="secondary small" style="display:none; margin-top:12px;">Load More</button>
   </div>
 </main>
 

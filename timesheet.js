@@ -15,6 +15,8 @@ let selectedProjectId = null;
 let selectedTaskId = null;
 let navChecked = false;
 let isDirty = false;
+let entriesShown = 10;
+const ENTRIES_PAGE_SIZE = 10;
 
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
@@ -24,17 +26,16 @@ const logCardHeading = document.getElementById("logCardHeading");
 const statProjectWeek = document.getElementById("statProjectWeek");
 const statProjectMonth = document.getElementById("statProjectMonth");
 const monthLabel = document.getElementById("monthLabel");
-const statSuggested = document.getElementById("statSuggested");
-const statRemaining = document.getElementById("statRemaining");
 const noAssignmentsEmpty = document.getElementById("noAssignmentsEmpty");
 const entryForm = document.getElementById("entryForm");
-const taskSelect = document.getElementById("taskSelect");
+const taskCardsEl = document.getElementById("taskCards");
 const entryDate = document.getElementById("entryDate");
 const entryHours = document.getElementById("entryHours");
 const entryNote = document.getElementById("entryNote");
 
 const tbody = document.querySelector("#entriesTable tbody");
 const entriesEmpty = document.getElementById("entriesEmpty");
+const loadMoreEntries = document.getElementById("loadMoreEntries");
 
 function esc(str) {
   return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -151,24 +152,13 @@ function renderLogCard() {
   if (!selectedTaskId || !columns.some((c) => c.task.id === selectedTaskId)) {
     selectedTaskId = columns[0].task.id;
   }
-  taskSelect.innerHTML = columns.map(({ task }) =>
-    `<option value="${task.id}" ${task.id === selectedTaskId ? "selected" : ""}>${task.name}</option>`
-  ).join("");
 
   if (!entryDate.value) entryDate.value = todayISO();
 
-  renderTaskStats();
+  renderTaskCards(columns);
 }
 
-function renderTaskStats() {
-  const columns = myTaskOptions();
-  const chosen = columns.find((c) => c.task.id === selectedTaskId);
-  if (!chosen) {
-    statSuggested.textContent = "—";
-    statRemaining.textContent = "—";
-    return;
-  }
-  const { assignment, task } = chosen;
+function taskStatsFor({ assignment, task }) {
   const person = people.find((p) => p.id === selectedPersonId);
   const rate = person ? person.rate : 0;
   const suggested = suggestedWeeklyHours(assignment.capValue, rate, task.startDate, task.endDate);
@@ -177,20 +167,45 @@ function renderTaskStats() {
     .reduce((sum, e) => sum + Number(e.hours || 0), 0);
   const totalHours = rate > 0 ? (assignment.capValue || 0) / rate : 0;
   const remainingHours = totalHours - allLogged;
-
-  statSuggested.textContent = suggested != null ? `${suggested.toFixed(1)} hrs` : "—";
-  statRemaining.textContent = `${remainingHours.toFixed(1)} hrs`;
+  return {
+    suggestedLabel: suggested != null ? `${suggested.toFixed(1)} hrs` : "—",
+    remainingLabel: `${remainingHours.toFixed(1)} hrs`,
+  };
 }
 
-taskSelect.addEventListener("change", () => {
-  selectedTaskId = taskSelect.value;
-  renderTaskStats();
+function renderTaskCards(columns) {
+  taskCardsEl.innerHTML = columns.map((c) => {
+    const active = c.task.id === selectedTaskId;
+    const statsHtml = active ? (() => {
+      const { suggestedLabel, remainingLabel } = taskStatsFor(c);
+      return `<div class="task-card-stats">
+        <div><span class="summary-label">Suggested</span><div class="summary-value">${suggestedLabel}/wk</div></div>
+        <div><span class="summary-label">Remaining</span><div class="summary-value">${remainingLabel}</div></div>
+      </div>`;
+    })() : "";
+    return `<div class="project-card task-card ${active ? "active" : ""}" data-task-card="${c.task.id}">
+      <div class="name">${c.task.name}</div>
+      ${statsHtml}
+    </div>`;
+  }).join("");
+}
+
+taskCardsEl.addEventListener("click", (e) => {
+  const card = e.target.closest(".task-card");
+  if (!card) return;
+  selectedTaskId = card.dataset.taskCard;
+  renderTaskCards(myTaskOptions());
 });
 
 [entryHours, entryNote].forEach((el) => {
   el.addEventListener("input", () => {
     isDirty = entryHours.value.trim() !== "" || entryNote.value.trim() !== "";
   });
+});
+
+loadMoreEntries.addEventListener("click", () => {
+  entriesShown += ENTRIES_PAGE_SIZE;
+  renderEntries();
 });
 
 document.getElementById("submitEntry").addEventListener("click", async () => {
@@ -232,10 +247,12 @@ document.getElementById("submitEntry").addEventListener("click", async () => {
 
 // ---------- Recent entries ----------
 function renderEntries() {
-  const mine = timeEntries
+  const allMine = timeEntries
     .filter((e) => e.personId === selectedPersonId)
-    .sort((a, b) => (a.date < b.date ? 1 : -1))
-    .slice(0, 15);
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  const mine = allMine.slice(0, entriesShown);
+
+  loadMoreEntries.style.display = allMine.length > mine.length ? "inline-block" : "none";
 
   if (mine.length === 0) {
     tbody.innerHTML = "";

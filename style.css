@@ -418,6 +418,18 @@ th {
   margin-top: 10px;
 }
 
+.task-card {
+  min-width: 170px;
+}
+
+.task-card-stats {
+  display: flex;
+  gap: 18px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--navy);
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
