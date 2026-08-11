@@ -312,7 +312,10 @@ th {
   font-size: 15px;
   font-weight: 600;
   flex-shrink: 0;
-  max-width: 35%;
+  width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-progress-bar-wrap {
@@ -780,6 +783,37 @@ th {
 
 .assignment-group-header button {
   margin-left: auto;
+}
+
+.timeline-task-row {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline-task-row:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.timeline-task-name {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.timeline-task-dates {
+  display: flex;
+  gap: 10px;
+}
+
+.timeline-task-dates > div {
+  flex: 1;
+}
+
+.timeline-task-dates label {
+  margin-top: 0;
 }
 
 .assignment-item {

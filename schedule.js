@@ -24,6 +24,13 @@ const LABEL_COL_WIDTH = 200;
 
 const ganttChart = document.getElementById("ganttChart");
 const ganttEmpty = document.getElementById("ganttEmpty");
+const ganttScroll = document.getElementById("ganttScroll");
+let userHasScrolledGantt = false;
+let isProgrammaticGanttScroll = false;
+ganttScroll.addEventListener("scroll", () => {
+  if (isProgrammaticGanttScroll) return;
+  userHasScrolledGantt = true;
+});
 const assignmentsList = document.getElementById("assignmentsList");
 
 const dueDateModal = document.getElementById("dueDateModal");
@@ -220,6 +227,12 @@ function renderGantt() {
     ${monthLinesHtml}
     ${todayLineHtml}
   </div>`;
+
+  if (!userHasScrolledGantt && todayInRange) {
+    isProgrammaticGanttScroll = true;
+    ganttScroll.scrollLeft = Math.max(0, todayX - 60);
+    requestAnimationFrame(() => { isProgrammaticGanttScroll = false; });
+  }
 }
 
 ganttChart.addEventListener("click", (e) => {
@@ -369,12 +382,11 @@ function openDueDateModal(dueDateRecord, mode, presetPersonId) {
     ? (mode === "event" ? "Edit Event" : "Edit Assignment")
     : (mode === "event" ? "Add Event" : "Add Assignment");
 
-  // Fresh "Add Event" is a minimal form: no task, no people. Everything
-  // else (Add Assignment, or editing anything) shows the full form so
-  // items can be reclassified or linked to a task later.
-  const showTaskAndPeople = isEditing || mode === "assignment";
-  ddTaskRow.style.display = showTaskAndPeople ? "block" : "none";
-  ddPeopleField.style.display = showTaskAndPeople ? "block" : "none";
+  // Task is always available (for placing an event on a task's timeline
+  // row). Events never show the people picker, add or edit — events are
+  // universal, never assigned to anyone.
+  ddTaskRow.style.display = "block";
+  ddPeopleField.style.display = mode === "assignment" ? "block" : "none";
 
   ddProject.innerHTML = projects.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
   const projectId = dueDateRecord ? dueDateRecord.projectId : (projects[0] && projects[0].id);
@@ -457,17 +469,17 @@ function openTimelineModal(projectId) {
 
   timelineModalTitle.textContent = project ? `Edit Timeline — ${project.name}` : "Edit Timeline";
   timelineModalRows.innerHTML = projectTasks.map((t) => `
-    <div class="inline-form" data-task-id="${t.id}" style="margin-bottom:10px;">
-      <div>
-        <label>${t.name}</label>
-      </div>
-      <div>
-        <label>Start</label>
-        <input type="date" class="timelineStart" value="${t.startDate || ""}" />
-      </div>
-      <div>
-        <label>End</label>
-        <input type="date" class="timelineEnd" value="${t.endDate || ""}" />
+    <div class="timeline-task-row" data-task-id="${t.id}">
+      <div class="timeline-task-name">${t.name}</div>
+      <div class="timeline-task-dates">
+        <div>
+          <label>Start</label>
+          <input type="date" class="timelineStart" value="${t.startDate || ""}" />
+        </div>
+        <div>
+          <label>End</label>
+          <input type="date" class="timelineEnd" value="${t.endDate || ""}" />
+        </div>
       </div>
     </div>
   `).join("") || `<div class="empty">This project has no tasks yet.</div>`;
