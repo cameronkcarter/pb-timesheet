@@ -244,6 +244,18 @@ th {
   margin-top: 4px;
 }
 
+.stat.stage-orange { box-shadow: inset 0 3px 0 0 var(--accent); }
+.stat.stage-orange .value { color: var(--accent); }
+
+.stat.stage-teal { box-shadow: inset 0 3px 0 0 #0f766e; }
+.stat.stage-teal .value { color: #0f766e; }
+
+.stat.stage-blue { box-shadow: inset 0 3px 0 0 #2a5fb0; }
+.stat.stage-blue .value { color: #2a5fb0; }
+
+.stat.stage-green { box-shadow: inset 0 3px 0 0 var(--green); }
+.stat.stage-green .value { color: var(--green); }
+
 .progress-bar {
   background: #eceef1;
   border-radius: 6px;

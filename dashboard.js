@@ -43,10 +43,11 @@ function render() {
   if (!person) return;
 
   const myEntries = timeEntries.filter((e) => e.personId === personId);
-  const uninvoiced = myEntries.filter((e) => !e.invoiced);
-  const outstanding = myEntries.filter((e) => e.invoiced && !e.paid);
-  const owed = uninvoiced.reduce((s, e) => s + Number(e.hours || 0) * person.rate, 0);
-  const outstandingTotal = outstanding.reduce((s, e) => s + Number(e.hours || 0) * person.rate, 0);
+  const dollarsOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0) * person.rate, 0);
+  const pendingTotal = dollarsOf(myEntries.filter((e) => !e.approved && !e.invoiced));
+  const approvedTotal = dollarsOf(myEntries.filter((e) => e.approved && !e.invoiced));
+  const invoicedTotal = dollarsOf(myEntries.filter((e) => e.invoiced && !e.paid));
+  const paidTotal = dollarsOf(myEntries.filter((e) => e.paid));
 
   const weekStart = getWeekStart(todayISO());
   const weekDates = Array.from({ length: 7 }, (_, i) => toISODate(addDays(weekStart, i)));
@@ -60,9 +61,11 @@ function render() {
     .reduce((s, e) => s + Number(e.hours || 0), 0);
 
   document.getElementById("statWeekHours").textContent = weekHours.toFixed(2);
-  document.getElementById("statMonthHours").textContent = monthHours.toFixed(2);
-  document.getElementById("statOwed").textContent = formatCurrency(owed);
-  document.getElementById("statOutstanding").textContent = formatCurrency(outstandingTotal);
+  document.getElementById("statMonthCaption").textContent = `${monthHours.toFixed(2)} hrs this month`;
+  document.getElementById("statPending").textContent = formatCurrency(pendingTotal);
+  document.getElementById("statApproved").textContent = formatCurrency(approvedTotal);
+  document.getElementById("statInvoiced").textContent = formatCurrency(invoicedTotal);
+  document.getElementById("statPaid").textContent = formatCurrency(paidTotal);
 
   renderDueDates(personId);
 
