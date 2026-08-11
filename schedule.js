@@ -20,11 +20,10 @@ let expandedAssignmentPersonId = null;
 let openDotId = null;
 
 const PX_PER_DAY = 4;
+const LABEL_COL_WIDTH = 200;
 
 const ganttChart = document.getElementById("ganttChart");
 const ganttEmpty = document.getElementById("ganttEmpty");
-const eventsTbody = document.querySelector("#eventsTable tbody");
-const eventsEmpty = document.getElementById("eventsEmpty");
 const assignmentsTbody = document.querySelector("#assignmentsTable tbody");
 
 const dueDateModal = document.getElementById("dueDateModal");
@@ -87,7 +86,6 @@ if (sessionPersonId) {
 
 function renderAll() {
   renderGantt();
-  renderEvents();
   renderAssignments();
 }
 
@@ -121,13 +119,14 @@ function renderGantt() {
   ganttEmpty.style.display = "none";
 
   const scheduledTasks = tasks.filter((t) => t.startDate && t.endDate);
-  const dueDatesWithDates = dueDates.filter((d) => d.dueDate && d.taskId);
+  const dueDatesWithDates = dueDates.filter((d) => d.dueDate);
 
   const allStarts = scheduledTasks.map((t) => t.startDate);
   const allEnds = scheduledTasks.map((t) => t.endDate);
+  const allDueDates = dueDatesWithDates.map((d) => d.dueDate);
   const today = todayISO();
-  const rangeStartRaw = [...allStarts, today].sort()[0];
-  const rangeEndRaw = [...allEnds, today].sort().slice(-1)[0];
+  const rangeStartRaw = [...allStarts, ...allDueDates, today].sort()[0];
+  const rangeEndRaw = [...allEnds, ...allDueDates, today].sort().slice(-1)[0];
   const rangeStart = toISODate(addDays(rangeStartRaw + "T00:00:00", -4));
   const rangeEnd = toISODate(addDays(rangeEndRaw + "T00:00:00", 14));
   const totalDays = Math.max(1, daysBetween(rangeStart, rangeEnd));
@@ -149,9 +148,13 @@ function renderGantt() {
   const todayX = xFor(today);
   const todayInRange = todayX >= 0 && todayX <= timelineWidth;
 
+  function dotHtml(d) {
+    const dx = xFor(d.dueDate);
+    return `<div class="gantt-dot" style="left:${dx}px;" data-dot-id="${d.id}" title="${esc(d.title)} — ${formatDate(d.dueDate)}"></div>`;
+  }
+
   const rulerHtml = `<div class="gantt-ruler" style="width:${timelineWidth}px;">
     ${ticks.map((t) => `<div class="gantt-tick" style="left:${t.x}px;">${t.label}</div>`).join("")}
-    ${todayInRange ? `<div class="gantt-today-tick" style="left:${todayX}px;"></div>` : ""}
   </div>`;
 
   const projectRowsHtml = projects.map((project) => {
@@ -162,17 +165,16 @@ function renderGantt() {
       (s, t) => s + (Number(t.budget || 0) - spentOnTask(t.id)), 0
     );
 
+    const projectDueDates = dueDatesWithDates.filter((d) => d.projectId === project.id && !d.taskId);
+    const projectDotsHtml = projectDueDates.map(dotHtml).join("");
+
     const taskRowsHtml = projectTasks.map((t) => {
       const hasDates = t.startDate && t.endDate;
       const barHtml = hasDates
         ? `<div class="gantt-bar" style="left:${xFor(t.startDate)}px; width:${Math.max(4, xFor(t.endDate) - xFor(t.startDate))}px;"></div>`
         : "";
       const taskDueDates = dueDatesWithDates.filter((d) => d.taskId === t.id);
-      const dotsHtml = taskDueDates.map((d) => {
-        const dx = xFor(d.dueDate);
-        return `<div class="gantt-dot" style="left:${dx}px;" data-dot-id="${d.id}" title="${esc(d.title)} — ${formatDate(d.dueDate)}"></div>`;
-      }).join("");
-
+      const dotsHtml = taskDueDates.map(dotHtml).join("");
       const remaining = Number(t.budget || 0) - spentOnTask(t.id);
 
       return `<div class="gantt-row">
@@ -187,11 +189,18 @@ function renderGantt() {
 
     return `<div class="gantt-row gantt-project-row">
         <div class="gantt-label-col">${project.name}</div>
-        <div class="gantt-track" style="width:${timelineWidth}px;"></div>
+        <div class="gantt-track" style="width:${timelineWidth}px;">${projectDotsHtml}</div>
         <div class="gantt-remaining-col gantt-project-remaining">${formatCurrency(projectRemaining)}</div>
       </div>
       ${taskRowsHtml}`;
   }).join("");
+
+  const monthLinesHtml = ticks.map((t) =>
+    `<div class="gantt-month-line" style="left:${LABEL_COL_WIDTH + t.x}px;"></div>`
+  ).join("");
+  const todayLineHtml = todayInRange
+    ? `<div class="gantt-today-line" style="left:${LABEL_COL_WIDTH + todayX}px;"></div>`
+    : "";
 
   ganttChart.innerHTML = `<div class="gantt-inner">
     <div class="gantt-row gantt-header-row">
@@ -200,6 +209,8 @@ function renderGantt() {
       <div class="gantt-remaining-col">Remaining</div>
     </div>
     ${projectRowsHtml}
+    ${monthLinesHtml}
+    ${todayLineHtml}
   </div>`;
 }
 
@@ -217,13 +228,19 @@ ganttChart.addEventListener("click", (e) => {
   const d = dueDates.find((dd) => dd.id === id);
   if (!d) return;
   const names = (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean);
+  const project = projects.find((p) => p.id === d.projectId);
+  const manageable = canManage(d);
   const popover = document.createElement("div");
   popover.className = "gantt-dot-popover";
   popover.innerHTML = `
     <div class="gantt-dot-popover-title">${esc(d.title)}</div>
+    ${project ? `<div>${esc(project.name)}</div>` : ""}
     <div>${formatDate(d.dueDate)} <span class="empty" style="padding:0;">(${dueLabel(d.dueDate)})</span></div>
-    ${d.estimatedHours ? `<div>${d.estimatedHours} hrs estimated</div>` : ""}
     ${names.length > 0 ? `<div>Assigned: ${names.join(", ")}</div>` : ""}
+    ${manageable ? `<div class="gantt-dot-popover-actions">
+      <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
+      <button class="danger small" data-action="remove-duedate" data-id="${d.id}">Remove</button>
+    </div>` : ""}
   `;
   const rect = dot.getBoundingClientRect();
   popover.style.left = `${rect.left + window.scrollX}px`;
@@ -231,37 +248,13 @@ ganttChart.addEventListener("click", (e) => {
   document.body.appendChild(popover);
 });
 
-// ---------- Events (due dates with no linked task) ----------
-function renderEvents() {
-  const events = dueDates.filter((d) => !d.taskId).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
-  if (events.length === 0) {
-    eventsTbody.innerHTML = "";
-    eventsEmpty.style.display = "block";
-    return;
-  }
-  eventsEmpty.style.display = "none";
-
-  eventsTbody.innerHTML = events.map((d) => {
-    const project = projects.find((p) => p.id === d.projectId);
-    const manageable = canManage(d);
-    return `<tr>
-      <td>${d.title}</td>
-      <td>${project ? project.name : "—"}</td>
-      <td>${formatDate(d.dueDate)} <span class="empty">(${dueLabel(d.dueDate)})</span></td>
-      <td class="row-actions">
-        ${manageable ? `
-          <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
-          <button class="danger small" data-action="remove-duedate" data-id="${d.id}">Remove</button>
-        ` : ""}
-      </td>
-    </tr>`;
-  }).join("");
-}
-
-eventsTbody.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button");
+document.body.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".gantt-dot-popover button");
   if (!btn) return;
-  await handleDueDateAction(btn.dataset.action, btn.dataset.id);
+  e.stopPropagation();
+  const { action, id } = btn.dataset;
+  closeDotPopover();
+  await handleDueDateAction(action, id);
 });
 
 // ---------- Assignments (due dates linked to a task), grouped by person ----------
@@ -319,7 +312,6 @@ function renderAssignments() {
         </td>
         <td>${project ? project.name : "—"}${task ? ` / ${task.name}` : ""}</td>
         <td>${formatDate(d.dueDate)} <span class="empty">(${dueLabel(d.dueDate)})</span></td>
-        <td>${d.estimatedHours ? `${d.estimatedHours} hrs` : "—"}</td>
         <td class="row-actions">
           ${manageable ? `
             <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
@@ -385,7 +377,6 @@ function openDueDateModal(dueDateRecord, mode, presetPersonId) {
     : (mode === "event" ? "Add Event" : "Add Assignment");
 
   ddTaskLabel.textContent = mode === "event" ? "Task (optional)" : "Task";
-  ddHoursField.style.display = mode === "assignment" ? "block" : "none";
   ddPeopleField.style.display = "block";
 
   ddProject.innerHTML = projects.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");

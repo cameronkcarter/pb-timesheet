@@ -98,6 +98,22 @@ h2 {
   }
 }
 
+#projectSummaryCards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+#projectSummaryCards .card {
+  margin-bottom: 0;
+}
+
+@media (min-width: 900px) {
+  #projectSummaryCards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 label {
   display: block;
   font-size: 13px;
@@ -309,7 +325,7 @@ th {
 }
 
 .task-progress-name {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -541,6 +557,7 @@ th {
 .gantt-inner {
   display: inline-block;
   min-width: 100%;
+  position: relative;
 }
 
 .gantt-row {
@@ -618,11 +635,21 @@ th {
   white-space: nowrap;
 }
 
-.gantt-today-tick {
+.gantt-month-line {
   position: absolute;
   top: 0;
-  height: 100%;
-  border-left: 2px solid var(--accent);
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
   z-index: 1;
 }
 
@@ -658,6 +685,7 @@ th {
   font-size: 12px;
   text-align: right;
   padding-left: 10px;
+  border-left: 2px solid var(--navy-light);
 }
 
 .gantt-project-remaining {
@@ -680,6 +708,12 @@ th {
 .gantt-dot-popover-title {
   font-weight: 700;
   margin-bottom: 4px;
+}
+
+.gantt-dot-popover-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .creator-tag {

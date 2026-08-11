@@ -23,7 +23,10 @@
   <p class="subtitle">See how projects and tasks overlap, and keep track of events and assignments.</p>
 
   <div class="card">
-    <h2>Timeline</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Timeline</h2>
+      <button id="openAddEvent" class="secondary small">+ Add Event</button>
+    </div>
     <div id="ganttEmpty" class="empty" style="display:none;">No projects yet.</div>
     <div id="ganttScroll" class="gantt-scroll">
       <div id="ganttChart"></div>
@@ -32,23 +35,11 @@
 
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0;">Events</h2>
-      <button id="openAddEvent" class="secondary small">+ Add Event</button>
-    </div>
-    <table id="eventsTable" style="margin-top:16px;">
-      <thead><tr><th>Event</th><th>Project</th><th>Date</th><th style="width:130px;"></th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <div id="eventsEmpty" class="empty" style="display:none;">No events yet.</div>
-  </div>
-
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
       <h2 style="margin:0;">Assignments</h2>
       <button id="openAddAssignment" class="secondary small">+ Add Assignment</button>
     </div>
     <table id="assignmentsTable" style="margin-top:16px;">
-      <thead><tr><th>Person</th><th>Item</th><th>Project / Task</th><th>Due Date</th><th>Est. Hours</th><th style="width:110px;"></th></tr></thead>
+      <thead><tr><th>Person</th><th>Item</th><th>Project / Task</th><th>Due Date</th><th style="width:110px;"></th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -71,15 +62,11 @@
     <label for="ddTitle">Name</label>
     <input type="text" id="ddTitle" placeholder="Community Workshop" />
 
-    <div class="inline-form">
-      <div>
-        <label for="ddDate">Due date</label>
-        <input type="date" id="ddDate" />
-      </div>
-      <div id="ddHoursField">
-        <label for="ddHours">Estimated hours (optional)</label>
-        <input type="number" id="ddHours" min="0" step="0.25" placeholder="6" />
-      </div>
+    <label for="ddDate">Due date</label>
+    <input type="date" id="ddDate" />
+    <div id="ddHoursField" style="display:none;">
+      <label for="ddHours">Estimated hours (optional)</label>
+      <input type="number" id="ddHours" min="0" step="0.25" placeholder="6" />
     </div>
 
     <div id="ddPeopleField">
