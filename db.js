@@ -1,4 +1,4 @@
-import { db } from "./firebase-config.js";
+import { db, authReady } from "./firebase-config.js";
 import {
   collection,
   addDoc,
@@ -24,30 +24,43 @@ import {
 
 function listenCollection(name, callback, orderByField) {
   if (isTestMode()) return listenTest(name, callback, orderByField);
-  const ref = collection(db, name);
-  const q = orderByField ? query(ref, orderBy(orderByField)) : ref;
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  let unsub = null;
+  let cancelled = false;
+  authReady.then(() => {
+    if (cancelled) return;
+    const ref = collection(db, name);
+    const q = orderByField ? query(ref, orderBy(orderByField)) : ref;
+    unsub = onSnapshot(q, (snap) => {
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
   });
+  return () => {
+    cancelled = true;
+    if (unsub) unsub();
+  };
 }
 
-function add(name, data) {
+async function add(name, data) {
   if (isTestMode()) return addTest(name, { ...data, createdAt: new Date().toISOString() });
+  await authReady;
   return addDoc(collection(db, name), { ...data, createdAt: serverTimestamp() });
 }
 
-function update(name, id, data) {
+async function update(name, id, data) {
   if (isTestMode()) return updateTest(name, id, data);
+  await authReady;
   return updateDoc(doc(db, name, id), data);
 }
 
-function remove(name, id) {
+async function remove(name, id) {
   if (isTestMode()) return removeTest(name, id);
+  await authReady;
   return deleteDoc(doc(db, name, id));
 }
 
 async function markInvoiced(ids, invoiceId) {
   if (isTestMode()) return markInvoicedTest(ids, invoiceId);
+  await authReady;
   const batch = writeBatch(db);
   const invoicedDate = new Date().toISOString();
   ids.forEach((id) => {
@@ -58,6 +71,7 @@ async function markInvoiced(ids, invoiceId) {
 
 async function markPaid(ids) {
   if (isTestMode()) return markPaidTest(ids);
+  await authReady;
   const batch = writeBatch(db);
   const paidDate = new Date().toISOString();
   ids.forEach((id) => {
@@ -68,6 +82,7 @@ async function markPaid(ids) {
 
 async function approve(ids) {
   if (isTestMode()) return approveTest(ids);
+  await authReady;
   const batch = writeBatch(db);
   const approvedDate = new Date().toISOString();
   ids.forEach((id) => {
