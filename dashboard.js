@@ -43,7 +43,7 @@ function render() {
   if (!person) return;
 
   const myEntries = timeEntries.filter((e) => e.personId === personId);
-  const dollarsOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0) * person.rate, 0);
+  const dollarsOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0) * (e.rate != null ? e.rate : person.rate), 0);
   const pendingTotal = dollarsOf(myEntries.filter((e) => !e.approved && !e.invoiced));
   const approvedTotal = dollarsOf(myEntries.filter((e) => e.approved && !e.invoiced));
   const invoicedTotal = dollarsOf(myEntries.filter((e) => e.invoiced && !e.paid));
@@ -91,7 +91,7 @@ function render() {
         return (taskA?.name || "").localeCompare(taskB?.name || "");
       });
     const projectOwed = projectEntries.filter((e) => !e.invoiced)
-      .reduce((s, e) => s + Number(e.hours || 0) * person.rate, 0);
+      .reduce((s, e) => s + Number(e.hours || 0) * (e.rate != null ? e.rate : person.rate), 0);
     const lastInvoiced = projectEntries
       .filter((e) => e.invoiced && e.invoicedDate)
       .sort((a, b) => (a.invoicedDate < b.invoicedDate ? 1 : -1))[0];
@@ -106,10 +106,9 @@ function render() {
 
     const taskRows = projectAssignments.map((a) => {
       const task = tasks.find((t) => t.id === a.taskId);
-      const logged = timeEntries
-        .filter((e) => e.taskId === a.taskId && e.personId === personId)
-        .reduce((s, e) => s + Number(e.hours || 0), 0);
-      const used = logged * rate;
+      const taskEntries = timeEntries.filter((e) => e.taskId === a.taskId && e.personId === personId);
+      const logged = taskEntries.reduce((s, e) => s + Number(e.hours || 0), 0);
+      const used = taskEntries.reduce((s, e) => s + Number(e.hours || 0) * (e.rate != null ? e.rate : rate), 0);
       totalEarned += used;
       totalAssigned += Number(a.capValue || 0);
       totalLoggedHours += logged;
@@ -123,8 +122,8 @@ function render() {
           <div class="task-progress-bar-wrap">
             <div class="progress-bar task-bar"><div class="fill task-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
             <div class="progress-captions">
-              <span>${formatCurrency(used)} spent (${logged.toFixed(2)} hrs)</span>
-              <span>${formatCurrency(remaining)} remaining (${remainingHours.toFixed(2)} hrs)</span>
+              <span>${formatCurrency(used)} (${logged.toFixed(2)} hrs) spent</span>
+              <span>${formatCurrency(remaining)} (${remainingHours.toFixed(2)} hrs) remaining</span>
             </div>
           </div>
         </div>
@@ -146,8 +145,8 @@ function render() {
           <div class="summary-label">Overall Progress</div>
           <div class="progress-bar large" style="margin-top:6px;"><div class="fill ${totalOver ? "over" : ""}" style="width:${totalPct}%"></div></div>
           <div class="progress-captions">
-            <span>${formatCurrency(totalEarned)} spent (${totalLoggedHours.toFixed(2)} hrs)</span>
-            <span>${formatCurrency(totalRemaining)} remaining (${totalRemainingHours.toFixed(2)} hrs)</span>
+            <span>${formatCurrency(totalEarned)} (${totalLoggedHours.toFixed(2)} hrs) spent</span>
+            <span>${formatCurrency(totalRemaining)} (${totalRemainingHours.toFixed(2)} hrs) remaining</span>
           </div>
         </div>
         <div style="margin-top:18px;">${taskRows}</div>` : '<div class="empty">No hour assignment set for this project.</div>'}

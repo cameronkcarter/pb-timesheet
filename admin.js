@@ -304,13 +304,16 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
 const tasksTbody = document.querySelector("#tasksTable tbody");
 const tasksEmpty = document.getElementById("tasksEmpty");
 
+function entryRate(e) {
+  if (e.rate != null) return e.rate;
+  const person = people.find((p) => p.id === e.personId);
+  return person ? person.rate : 0;
+}
+
 function spentOnTask(taskId) {
   return timeEntries
     .filter((e) => e.taskId === taskId)
-    .reduce((sum, e) => {
-      const person = people.find((p) => p.id === e.personId);
-      return sum + Number(e.hours || 0) * (person ? person.rate : 0);
-    }, 0);
+    .reduce((sum, e) => sum + Number(e.hours || 0) * entryRate(e), 0);
 }
 
 function assignedTotal(taskId) {
@@ -370,11 +373,10 @@ function renderAccordion(task, diff) {
 
   const rows = taskAssignments.map((a) => {
     const person = people.find((p) => p.id === a.personId);
-    const loggedHours = timeEntries
-      .filter((e) => e.taskId === a.taskId && e.personId === a.personId)
-      .reduce((sum, e) => sum + Number(e.hours || 0), 0);
+    const personEntries = timeEntries.filter((e) => e.taskId === a.taskId && e.personId === a.personId);
+    const loggedHours = personEntries.reduce((sum, e) => sum + Number(e.hours || 0), 0);
     const rate = person ? person.rate : 0;
-    const earned = loggedHours * rate;
+    const earned = personEntries.reduce((sum, e) => sum + Number(e.hours || 0) * entryRate(e), 0);
     const remaining = (a.capValue || 0) - earned;
 
     const remainingHours = rate > 0 ? remaining / rate : 0;

@@ -65,6 +65,12 @@ function rateOf(personId) {
   return p ? p.rate : 0;
 }
 
+// Uses the rate locked in on the entry when it was logged, falling back to
+// the person's current rate for older entries logged before that existed.
+function entryRate(e) {
+  return e.rate != null ? e.rate : rateOf(e.personId);
+}
+
 // ---------- Project cards ----------
 function renderProjectCards() {
   if (projects.length === 0) {
@@ -119,12 +125,16 @@ function notesForPersonMonth(personId, monthKeyStr) {
 function groupByPerson(entries) {
   const byPerson = {};
   entries.forEach((e) => {
-    byPerson[e.personId] = (byPerson[e.personId] || 0) + Number(e.hours || 0);
+    const rate = entryRate(e);
+    const hours = Number(e.hours || 0);
+    if (!byPerson[e.personId]) byPerson[e.personId] = { hours: 0, total: 0, rate };
+    byPerson[e.personId].hours += hours;
+    byPerson[e.personId].total += hours * rate;
+    byPerson[e.personId].rate = rate; // display the most recent entry's rate
   });
-  return Object.entries(byPerson).map(([personId, hours]) => {
+  return Object.entries(byPerson).map(([personId, agg]) => {
     const person = people.find((p) => p.id === personId);
-    const rate = rateOf(personId);
-    return { personId, name: person ? person.name : "—", hours, rate, total: hours * rate };
+    return { personId, name: person ? person.name : "—", hours: agg.hours, rate: agg.rate, total: agg.total };
   });
 }
 
@@ -223,10 +233,10 @@ function computeInvoiceData(project, entries) {
     const budget = Number(t.budget || 0);
     const billed = allEntriesForProject
       .filter((e) => e.taskId === t.id && e.invoiced)
-      .reduce((s, e) => s + Number(e.hours || 0) * rateOf(e.personId), 0);
+      .reduce((s, e) => s + Number(e.hours || 0) * entryRate(e), 0);
     const current = entries
       .filter((e) => e.taskId === t.id)
-      .reduce((s, e) => s + Number(e.hours || 0) * rateOf(e.personId), 0);
+      .reduce((s, e) => s + Number(e.hours || 0) * entryRate(e), 0);
     const pct = budget > 0 ? Math.round(((billed + current) / budget) * 100) : 0;
     const remaining = budget - billed - current;
     return { name: t.name, budget, billed, current, pct, remaining };

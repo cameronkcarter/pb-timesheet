@@ -231,7 +231,8 @@ document.getElementById("submitEntry").addEventListener("click", async () => {
       await TimeEntries.update(existing.id, { hours, note, approved: false, approvedDate: null });
       showToast("Entry updated.");
     } else {
-      await TimeEntries.add({ personId, projectId, taskId, date, hours, note });
+      const person = people.find((p) => p.id === personId);
+      await TimeEntries.add({ personId, projectId, taskId, date, hours, note, rate: person ? person.rate : 0 });
       showToast("Hours logged.");
     }
     entryHours.value = "";

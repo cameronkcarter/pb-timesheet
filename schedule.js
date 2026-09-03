@@ -104,13 +104,16 @@ function renderAll() {
 }
 
 // ---------- Gantt ----------
+function entryRate(e) {
+  if (e.rate != null) return e.rate;
+  const person = people.find((p) => p.id === e.personId);
+  return person ? person.rate : 0;
+}
+
 function spentOnTask(taskId) {
   return timeEntries
     .filter((e) => e.taskId === taskId)
-    .reduce((sum, e) => {
-      const person = people.find((p) => p.id === e.personId);
-      return sum + Number(e.hours || 0) * (person ? person.rate : 0);
-    }, 0);
+    .reduce((sum, e) => sum + Number(e.hours || 0) * entryRate(e), 0);
 }
 
 function closeDotPopover() {
