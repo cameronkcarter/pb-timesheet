@@ -101,16 +101,20 @@ function render() {
 
     let totalEarned = 0;
     let totalAssigned = 0;
+    let totalLoggedHours = 0;
+    const rate = person.rate || 0;
 
     const taskRows = projectAssignments.map((a) => {
       const task = tasks.find((t) => t.id === a.taskId);
       const logged = timeEntries
         .filter((e) => e.taskId === a.taskId && e.personId === personId)
         .reduce((s, e) => s + Number(e.hours || 0), 0);
-      const used = logged * person.rate;
+      const used = logged * rate;
       totalEarned += used;
       totalAssigned += Number(a.capValue || 0);
+      totalLoggedHours += logged;
       const remaining = (a.capValue || 0) - used;
+      const remainingHours = rate > 0 ? remaining / rate : 0;
       const pct = a.capValue > 0 ? Math.min(100, (used / a.capValue) * 100) : 0;
       const over = used > a.capValue;
       return `<div class="task-progress-row">
@@ -119,8 +123,8 @@ function render() {
           <div class="task-progress-bar-wrap">
             <div class="progress-bar task-bar"><div class="fill task-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
             <div class="progress-captions">
-              <span>${formatCurrency(used)} spent</span>
-              <span>${formatCurrency(remaining)} remaining</span>
+              <span>${formatCurrency(used)} spent (${logged.toFixed(2)} hrs)</span>
+              <span>${formatCurrency(remaining)} remaining (${remainingHours.toFixed(2)} hrs)</span>
             </div>
           </div>
         </div>
@@ -130,6 +134,7 @@ function render() {
     const totalPct = totalAssigned > 0 ? Math.min(100, (totalEarned / totalAssigned) * 100) : 0;
     const totalOver = totalEarned > totalAssigned;
     const totalRemaining = totalAssigned - totalEarned;
+    const totalRemainingHours = rate > 0 ? totalRemaining / rate : 0;
 
     return `<div class="card">
       <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px;">
@@ -141,8 +146,8 @@ function render() {
           <div class="summary-label">Overall Progress</div>
           <div class="progress-bar large" style="margin-top:6px;"><div class="fill ${totalOver ? "over" : ""}" style="width:${totalPct}%"></div></div>
           <div class="progress-captions">
-            <span>${formatCurrency(totalEarned)} spent</span>
-            <span>${formatCurrency(totalRemaining)} remaining</span>
+            <span>${formatCurrency(totalEarned)} spent (${totalLoggedHours.toFixed(2)} hrs)</span>
+            <span>${formatCurrency(totalRemaining)} remaining (${totalRemainingHours.toFixed(2)} hrs)</span>
           </div>
         </div>
         <div style="margin-top:18px;">${taskRows}</div>` : '<div class="empty">No hour assignment set for this project.</div>'}
