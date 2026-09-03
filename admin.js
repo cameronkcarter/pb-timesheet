@@ -11,7 +11,6 @@ let assignments = [];
 let timeEntries = [];
 let adminCheckDone = false;
 
-let editingAssignmentId = null;
 let modalEditingPersonId = null;
 let expandedTaskId = null;
 let selectedProjectId = null;
@@ -364,6 +363,7 @@ function renderTasks() {
 }
 
 function renderAccordion(task, diff) {
+  const budget = Number(task.budget || 0);
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   const assignedPersonIds = taskAssignments.map((a) => a.personId);
   const availablePeople = people.filter((p) => !assignedPersonIds.includes(p.id));
@@ -377,30 +377,18 @@ function renderAccordion(task, diff) {
     const earned = loggedHours * rate;
     const remaining = (a.capValue || 0) - earned;
 
-    if (a.id === editingAssignmentId) {
-      return `<tr>
-        <td>${person ? person.name : "—"}</td>
-        <td><input type="number" class="editAmount" min="0" step="1" value="${a.capValue}" style="width:100px;" /></td>
-        <td>${formatCurrency(earned)}</td>
-        <td></td>
-        <td class="row-actions">
-          <button class="small" data-action="save-assignment" data-id="${a.id}">Save</button>
-          <button class="small secondary" data-action="cancel-assignment">Cancel</button>
-        </td>
-      </tr>`;
-    }
-
-    return `<tr>
-      <td>${person ? person.name : "—"}</td>
-      <td>${formatCurrency(a.capValue)}</td>
+    return `<tr class="assignmentRow" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-earned="${earned}">
+      <td>${person ? esc(person.name) : "—"}</td>
+      <td><input type="number" class="editAmount" min="0" step="1" data-person-id="${a.personId}" value="${a.capValue}" style="width:100px;" /></td>
       <td>${formatCurrency(earned)} <span class="empty">(${loggedHours.toFixed(2)} hrs)</span></td>
-      <td>${formatCurrency(remaining)}</td>
+      <td class="remainingCell">${formatCurrency(remaining)}</td>
       <td class="row-actions">
-        <button class="small secondary" data-action="edit-assignment" data-id="${a.id}">Edit</button>
         <button class="danger small" data-action="remove-assignment" data-id="${a.id}">Remove</button>
       </td>
     </tr>`;
   }).join("");
+
+  const totalAssigned = taskAssignments.reduce((s, a) => s + Number(a.capValue || 0), 0);
 
   const addRow = availablePeople.length === 0
     ? `<div class="empty">Everyone on the team is already assigned to this task.</div>`
@@ -413,7 +401,7 @@ function renderAccordion(task, diff) {
         </div>
         <div>
           <label>Amount ($)</label>
-          <input type="number" class="newAssignAmount" min="0" step="1" placeholder="${diff > 0 ? diff.toFixed(0) : "500"}" />
+          <input type="number" class="newAssignAmount" min="0" step="1" value="0" placeholder="${diff > 0 ? diff.toFixed(0) : "0"}" />
         </div>
         <div style="flex:0;">
           <label>&nbsp;</label>
@@ -421,14 +409,80 @@ function renderAccordion(task, diff) {
         </div>
       </div>`;
 
+  const transferBox = taskAssignments.length >= 2
+    ? `<div class="transfer-box">
+        <div style="font-weight:600; margin-bottom:8px;">Transfer between people</div>
+        <div class="inline-form">
+          <div>
+            <label>From</label>
+            <select class="transferFrom">
+              ${taskAssignments.map((a) => {
+                const p = people.find((pp) => pp.id === a.personId);
+                return `<option value="${a.personId}">${p ? esc(p.name) : "—"}</option>`;
+              }).join("")}
+            </select>
+          </div>
+          <div>
+            <label>To</label>
+            <select class="transferTo">
+              ${taskAssignments.map((a) => {
+                const p = people.find((pp) => pp.id === a.personId);
+                return `<option value="${a.personId}">${p ? esc(p.name) : "—"}</option>`;
+              }).join("")}
+            </select>
+          </div>
+          <div>
+            <label>Amount ($)</label>
+            <input type="number" class="transferAmount" min="0" step="1" placeholder="500" />
+          </div>
+          <div style="flex:0;">
+            <label>&nbsp;</label>
+            <button type="button" class="small secondary" data-action="do-transfer" data-task-id="${task.id}">Transfer &rarr;</button>
+          </div>
+        </div>
+      </div>`
+    : "";
+
   return `
-    ${taskAssignments.length > 0 ? `<table>
-      <thead><tr><th>Person</th><th>Assigned</th><th>Earned</th><th>Remaining</th><th style="width:130px;"></th></tr></thead>
+    <div class="assign-summary" data-task-budget="${budget}">
+      Assigned: <strong class="assignSumAssigned">${formatCurrency(totalAssigned)}</strong> of ${formatCurrency(budget)} budget
+      <span class="assignSumDiffPill">${assignedPill(budget - totalAssigned)}</span>
+    </div>
+    ${taskAssignments.length > 0 ? `<table style="margin-top:10px;">
+      <thead><tr><th>Person</th><th>Assigned</th><th>Earned</th><th>Remaining</th><th style="width:100px;"></th></tr></thead>
       <tbody class="assignmentRows">${rows}</tbody>
-    </table>` : `<div class="empty">No one assigned to this task yet.</div>`}
-    ${addRow}
+    </table>
+    <div class="row-actions" style="margin-top:10px;">
+      <button class="small" data-action="save-assignments" data-task-id="${task.id}">Save Changes</button>
+    </div>` : `<div class="empty">No one assigned to this task yet.</div>`}
+    ${transferBox}
+    <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border);">
+      ${addRow}
+    </div>
   `;
 }
+
+function liveRecomputeAssignments(accordionCell) {
+  const summaryEl = accordionCell.querySelector(".assign-summary");
+  if (!summaryEl) return;
+  const budget = Number(summaryEl.dataset.taskBudget || 0);
+  const inputs = [...accordionCell.querySelectorAll(".editAmount")];
+  const total = inputs.reduce((s, inp) => s + (Number(inp.value) || 0), 0);
+  summaryEl.querySelector(".assignSumAssigned").textContent = formatCurrency(total);
+  summaryEl.querySelector(".assignSumDiffPill").innerHTML = assignedPill(budget - total);
+
+  accordionCell.querySelectorAll(".assignmentRow").forEach((row) => {
+    const input = row.querySelector(".editAmount");
+    const earned = Number(row.dataset.earned || 0);
+    row.querySelector(".remainingCell").textContent = formatCurrency((Number(input.value) || 0) - earned);
+  });
+}
+
+tasksTbody.addEventListener("input", (e) => {
+  if (!e.target.classList.contains("editAmount")) return;
+  const cell = e.target.closest(".accordion-cell");
+  if (cell) liveRecomputeAssignments(cell);
+});
 
 tasksTbody.addEventListener("click", async (e) => {
   const btn = e.target.closest("button");
@@ -445,31 +499,56 @@ tasksTbody.addEventListener("click", async (e) => {
 
   const { action, id } = btn.dataset;
 
-  if (action === "edit-assignment") { editingAssignmentId = id; renderTasks(); }
-  if (action === "cancel-assignment") { editingAssignmentId = null; renderTasks(); }
   if (action === "remove-assignment") {
     if (!confirm("Remove this assignment?")) return;
     try { await Assignments.remove(id); } catch (err) { showToast("Error: " + err.message); }
   }
-  if (action === "save-assignment") {
-    const row = btn.closest("tr");
-    const capValue = Number(row.querySelector(".editAmount").value);
-    if (!capValue) return showToast("Enter a dollar amount.");
+  if (action === "save-assignments") {
+    const cell = btn.closest(".accordion-cell");
     try {
-      await Assignments.update(id, { capValue });
-      editingAssignmentId = null;
-      renderTasks();
-      showToast("Assignment updated.");
+      for (const row of cell.querySelectorAll(".assignmentRow")) {
+        const assignmentId = row.dataset.assignmentId;
+        const capValue = Number(row.querySelector(".editAmount").value) || 0;
+        const original = assignments.find((a) => a.id === assignmentId);
+        if (original && Number(original.capValue) !== capValue) {
+          await Assignments.update(assignmentId, { capValue });
+        }
+      }
+      showToast("Assignments updated.");
     } catch (err) { showToast("Error: " + err.message); }
+  }
+  if (action === "do-transfer") {
+    const cell = btn.closest(".accordion-cell");
+    const box = btn.closest(".transfer-box");
+    const fromId = box.querySelector(".transferFrom").value;
+    const toId = box.querySelector(".transferTo").value;
+    const amountInput = box.querySelector(".transferAmount");
+    const amount = Number(amountInput.value);
+    if (!fromId || !toId || fromId === toId) return showToast("Pick two different people.");
+    if (!amount || amount <= 0) return showToast("Enter an amount to transfer.");
+    const fromInput = cell.querySelector(`.editAmount[data-person-id="${fromId}"]`);
+    const toInput = cell.querySelector(`.editAmount[data-person-id="${toId}"]`);
+    if (!fromInput || !toInput) return;
+    const fromVal = Number(fromInput.value) || 0;
+    if (amount > fromVal) {
+      const fromPerson = people.find((p) => p.id === fromId);
+      return showToast(`${fromPerson ? fromPerson.name : "That person"} only has ${formatCurrency(fromVal)} assigned.`);
+    }
+    fromInput.value = (fromVal - amount).toFixed(2);
+    toInput.value = ((Number(toInput.value) || 0) + amount).toFixed(2);
+    amountInput.value = "";
+    liveRecomputeAssignments(cell);
+    showToast(`Moved ${formatCurrency(amount)} — click Save Changes to apply.`);
   }
   if (action === "add-assignment") {
     const taskId = btn.dataset.taskId;
     const projectId = btn.dataset.projectId;
     const container = btn.closest(".accordion-cell");
     const personId = container.querySelector(".newAssignPerson").value;
-    const capValue = Number(container.querySelector(".newAssignAmount").value);
+    const amountInput = container.querySelector(".newAssignAmount");
+    const capValue = amountInput.value === "" ? 0 : Number(amountInput.value);
     if (!personId) return showToast("Select a person.");
-    if (!capValue) return showToast("Enter a dollar amount.");
+    if (isNaN(capValue) || capValue < 0) return showToast("Enter a valid dollar amount.");
     try {
       await Assignments.add({ projectId, taskId, personId, capValue });
       showToast("Assigned.");
