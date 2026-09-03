@@ -124,15 +124,26 @@ document.addEventListener("click", (e) => {
   }
 });
 
+function visibleProjects() {
+  const me = currentPerson();
+  if (me && me.isAdmin) return projects;
+  const assignedProjectIds = new Set(
+    assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId)
+  );
+  return projects.filter((p) => assignedProjectIds.has(p.id));
+}
+
 function renderGantt() {
-  if (projects.length === 0) {
+  const visible = visibleProjects();
+  if (visible.length === 0) {
     ganttChart.innerHTML = "";
     ganttEmpty.style.display = "block";
     return;
   }
   ganttEmpty.style.display = "none";
 
-  const scheduledTasks = tasks.filter((t) => t.startDate && t.endDate);
+  const visibleProjectIds = new Set(visible.map((p) => p.id));
+  const scheduledTasks = tasks.filter((t) => t.startDate && t.endDate && visibleProjectIds.has(t.projectId));
   const dueDatesWithDates = dueDates.filter((d) => d.dueDate);
 
   const allStarts = scheduledTasks.map((t) => t.startDate);
@@ -174,7 +185,7 @@ function renderGantt() {
     ${ticks.map((t) => `<div class="gantt-tick" style="left:${t.x}px;">${t.label}</div>`).join("")}
   </div>`;
 
-  const projectRowsHtml = projects.map((project) => {
+  const projectRowsHtml = visible.map((project) => {
     const projectTasks = tasks.filter((t) => t.projectId === project.id)
       .sort((a, b) => a.name.localeCompare(b.name));
 

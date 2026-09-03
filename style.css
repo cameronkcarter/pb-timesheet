@@ -981,6 +981,12 @@ td.accordion-cell {
   padding: 16px 20px !important;
 }
 
+tr.notes-row td {
+  background: var(--bg);
+  padding: 10px 20px !important;
+  font-size: 13px;
+}
+
 .empty {
   color: var(--text-muted);
   font-size: 14px;

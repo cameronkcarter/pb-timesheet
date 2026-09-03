@@ -27,25 +27,9 @@
     <div id="projectCardsEmpty" class="empty" style="display:none;">No projects yet — add one in Admin.</div>
   </div>
 
-  <div class="card" id="monthCard" style="display:none;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <button id="prevMonth" class="secondary small">&larr; Prev month</button>
-      <h2 id="monthLabel" style="margin:0;"></h2>
-      <button id="nextMonth" class="secondary small">Next month &rarr;</button>
-    </div>
-
-    <table id="laborTable" style="margin-top:16px;">
-      <thead><tr><th>Person</th><th>Hours</th><th>Rate</th><th>Total</th></tr></thead>
-      <tbody></tbody>
-      <tfoot><tr><td>Total</td><td></td><td></td><td id="laborGrandTotal">$0.00</td></tr></tfoot>
-    </table>
-    <div id="laborEmpty" class="empty" style="display:none;">No uninvoiced hours for this project in this month.</div>
-
-    <div class="row-actions" style="margin-top:16px;">
-      <button id="previewInvoice" class="secondary" disabled>Preview PDF (Test)</button>
-      <button id="generateInvoice" disabled>Generate Invoice</button>
-    </div>
-  </div>
+  <h2 id="outstandingHeading" style="display:none; margin:28px 0 12px;">Uninvoiced Hours</h2>
+  <div id="monthsContainer"></div>
+  <div id="monthsEmpty" class="card empty" style="display:none;">No uninvoiced hours for this project — everything logged so far has already been invoiced.</div>
 
   <div class="card" id="historyCard" style="display:none;">
     <h2>Previous Invoices</h2>

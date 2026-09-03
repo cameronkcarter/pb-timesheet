@@ -2,9 +2,12 @@ import { People, Projects, Tasks, TimeEntries, Invoices } from "./db.js";
 import { requireSession, wireLogout, enforceAdmin } from "./session.js";
 import {
   formatCurrency, formatDate, daysAgo, showToast,
-  firstOfMonth, addMonths, lastDayOfMonth, monthKey,
-  formatMonthLabel, formatMonthShort, formatShortMDY, toISODate,
+  lastDayOfMonth, formatMonthLabel, formatMonthShort, formatShortMDY, toISODate,
 } from "./util.js";
+
+function esc(str) {
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 const sessionPersonId = requireSession();
 
@@ -26,19 +29,15 @@ let tasks = [];
 let timeEntries = [];
 let invoices = [];
 let selectedProjectId = null;
-let currentMonth = firstOfMonth(new Date());
 let adminCheckDone = false;
 let expandedInvoiceId = null;
+let expandedNotesKey = null;
 
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
-const monthCard = document.getElementById("monthCard");
-const monthLabelEl = document.getElementById("monthLabel");
-const laborTbody = document.querySelector("#laborTable tbody");
-const laborEmpty = document.getElementById("laborEmpty");
-const laborGrandTotalEl = document.getElementById("laborGrandTotal");
-const previewBtn = document.getElementById("previewInvoice");
-const generateBtn = document.getElementById("generateInvoice");
+const outstandingHeading = document.getElementById("outstandingHeading");
+const monthsContainer = document.getElementById("monthsContainer");
+const monthsEmpty = document.getElementById("monthsEmpty");
 const historyCard = document.getElementById("historyCard");
 const historyTbody = document.querySelector("#historyTable tbody");
 const historyEmpty = document.getElementById("historyEmpty");
@@ -53,11 +52,11 @@ if (sessionPersonId) {
       const me = people.find((p) => p.id === sessionPersonId);
       if (!enforceAdmin(me)) return;
     }
-    renderMonth();
+    renderMonths();
   });
   Projects.listen((d) => { projects = d; renderProjectCards(); });
-  Tasks.listen((d) => { tasks = d; renderMonth(); });
-  TimeEntries.listen((d) => { timeEntries = d; renderMonth(); });
+  Tasks.listen((d) => { tasks = d; renderMonths(); });
+  TimeEntries.listen((d) => { timeEntries = d; renderMonths(); });
   Invoices.listen((d) => { invoices = d; renderHistory(); });
 }
 
@@ -71,7 +70,9 @@ function renderProjectCards() {
   if (projects.length === 0) {
     projectCardsEl.innerHTML = "";
     projectCardsEmpty.style.display = "block";
-    monthCard.style.display = "none";
+    outstandingHeading.style.display = "none";
+    monthsContainer.innerHTML = "";
+    monthsEmpty.style.display = "none";
     historyCard.style.display = "none";
     return;
   }
@@ -88,7 +89,7 @@ function renderProjectCards() {
     </div>
   `).join("");
 
-  renderMonth();
+  renderMonths();
   renderHistory();
 }
 
@@ -96,27 +97,23 @@ projectCardsEl.addEventListener("click", (e) => {
   const card = e.target.closest(".project-card");
   if (!card) return;
   selectedProjectId = card.dataset.projectCard;
-  currentMonth = firstOfMonth(new Date());
   expandedInvoiceId = null;
+  expandedNotesKey = null;
   renderProjectCards();
 });
 
-// ---------- Month selector + labor preview ----------
-document.getElementById("prevMonth").addEventListener("click", () => {
-  currentMonth = addMonths(currentMonth, -1);
-  renderMonth();
-});
-document.getElementById("nextMonth").addEventListener("click", () => {
-  currentMonth = addMonths(currentMonth, 1);
-  renderMonth();
-});
-
-function monthEntries() {
+// ---------- Outstanding (uninvoiced) hours, grouped by month ----------
+function entriesForMonth(monthKeyStr) {
   if (!selectedProjectId) return [];
-  const prefix = monthKey(currentMonth);
   return timeEntries.filter((e) =>
-    e.projectId === selectedProjectId && e.approved && !e.invoiced && e.date.startsWith(prefix)
+    e.projectId === selectedProjectId && e.approved && !e.invoiced && e.date.startsWith(monthKeyStr)
   );
+}
+
+function notesForPersonMonth(personId, monthKeyStr) {
+  return entriesForMonth(monthKeyStr)
+    .filter((e) => e.personId === personId && e.note)
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
 function groupByPerson(entries) {
@@ -131,39 +128,91 @@ function groupByPerson(entries) {
   });
 }
 
-function renderMonth() {
-  if (!selectedProjectId || projects.length === 0) {
-    monthCard.style.display = "none";
-    return;
-  }
-  monthCard.style.display = "block";
-  monthLabelEl.textContent = formatMonthLabel(currentMonth);
-
-  const laborRows = groupByPerson(monthEntries());
-
-  if (laborRows.length === 0) {
-    laborTbody.innerHTML = "";
-    laborEmpty.style.display = "block";
-    laborGrandTotalEl.textContent = formatCurrency(0);
-    previewBtn.disabled = true;
-    generateBtn.disabled = true;
-    return;
-  }
-  laborEmpty.style.display = "none";
-  previewBtn.disabled = false;
-  generateBtn.disabled = false;
-
-  laborTbody.innerHTML = laborRows.map((r) => `
-    <tr>
-      <td>${r.name}</td>
-      <td>${r.hours.toFixed(2)}</td>
-      <td>${formatCurrency(r.rate)}</td>
-      <td>${formatCurrency(r.total)}</td>
-    </tr>`).join("");
-
-  const grand = laborRows.reduce((s, r) => s + r.total, 0);
-  laborGrandTotalEl.textContent = formatCurrency(grand);
+function outstandingMonthKeys() {
+  if (!selectedProjectId) return [];
+  const entries = timeEntries.filter((e) => e.projectId === selectedProjectId && e.approved && !e.invoiced);
+  const keys = new Set(entries.map((e) => e.date.slice(0, 7)));
+  return [...keys].sort(); // oldest first, so forgotten months surface at the top
 }
+
+function monthSectionHtml(monthKeyStr) {
+  const monthDate = new Date(monthKeyStr + "-01T00:00:00");
+  const laborRows = groupByPerson(entriesForMonth(monthKeyStr));
+  const grand = laborRows.reduce((s, r) => s + r.total, 0);
+
+  const rowsHtml = laborRows.map((r) => {
+    const notesKey = `${monthKeyStr}|${r.personId}`;
+    const isOpen = expandedNotesKey === notesKey;
+    const notes = notesForPersonMonth(r.personId, monthKeyStr);
+    return `
+      <tr>
+        <td>${esc(r.name)}</td>
+        <td>${r.hours.toFixed(2)}</td>
+        <td>${formatCurrency(r.rate)}</td>
+        <td>${formatCurrency(r.total)}</td>
+        <td><button class="small secondary" data-action="toggle-notes" data-key="${notesKey}">${isOpen ? "Hide notes" : "View notes"}</button></td>
+      </tr>
+      ${isOpen ? `<tr class="notes-row"><td colspan="5">
+        ${notes.length === 0
+          ? '<div class="empty">No notes logged for this person this month.</div>'
+          : notes.map((e) => `<div>${formatDate(e.date)} — ${Number(e.hours).toFixed(2)}h: ${esc(e.note)}</div>`).join("")}
+      </td></tr>` : ""}
+    `;
+  }).join("");
+
+  return `<div class="card month-section">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">${formatMonthLabel(monthDate)}</h2>
+      <span class="pill orange">Not yet invoiced</span>
+    </div>
+    <table style="margin-top:16px;">
+      <thead><tr><th>Person</th><th>Hours</th><th>Rate</th><th>Total</th><th></th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+      <tfoot><tr><td>Total</td><td></td><td></td><td>${formatCurrency(grand)}</td><td></td></tr></tfoot>
+    </table>
+    <div class="row-actions" style="margin-top:16px;">
+      <button class="secondary" data-action="preview" data-month="${monthKeyStr}">Preview PDF (Test)</button>
+      <button data-action="generate" data-month="${monthKeyStr}">Generate Invoice</button>
+    </div>
+  </div>`;
+}
+
+function renderMonths() {
+  if (!selectedProjectId || projects.length === 0) {
+    outstandingHeading.style.display = "none";
+    monthsContainer.innerHTML = "";
+    monthsEmpty.style.display = "none";
+    return;
+  }
+
+  const monthKeys = outstandingMonthKeys();
+  if (monthKeys.length === 0) {
+    outstandingHeading.style.display = "none";
+    monthsContainer.innerHTML = "";
+    monthsEmpty.style.display = "block";
+    return;
+  }
+
+  outstandingHeading.style.display = "block";
+  monthsEmpty.style.display = "none";
+  monthsContainer.innerHTML = monthKeys.map(monthSectionHtml).join("");
+}
+
+monthsContainer.addEventListener("click", async (e) => {
+  const notesBtn = e.target.closest('[data-action="toggle-notes"]');
+  if (notesBtn) {
+    const key = notesBtn.dataset.key;
+    expandedNotesKey = expandedNotesKey === key ? null : key;
+    renderMonths();
+    return;
+  }
+
+  const actionBtn = e.target.closest('[data-action="preview"], [data-action="generate"]');
+  if (!actionBtn) return;
+  const monthKeyStr = actionBtn.dataset.month;
+  const isPreview = actionBtn.dataset.action === "preview";
+  await generate(isPreview, monthKeyStr);
+});
 
 // ---------- Shared invoice math ----------
 function computeInvoiceData(project, entries) {
@@ -438,19 +487,20 @@ async function buildPdf(data) {
   doc.save(`${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`);
 }
 
-async function generate(isPreview) {
+async function generate(isPreview, monthKeyStr) {
   const project = projects.find((p) => p.id === selectedProjectId);
-  const entries = monthEntries();
+  const entries = entriesForMonth(monthKeyStr);
   if (!project || entries.length === 0) return;
+  const monthDate = new Date(monthKeyStr + "-01T00:00:00");
 
-  previewBtn.disabled = true;
-  generateBtn.disabled = true;
+  const monthButtons = [...monthsContainer.querySelectorAll(`[data-month="${monthKeyStr}"]`)];
+  monthButtons.forEach((b) => { b.disabled = true; });
   try {
     const computed = computeInvoiceData(project, entries);
     const invoiceDate = new Date();
     const dueDate = lastDayOfMonth(invoiceDate);
     const invoiceNumber = toISODate(invoiceDate);
-    const periodLabel = formatMonthShort(currentMonth);
+    const periodLabel = formatMonthShort(monthDate);
 
     await buildPdf({
       project, invoiceNumber, invoiceDate, dueDate,
@@ -464,7 +514,7 @@ async function generate(isPreview) {
         invoiceNumber,
         date: toISODate(invoiceDate),
         dueDate: toISODate(dueDate),
-        periodLabel: formatMonthLabel(currentMonth),
+        periodLabel: formatMonthLabel(monthDate),
         taskRows: computed.taskRows,
         laborRows: computed.laborRows,
         feeTotal: computed.feeTotal,
@@ -481,13 +531,9 @@ async function generate(isPreview) {
     }
   } catch (err) {
     showToast("Error: " + err.message);
+    monthButtons.forEach((b) => { b.disabled = false; });
   }
-  previewBtn.disabled = false;
-  generateBtn.disabled = false;
 }
-
-previewBtn.addEventListener("click", () => generate(true));
-generateBtn.addEventListener("click", () => generate(false));
 
 // ---------- Invoice history ----------
 function renderHistory() {
