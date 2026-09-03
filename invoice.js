@@ -1,5 +1,5 @@
 import { People, Projects, Tasks, TimeEntries, Invoices } from "./db.js";
-import { requireSession, wireLogout, enforceAdmin } from "./session.js";
+import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
   formatCurrency, formatDate, daysAgo, showToast,
   lastDayOfMonth, formatMonthLabel, formatMonthShort, formatShortMDY, toISODate,
@@ -51,6 +51,7 @@ if (sessionPersonId) {
       adminCheckDone = true;
       const me = people.find((p) => p.id === sessionPersonId);
       if (!enforceAdmin(me)) return;
+      renderNavUserName(me);
     }
     renderMonths();
   });

@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import { formatCurrency, formatDate, showToast } from "./util.js";
-import { requireSession, wireLogout, enforceAdmin } from "./session.js";
+import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 
 const sessionPersonId = requireSession();
 
@@ -26,6 +26,7 @@ if (sessionPersonId) {
       adminCheckDone = true;
       const me = people.find((p) => p.id === sessionPersonId);
       if (!enforceAdmin(me)) return;
+      renderNavUserName(me);
     }
     renderPeople();
     renderTasks();
@@ -50,6 +51,7 @@ const personModalTitle = document.getElementById("personModalTitle");
 const modalPersonName = document.getElementById("modalPersonName");
 const modalPersonRate = document.getElementById("modalPersonRate");
 const modalPersonAdmin = document.getElementById("modalPersonAdmin");
+const modalPersonPassword = document.getElementById("modalPersonPassword");
 
 function renderPeople() {
   if (people.length === 0) {
@@ -90,6 +92,7 @@ function openPersonModal(person) {
   modalPersonName.value = person ? person.name : "";
   modalPersonRate.value = person ? person.rate : "";
   modalPersonAdmin.checked = person ? !!person.isAdmin : false;
+  modalPersonPassword.value = person ? (person.password || "") : "";
   personModal.style.display = "flex";
   modalPersonName.focus();
 }
@@ -108,13 +111,14 @@ document.getElementById("modalSavePerson").addEventListener("click", async () =>
   const name = modalPersonName.value.trim();
   const rate = Number(modalPersonRate.value);
   const isAdmin = modalPersonAdmin.checked;
+  const password = modalPersonPassword.value.trim() || null;
   if (!name || !rate) return showToast("Enter a name and rate.");
   try {
     if (modalEditingPersonId) {
-      await People.update(modalEditingPersonId, { name, rate, isAdmin });
+      await People.update(modalEditingPersonId, { name, rate, isAdmin, password });
       showToast("Person updated.");
     } else {
-      await People.add({ name, rate, isAdmin });
+      await People.add({ name, rate, isAdmin, password });
       showToast("Person added.");
     }
     closePersonModal();

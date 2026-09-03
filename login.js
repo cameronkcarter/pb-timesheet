@@ -8,6 +8,9 @@ const personCardsEl = document.getElementById("personCards");
 const personCardsEmpty = document.getElementById("personCardsEmpty");
 const loginAction = document.getElementById("loginAction");
 const loginName = document.getElementById("loginName");
+const loginPasswordField = document.getElementById("loginPasswordField");
+const loginPassword = document.getElementById("loginPassword");
+const loginError = document.getElementById("loginError");
 
 People.listen((data) => {
   people = data;
@@ -35,17 +38,34 @@ personCardsEl.addEventListener("click", (e) => {
   const person = people.find((p) => p.id === selectedPersonId);
   loginName.textContent = person ? person.name : "";
   loginAction.style.display = "flex";
+  loginPasswordField.style.display = person && person.password ? "block" : "none";
+  loginPassword.value = "";
+  loginError.style.display = "none";
   render();
 });
 
+function checkPassword() {
+  const person = people.find((p) => p.id === selectedPersonId);
+  if (!person || !person.password) return true;
+  if (loginPassword.value === person.password) return true;
+  loginError.style.display = "block";
+  return false;
+}
+
 document.getElementById("loginBtn").addEventListener("click", () => {
   if (!selectedPersonId) return;
+  if (!checkPassword()) return;
   setSessionPersonId(selectedPersonId);
   window.location.href = "dashboard.html";
 });
 
 document.getElementById("testLoginBtn").addEventListener("click", () => {
   if (!selectedPersonId) return;
+  if (!checkPassword()) return;
   startTestSession(selectedPersonId);
   window.location.href = "dashboard.html";
+});
+
+loginPassword.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("loginBtn").click();
 });

@@ -2,7 +2,7 @@ import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
   formatDate, todayISO, toISODate, getWeekStart, suggestedWeeklyHours, monthKey, showToast,
 } from "./util.js";
-import { requireSession, wireLogout, applyAdminNavVisibility } from "./session.js";
+import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 
 const selectedPersonId = requireSession();
 
@@ -48,7 +48,9 @@ if (selectedPersonId) {
     people = data;
     if (!navChecked) {
       navChecked = true;
-      applyAdminNavVisibility(people.find((p) => p.id === selectedPersonId));
+      const me = people.find((p) => p.id === selectedPersonId);
+      applyAdminNavVisibility(me);
+      renderNavUserName(me);
     }
   });
   Projects.listen((data) => { projects = data; renderProjectCards(); });

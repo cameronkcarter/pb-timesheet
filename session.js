@@ -101,3 +101,12 @@ export function applyAdminNavVisibility(person) {
   if (adminLink) adminLink.style.display = "";
   if (invoiceLink) invoiceLink.style.display = "";
 }
+
+// Call once a person record has loaded, on any page with a nav bar, to show
+// who's currently logged in (and whether it's a Test Mode session).
+export function renderNavUserName(person) {
+  const el = document.getElementById("navUserName");
+  if (!el) return;
+  if (!person) { el.textContent = ""; return; }
+  el.textContent = isTestMode() ? `${person.name} (Test Mode)` : person.name;
+}

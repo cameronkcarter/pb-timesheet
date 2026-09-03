@@ -56,6 +56,13 @@ nav a.active {
   color: #fff;
 }
 
+.nav-user-name {
+  color: #c7d1db;
+  font-size: 14px;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
 main {
   max-width: 1000px;
   margin: 0 auto;

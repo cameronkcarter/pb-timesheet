@@ -3,7 +3,7 @@ import {
   formatCurrency, formatDate, daysAgo, dueLabel,
   todayISO, toISODate, getWeekStart, addDays, monthKey,
 } from "./util.js";
-import { requireSession, wireLogout, applyAdminNavVisibility } from "./session.js";
+import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 
 const selectedPersonId = requireSession();
 
@@ -26,7 +26,9 @@ if (selectedPersonId) {
     people = d;
     if (!navChecked) {
       navChecked = true;
-      applyAdminNavVisibility(people.find((p) => p.id === selectedPersonId));
+      const me = people.find((p) => p.id === selectedPersonId);
+      applyAdminNavVisibility(me);
+      renderNavUserName(me);
     }
     render();
   });

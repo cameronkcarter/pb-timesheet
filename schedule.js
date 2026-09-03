@@ -3,7 +3,7 @@ import {
   formatCurrency, formatDate, dueLabel, showToast,
   todayISO, toISODate, addDays, daysBetween,
 } from "./util.js";
-import { requireSession, wireLogout, applyAdminNavVisibility } from "./session.js";
+import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 
 const sessionPersonId = requireSession();
 
@@ -88,6 +88,7 @@ if (sessionPersonId) {
     if (!navChecked) {
       navChecked = true;
       applyAdminNavVisibility(currentPerson());
+      renderNavUserName(currentPerson());
     }
     renderAll();
   });
