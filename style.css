@@ -995,12 +995,6 @@ tr.notes-row td {
   flex-wrap: wrap;
 }
 
-.transfer-box {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
 .empty {
   color: var(--text-muted);
   font-size: 14px;

@@ -379,7 +379,7 @@ function renderAccordion(task, diff) {
 
     return `<tr class="assignmentRow" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-earned="${earned}">
       <td>${person ? esc(person.name) : "—"}</td>
-      <td><input type="number" class="editAmount" min="0" step="1" data-person-id="${a.personId}" value="${a.capValue}" style="width:100px;" /></td>
+      <td><input type="number" class="editAmount" min="0" step="${rate || 1}" data-person-id="${a.personId}" value="${a.capValue}" style="width:100px;" /></td>
       <td>${formatCurrency(earned)} <span class="empty">(${loggedHours.toFixed(2)} hrs)</span></td>
       <td class="remainingCell">${formatCurrency(remaining)}</td>
       <td class="row-actions">
@@ -409,40 +409,6 @@ function renderAccordion(task, diff) {
         </div>
       </div>`;
 
-  const transferBox = taskAssignments.length >= 2
-    ? `<div class="transfer-box">
-        <div style="font-weight:600; margin-bottom:8px;">Transfer between people</div>
-        <div class="inline-form">
-          <div>
-            <label>From</label>
-            <select class="transferFrom">
-              ${taskAssignments.map((a) => {
-                const p = people.find((pp) => pp.id === a.personId);
-                return `<option value="${a.personId}">${p ? esc(p.name) : "—"}</option>`;
-              }).join("")}
-            </select>
-          </div>
-          <div>
-            <label>To</label>
-            <select class="transferTo">
-              ${taskAssignments.map((a) => {
-                const p = people.find((pp) => pp.id === a.personId);
-                return `<option value="${a.personId}">${p ? esc(p.name) : "—"}</option>`;
-              }).join("")}
-            </select>
-          </div>
-          <div>
-            <label>Amount ($)</label>
-            <input type="number" class="transferAmount" min="0" step="1" placeholder="500" />
-          </div>
-          <div style="flex:0;">
-            <label>&nbsp;</label>
-            <button type="button" class="small secondary" data-action="do-transfer" data-task-id="${task.id}">Transfer &rarr;</button>
-          </div>
-        </div>
-      </div>`
-    : "";
-
   return `
     <div class="assign-summary" data-task-budget="${budget}">
       Assigned: <strong class="assignSumAssigned">${formatCurrency(totalAssigned)}</strong> of ${formatCurrency(budget)} budget
@@ -455,7 +421,6 @@ function renderAccordion(task, diff) {
     <div class="row-actions" style="margin-top:10px;">
       <button class="small" data-action="save-assignments" data-task-id="${task.id}">Save Changes</button>
     </div>` : `<div class="empty">No one assigned to this task yet.</div>`}
-    ${transferBox}
     <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border);">
       ${addRow}
     </div>
@@ -516,29 +481,6 @@ tasksTbody.addEventListener("click", async (e) => {
       }
       showToast("Assignments updated.");
     } catch (err) { showToast("Error: " + err.message); }
-  }
-  if (action === "do-transfer") {
-    const cell = btn.closest(".accordion-cell");
-    const box = btn.closest(".transfer-box");
-    const fromId = box.querySelector(".transferFrom").value;
-    const toId = box.querySelector(".transferTo").value;
-    const amountInput = box.querySelector(".transferAmount");
-    const amount = Number(amountInput.value);
-    if (!fromId || !toId || fromId === toId) return showToast("Pick two different people.");
-    if (!amount || amount <= 0) return showToast("Enter an amount to transfer.");
-    const fromInput = cell.querySelector(`.editAmount[data-person-id="${fromId}"]`);
-    const toInput = cell.querySelector(`.editAmount[data-person-id="${toId}"]`);
-    if (!fromInput || !toInput) return;
-    const fromVal = Number(fromInput.value) || 0;
-    if (amount > fromVal) {
-      const fromPerson = people.find((p) => p.id === fromId);
-      return showToast(`${fromPerson ? fromPerson.name : "That person"} only has ${formatCurrency(fromVal)} assigned.`);
-    }
-    fromInput.value = (fromVal - amount).toFixed(2);
-    toInput.value = ((Number(toInput.value) || 0) + amount).toFixed(2);
-    amountInput.value = "";
-    liveRecomputeAssignments(cell);
-    showToast(`Moved ${formatCurrency(amount)} — click Save Changes to apply.`);
   }
   if (action === "add-assignment") {
     const taskId = btn.dataset.taskId;
