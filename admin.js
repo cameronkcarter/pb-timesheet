@@ -377,11 +377,13 @@ function renderAccordion(task, diff) {
     const earned = loggedHours * rate;
     const remaining = (a.capValue || 0) - earned;
 
-    return `<tr class="assignmentRow" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-earned="${earned}">
+    const remainingHours = rate > 0 ? remaining / rate : 0;
+
+    return `<tr class="assignmentRow" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-earned="${earned}" data-rate="${rate}">
       <td>${person ? esc(person.name) : "—"}</td>
       <td><input type="number" class="editAmount" min="0" step="${rate || 1}" data-person-id="${a.personId}" value="${a.capValue}" style="width:100px;" /></td>
       <td>${formatCurrency(earned)} <span class="empty">(${loggedHours.toFixed(2)} hrs)</span></td>
-      <td class="remainingCell">${formatCurrency(remaining)}</td>
+      <td class="remainingCell">${formatCurrency(remaining)} <span class="empty">(${remainingHours.toFixed(2)} hrs)</span></td>
       <td class="row-actions">
         <button class="danger small" data-action="remove-assignment" data-id="${a.id}">Remove</button>
       </td>
@@ -439,7 +441,11 @@ function liveRecomputeAssignments(accordionCell) {
   accordionCell.querySelectorAll(".assignmentRow").forEach((row) => {
     const input = row.querySelector(".editAmount");
     const earned = Number(row.dataset.earned || 0);
-    row.querySelector(".remainingCell").textContent = formatCurrency((Number(input.value) || 0) - earned);
+    const rate = Number(row.dataset.rate || 0);
+    const remaining = (Number(input.value) || 0) - earned;
+    const remainingHours = rate > 0 ? remaining / rate : 0;
+    row.querySelector(".remainingCell").innerHTML =
+      `${formatCurrency(remaining)} <span class="empty">(${remainingHours.toFixed(2)} hrs)</span>`;
   });
 }
 
