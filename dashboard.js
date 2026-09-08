@@ -158,7 +158,7 @@ function render() {
 
 function renderDueDates(personId) {
   const mine = dueDates
-    .filter((d) => (d.personIds || []).includes(personId))
+    .filter((d) => (d.personIds || []).includes(personId) && !d.completed)
     .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
 
   if (mine.length === 0) {
