@@ -3,7 +3,7 @@
 //
 // This script lives inside the Google Sheet (Extensions > Apps Script), NOT on
 // the website. The website POSTs invoice data to it whenever an invoice is
-// generated or marked paid, and it appends rows to the sheet.
+// generated or marked paid, and it records it in the sheet.
 //
 // ONE-TIME SETUP
 //   1. Paste this whole file into Extensions > Apps Script (replace what's there).
@@ -15,35 +15,60 @@
 //      Click Deploy and copy the Web app URL (ends in /exec).
 //   4. Paste the URL and the secret into sheets.js on the website.
 //
-// If you edit this script later, use Deploy > Manage deployments > edit (pencil)
-// > Version: New version, so the URL stays the same.
+// UPDATING THIS SCRIPT LATER
+//   Paste the new version, save, then Deploy > Manage deployments > pencil icon
+//   > Version: New version > Deploy (keeps the same URL). Then run "setup"
+//   once to apply any sheet layout changes.
 //
-// Tabs:
-//   Invoices       one row per invoice (paper trail; never rewritten except Paid Date)
-//   Invoice Lines  one row per invoice x task x person (paper trail; append-only)
-//   Task Budgets   current task budgets from the site + live invoiced/remaining formulas
-//   Summary        live rollups by project, person, and task (formulas only)
+// How the sheet is organized:
+//   Hidden "Log:" tabs are the paper trail — raw records (with the IDs used to
+//   avoid duplicates) that are only ever appended to, plus Paid Date filled in.
+//   The visible tabs are reports rebuilt from those logs on every sync, so
+//   don't type into them; anything typed there is overwritten.
+//
+//   Invoices      one row per invoice, with running totals vs. project budget
+//   Staff Time    one row per person per invoice (hours + pay)
+//   Task Budgets  each task's budget vs. amount invoiced so far
+//   Summary       rollups by project, person, and task (live formulas)
 // ---------------------------------------------------------------------------
 
-const TABS = {
+const LOG = {
   invoices: {
-    name: "Invoices",
+    name: "Log: Invoices",
     headers: ["Invoice Date", "Invoice #", "Project", "Billing Period", "Total", "Paid Date", "Added to Sheet", "Invoice ID"],
-    formats: { A: "m/d/yyyy", E: "$#,##0.00", F: "m/d/yyyy", G: "m/d/yyyy h:mm am/pm" },
   },
   lines: {
-    name: "Invoice Lines",
+    name: "Log: Lines",
     headers: ["Invoice Date", "Invoice #", "Billing Period", "Project", "Task", "Person", "Hours", "Rate", "Amount",
       "Added to Sheet", "Note", "Invoice ID", "Project ID", "Task ID", "Person ID", "Line Key"],
-    formats: { A: "m/d/yyyy", G: "0.00", H: "$#,##0.00", I: "$#,##0.00", J: "m/d/yyyy h:mm am/pm" },
+  },
+  budgets: {
+    name: "Log: Budgets",
+    headers: ["Project", "Task", "Budget", "Project ID", "Task ID"],
+  },
+};
+
+const REPORTS = {
+  invoices: {
+    name: "Invoices",
+    headers: ["Invoice Date", "Invoice #", "Project", "Billing Period", "Hours Invoiced", "Amount Invoiced",
+      "Invoiced to Date", "Remaining Budget", "Paid Date", "Note"],
+    formats: { A: "m/d/yyyy", E: "0.00", F: "$#,##0.00", G: "$#,##0.00", H: "$#,##0.00", I: "m/d/yyyy" },
+  },
+  staff: {
+    name: "Staff Time",
+    headers: ["Invoice Date", "Invoice #", "Project", "Billing Period", "Person", "Hours", "Rate", "Amount", "Note"],
+    formats: { A: "m/d/yyyy", F: "0.00", G: "$#,##0.00", H: "$#,##0.00" },
   },
   budgets: {
     name: "Task Budgets",
-    headers: ["Project", "Task", "Budget", "Invoiced to Date", "Hours Invoiced", "Remaining", "% Invoiced", "Project ID", "Task ID"],
+    headers: ["Project", "Task", "Budget", "Invoiced to Date", "Hours Invoiced", "Remaining", "% Invoiced"],
     formats: { C: "$#,##0.00", D: "$#,##0.00", E: "0.00", F: "$#,##0.00", G: "0%" },
   },
 };
 const SUMMARY_TAB = "Summary";
+const TAB_ORDER = ["Invoices", "Staff Time", "Task Budgets", "Summary"];
+const PURPLE = "#5c2670";
 
 // ---------- Entry points ----------
 
@@ -54,7 +79,13 @@ function setup() {
     secret = Utilities.getUuid().replace(/-/g, "");
     props.setProperty("SYNC_SECRET", secret);
   }
-  ensureSheets_(SpreadsheetApp.getActiveSpreadsheet());
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSheets_(ss);
+  rebuildReports_(ss);
+  TAB_ORDER.forEach((name, i) => {
+    ss.setActiveSheet(ss.getSheetByName(name));
+    ss.moveActiveSheet(i + 1);
+  });
   Logger.log("Setup complete. Your secret passphrase is:\n\n" + secret + "\n\nPaste it into SHEET_SECRET in sheets.js.");
 }
 
@@ -81,6 +112,7 @@ function doPost(e) {
     const result = { ok: true };
     if (body.invoices) Object.assign(result, upsertInvoices_(ss, body.invoices, body.extraLines || []));
     if (body.budgets) result.budgetRows = writeBudgets_(ss, body.budgets);
+    if (body.invoices || body.budgets) rebuildReports_(ss);
     return json_(result);
   } catch (err) {
     return json_({ ok: false, error: String(err) });
@@ -89,20 +121,20 @@ function doPost(e) {
   }
 }
 
-// ---------- Invoices + lines (append-only) ----------
+// ---------- Logs: invoices + lines (append-only) ----------
 
 function upsertInvoices_(ss, invoices, extraLines) {
   const now = new Date();
-  const invSheet = ss.getSheetByName(TABS.invoices.name);
-  const lineSheet = ss.getSheetByName(TABS.lines.name);
+  const invSheet = ss.getSheetByName(LOG.invoices.name);
+  const lineSheet = ss.getSheetByName(LOG.lines.name);
 
   // Invoice ID -> sheet row number, for dedup and Paid Date updates.
-  const invIdCol = TABS.invoices.headers.indexOf("Invoice ID") + 1;
-  const paidCol = TABS.invoices.headers.indexOf("Paid Date") + 1;
+  const invIdCol = LOG.invoices.headers.indexOf("Invoice ID") + 1;
+  const paidCol = LOG.invoices.headers.indexOf("Paid Date") + 1;
   const existingInv = {};
   columnValues_(invSheet, invIdCol).forEach((id, i) => { if (id) existingInv[id] = i + 2; });
 
-  const lineKeyCol = TABS.lines.headers.indexOf("Line Key") + 1;
+  const lineKeyCol = LOG.lines.headers.indexOf("Line Key") + 1;
   const existingLines = new Set(columnValues_(lineSheet, lineKeyCol).filter(String));
 
   const newInvRows = [];
@@ -151,81 +183,201 @@ function lineRow_(l, now) {
   ];
 }
 
-// ---------- Task budgets (rewritten every sync; formulas pull from Invoice Lines) ----------
-
+// Current task budgets from the site (a snapshot, replaced every sync).
 function writeBudgets_(ss, budgets) {
-  const sheet = ss.getSheetByName(TABS.budgets.name);
-  const width = TABS.budgets.headers.length;
+  const sheet = ss.getSheetByName(LOG.budgets.name);
   const last = sheet.getLastRow();
-  if (last > 1) sheet.getRange(2, 1, last - 1, width).clearContent();
-  if (budgets.length === 0) return 0;
-
-  const sorted = budgets.slice().sort((a, b) =>
-    a.projectName.localeCompare(b.projectName) || a.taskName.localeCompare(b.taskName));
-  const rows = sorted.map((b, i) => {
-    const r = i + 2;
-    return [
-      b.projectName, b.taskName, b.budget,
-      `=SUMIFS('Invoice Lines'!I:I,'Invoice Lines'!N:N,I${r})`,
-      `=SUMIFS('Invoice Lines'!G:G,'Invoice Lines'!N:N,I${r})`,
-      `=C${r}-D${r}`,
-      `=IF(C${r}>0,D${r}/C${r},"")`,
-      b.projectId, b.taskId,
-    ];
-  });
-  sheet.getRange(2, 1, rows.length, width).setValues(rows);
+  if (last > 1) sheet.getRange(2, 1, last - 1, LOG.budgets.headers.length).clearContent();
+  const rows = budgets.map((b) => [b.projectName, b.taskName, b.budget, b.projectId, b.taskId]);
+  appendRows_(sheet, rows);
   return rows.length;
 }
 
-// ---------- Sheet scaffolding ----------
+// ---------- Reports (rebuilt from the logs every sync) ----------
 
-function ensureSheets_(ss) {
-  Object.keys(TABS).forEach((key) => {
-    const tab = TABS[key];
-    let sheet = ss.getSheetByName(tab.name);
-    if (!sheet) sheet = ss.insertSheet(tab.name);
-    if (sheet.getRange(1, 1).getValue() !== tab.headers[0]) {
-      sheet.getRange(1, 1, 1, tab.headers.length).setValues([tab.headers]).setFontWeight("bold").setBackground("#5c2670").setFontColor("#ffffff");
-      sheet.setFrozenRows(1);
-      Object.keys(tab.formats).forEach((col) => sheet.getRange(`${col}2:${col}`).setNumberFormat(tab.formats[col]));
-    }
+function rebuildReports_(ss) {
+  const invoices = readLog_(ss, LOG.invoices);
+  const lines = readLog_(ss, LOG.lines);
+  const budgets = readLog_(ss, LOG.budgets);
+
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const time = (d) => (d instanceof Date ? d.getTime() : 0);
+  const byDateThenNumber = (a, b) => time(a.date) - time(b.date) || String(a.number).localeCompare(String(b.number));
+
+  // --- Invoices: real invoices plus any "no invoice record" lines, which the
+  // site counts as already billed, so running totals match the app.
+  const hoursByInvoice = {};
+  lines.forEach((l) => {
+    if (l["Invoice ID"]) hoursByInvoice[l["Invoice ID"]] = (hoursByInvoice[l["Invoice ID"]] || 0) + Number(l.Hours || 0);
   });
+  const invoiceRecords = invoices.map((inv) => ({
+    date: inv["Invoice Date"], number: inv["Invoice #"], project: inv.Project, period: inv["Billing Period"],
+    hours: hoursByInvoice[inv["Invoice ID"]] || 0, amount: Number(inv.Total || 0), paid: inv["Paid Date"], note: "",
+  })).concat(lines.filter((l) => !l["Invoice ID"]).map((l) => ({
+    date: l["Invoice Date"], number: "", project: l.Project, period: l["Billing Period"],
+    hours: Number(l.Hours || 0), amount: Number(l.Amount || 0), paid: "", note: l.Note,
+  }))).sort(byDateThenNumber);
 
-  let summary = ss.getSheetByName(SUMMARY_TAB);
-  if (!summary) summary = ss.insertSheet(SUMMARY_TAB);
-  if (summary.getRange("A1").getValue() === "") buildSummary_(summary);
+  const budgetByProject = {};
+  budgets.forEach((b) => { budgetByProject[b.Project] = (budgetByProject[b.Project] || 0) + Number(b.Budget || 0); });
+  const runningByProject = {};
+  const invoiceRows = invoiceRecords.map((r) => {
+    runningByProject[r.project] = (runningByProject[r.project] || 0) + r.amount;
+    const toDate = runningByProject[r.project];
+    return [r.date, r.number, r.project, r.period, round2(r.hours), r.amount, round2(toDate),
+      round2((budgetByProject[r.project] || 0) - toDate), r.paid, r.note];
+  });
+  writeReport_(ss, REPORTS.invoices, invoiceRows);
 
-  // Drop the blank default tab a brand-new spreadsheet comes with.
-  const blank = ss.getSheetByName("Sheet1");
-  if (blank && ss.getSheets().length > 1 && blank.getLastRow() === 0) ss.deleteSheet(blank);
+  // --- Staff Time: tasks combined, one row per person per invoice.
+  const staff = {};
+  lines.forEach((l) => {
+    const key = (l["Invoice ID"] || l["Line Key"]) + "|" + (l["Person ID"] || l.Person);
+    if (!staff[key]) {
+      staff[key] = { date: l["Invoice Date"], number: l["Invoice #"], project: l.Project, period: l["Billing Period"],
+        person: l.Person, hours: 0, amount: 0, note: l.Note || "" };
+    }
+    staff[key].hours += Number(l.Hours || 0);
+    staff[key].amount += Number(l.Amount || 0);
+  });
+  const staffRows = Object.keys(staff).map((k) => staff[k])
+    .sort((a, b) => byDateThenNumber(a, b) || a.person.localeCompare(b.person))
+    .map((s) => [s.date, s.number, s.project, s.period, s.person, round2(s.hours),
+      s.hours > 0 ? round2(s.amount / s.hours) : "", round2(s.amount), s.note]);
+  writeReport_(ss, REPORTS.staff, staffRows);
+
+  // --- Task Budgets: matched to invoiced lines by task ID, so renaming a task
+  // on the site doesn't break its history.
+  const invoicedByTask = {};
+  lines.forEach((l) => {
+    const id = l["Task ID"];
+    if (!invoicedByTask[id]) invoicedByTask[id] = { amount: 0, hours: 0 };
+    invoicedByTask[id].amount += Number(l.Amount || 0);
+    invoicedByTask[id].hours += Number(l.Hours || 0);
+  });
+  const budgetRows = budgets
+    .slice()
+    .sort((a, b) => String(a.Project).localeCompare(String(b.Project)) || String(a.Task).localeCompare(String(b.Task)))
+    .map((b) => {
+      const budget = Number(b.Budget || 0);
+      const inv = invoicedByTask[b["Task ID"]] || { amount: 0, hours: 0 };
+      return [b.Project, b.Task, budget, round2(inv.amount), round2(inv.hours), round2(budget - inv.amount),
+        budget > 0 ? inv.amount / budget : ""];
+    });
+  writeReport_(ss, REPORTS.budgets, budgetRows);
+
+  buildSummary_(ss.getSheetByName(SUMMARY_TAB));
+}
+
+function readLog_(ss, log) {
+  const sheet = ss.getSheetByName(log.name);
+  const last = sheet.getLastRow();
+  if (last < 2) return [];
+  return sheet.getRange(2, 1, last - 1, log.headers.length).getValues().map((row) => {
+    const obj = {};
+    log.headers.forEach((h, i) => { obj[h] = row[i]; });
+    return obj;
+  });
+}
+
+function writeReport_(ss, report, rows) {
+  const sheet = ss.getSheetByName(report.name);
+  const width = report.headers.length;
+  sheet.clear();
+  sheet.getBandings().forEach((b) => b.remove());
+
+  sheet.getRange(1, 1, 1, width).setValues([report.headers]);
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, width).setValues(rows);
+  Object.keys(report.formats).forEach((col) => sheet.getRange(`${col}2:${col}`).setNumberFormat(report.formats[col]));
+
+  const banding = sheet.getRange(1, 1, Math.max(rows.length, 1) + 1, width)
+    .applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, true, false);
+  banding.setHeaderRowColor(PURPLE);
+  sheet.getRange(1, 1, 1, width).setFontWeight("bold").setFontColor("#ffffff");
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, width);
 }
 
 function buildSummary_(sheet) {
-  const title = (cell, text) => sheet.getRange(cell).setValue(text).setFontWeight("bold").setFontSize(12);
+  sheet.clear();
+  const title = (cell, text) => sheet.getRange(cell).setValue(text).setFontWeight("bold").setFontSize(12).setFontColor(PURPLE);
 
   title("A1", "By Project");
   sheet.getRange("A2").setFormula(
-    "=QUERY('Task Budgets'!A:G,\"select A, sum(C), sum(D), sum(E), sum(F) where A is not null group by A order by A " +
+    "=QUERY('Task Budgets'!A:F,\"select A, sum(C), sum(D), sum(E), sum(F) where A is not null group by A order by A " +
     "label A 'Project', sum(C) 'Budget', sum(D) 'Invoiced', sum(E) 'Hours', sum(F) 'Remaining'\",1)");
   ["B", "C", "E"].forEach((c) => sheet.getRange(`${c}3:${c}`).setNumberFormat("$#,##0.00"));
   sheet.getRange("D3:D").setNumberFormat("0.00");
 
   title("G1", "By Person & Project");
   sheet.getRange("G2").setFormula(
-    "=QUERY('Invoice Lines'!A:P,\"select D, F, sum(G), sum(I) where F is not null group by D, F order by D, F " +
-    "label D 'Project', F 'Person', sum(G) 'Hours', sum(I) 'Pay'\",1)");
+    "=QUERY('Staff Time'!A:H,\"select C, E, sum(F), sum(H) where E is not null group by C, E order by C, E " +
+    "label C 'Project', E 'Person', sum(F) 'Hours', sum(H) 'Pay'\",1)");
   sheet.getRange("I3:I").setNumberFormat("0.00");
   sheet.getRange("J3:J").setNumberFormat("$#,##0.00");
 
-  title("L1", "By Person, Project & Task");
+  title("L1", "By Project & Task");
   sheet.getRange("L2").setFormula(
-    "=QUERY('Invoice Lines'!A:P,\"select D, E, F, sum(G), sum(I) where F is not null group by D, E, F order by D, E, F " +
-    "label D 'Project', E 'Task', F 'Person', sum(G) 'Hours', sum(I) 'Pay'\",1)");
-  sheet.getRange("O3:O").setNumberFormat("0.00");
-  sheet.getRange("P3:P").setNumberFormat("$#,##0.00");
+    "=QUERY('Task Budgets'!A:F,\"select A, B, C, D, E, F where A is not null order by A, B " +
+    "label A 'Project', B 'Task', C 'Budget', D 'Invoiced', E 'Hours', F 'Remaining'\",1)");
+  ["N", "O", "Q"].forEach((c) => sheet.getRange(`${c}3:${c}`).setNumberFormat("$#,##0.00"));
+  sheet.getRange("P3:P").setNumberFormat("0.00");
 
-  sheet.getRange("A2:P2").setFontWeight("bold");
+  sheet.getRange("A2:Q2").setFontWeight("bold").setBackground("#eeeeee");
   sheet.setFrozenRows(2);
+  sheet.setColumnWidths(1, 17, 110);
+  [1, 7, 12, 13].forEach((c) => sheet.setColumnWidth(c, 200));
+}
+
+// ---------- Sheet scaffolding ----------
+
+function ensureSheets_(ss) {
+  migrateV1_(ss);
+
+  Object.keys(LOG).forEach((key) => {
+    const log = LOG[key];
+    let sheet = ss.getSheetByName(log.name);
+    if (!sheet) {
+      sheet = ss.insertSheet(log.name);
+      sheet.getRange(1, 1, 1, log.headers.length).setValues([log.headers]).setFontWeight("bold");
+      sheet.setFrozenRows(1);
+    }
+    if (!sheet.isSheetHidden()) sheet.hideSheet();
+  });
+
+  Object.keys(REPORTS).map((k) => REPORTS[k].name).concat([SUMMARY_TAB]).forEach((name) => {
+    if (!ss.getSheetByName(name)) ss.insertSheet(name);
+  });
+
+  // Drop the blank default tab a brand-new spreadsheet comes with.
+  const blank = ss.getSheetByName("Sheet1");
+  if (blank && blank.getLastRow() === 0) ss.deleteSheet(blank);
+}
+
+// The first version of this script wrote raw rows (with ID columns) straight
+// into the visible tabs. Keep those rows as the hidden logs instead.
+function migrateV1_(ss) {
+  const oldInvoices = ss.getSheetByName("Invoices");
+  if (oldInvoices && !ss.getSheetByName(LOG.invoices.name) && oldInvoices.getRange(1, 8).getValue() === "Invoice ID") {
+    oldInvoices.setName(LOG.invoices.name);
+  }
+  const oldLines = ss.getSheetByName("Invoice Lines");
+  if (oldLines && !ss.getSheetByName(LOG.lines.name)) oldLines.setName(LOG.lines.name);
+
+  const oldBudgets = ss.getSheetByName("Task Budgets");
+  if (oldBudgets && oldBudgets.getRange(1, 9).getValue() === "Task ID") {
+    const last = oldBudgets.getLastRow();
+    const rows = last < 2 ? [] : oldBudgets.getRange(2, 1, last - 1, 9).getValues()
+      .map((r) => [r[0], r[1], r[2], r[7], r[8]]);
+    let log = ss.getSheetByName(LOG.budgets.name);
+    if (!log) {
+      log = ss.insertSheet(LOG.budgets.name);
+      log.getRange(1, 1, 1, LOG.budgets.headers.length).setValues([LOG.budgets.headers]).setFontWeight("bold");
+      log.setFrozenRows(1);
+      appendRows_(log, rows);
+    }
+    ss.deleteSheet(oldBudgets);
+  }
 }
 
 // ---------- Helpers ----------
