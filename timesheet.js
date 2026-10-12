@@ -249,7 +249,7 @@ document.getElementById("submitEntry").addEventListener("click", async () => {
 // Each day shows one small chip per project (colored by project): solid once
 // approved (or later), outlined while still pending approval. Clicking a day
 // lists that day's entries below and sets it as the date to log hours for.
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function fmtHours(n) {
   return String(Math.round(n * 100) / 100);
@@ -294,7 +294,7 @@ function renderCalendar() {
   const monthPrefix = monthKey(calMonth);
   calMonthLabel.textContent = formatMonthLabel(calMonth);
 
-  // Monday-start weeks covering the whole month.
+  // Sunday-start weeks covering the whole month.
   let cursor = getWeekStart(toISODate(calMonth));
   const cells = WEEKDAYS.map((d) => `<div class="cal-weekday">${d}</div>`).concat('<div class="cal-weekday cal-week-col">Week</div>');
   const monthProjectIds = new Set();

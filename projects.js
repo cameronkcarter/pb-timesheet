@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { billRateOf, assignmentRate } from "./rates.js";
@@ -251,15 +251,11 @@ function taskPeopleHtml(task) {
     return { name: person ? person.name : "—", assignedHours, spentHours, remainingHours, assigned: !!assignment };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
-  return `<table>
-    <thead><tr><th>Person</th><th>Assigned</th><th>Spent</th><th>Remaining</th></tr></thead>
-    <tbody>${rows.map((r) => `<tr>
-      <td>${esc(r.name)}${r.assigned ? "" : ' <span class="empty" style="padding:0;">(not assigned)</span>'}</td>
-      <td>${r.assignedHours.toFixed(2)} hrs</td>
-      <td>${r.spentHours.toFixed(2)} hrs</td>
-      <td ${r.remainingHours < 0 ? 'style="color:var(--red);"' : ""}>${r.remainingHours.toFixed(2)} hrs</td>
-    </tr>`).join("")}</tbody>
-  </table>`;
+  const color = projectColor(task.projectId);
+  return `<div class="hours-rows" style="margin-top:0;">${rows.map((r) => `<div class="hours-row">
+      <div class="hours-row-name">${esc(r.name)}${r.assigned ? "" : ' <span class="empty" style="padding:0; font-weight:400;">(not assigned)</span>'}</div>
+      ${hoursBarHtml(r.spentHours, r.assignedHours, color)}
+    </div>`).join("")}</div>`;
 }
 
 budgetTbody.addEventListener("click", (e) => {

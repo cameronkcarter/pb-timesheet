@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, daysAgo, dueLabel,
-  todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor,
+  todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor, hoursBarHtml,
 } from "./util.js";
 import { paidAmount, assignmentRate } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -135,23 +135,6 @@ function render() {
         <div class="hours-rows">${taskRows}</div>` : '<div class="empty">No hours assigned to you on this project yet.</div>'}
     </div>`;
   }).join("");
-}
-
-function hoursBarHtml(used, assigned, color, large = false) {
-  const pct = assigned > 0 ? Math.min(100, (used / assigned) * 100) : (used > 0 ? 100 : 0);
-  const left = assigned - used;
-  const over = left < -0.005;
-  return `<div class="hours-bar-wrap">
-    <div class="progress-bar ${large ? "large" : "task-bar"}"><div class="fill ${over ? "over" : ""}" style="width:${pct}%; ${over ? "" : `background:${color};`}"></div></div>
-    <div class="hours-captions">
-      <span><strong>${fmtHrs(used)}</strong> of ${fmtHrs(assigned)} hrs used</span>
-      <span class="${over ? "hours-over" : ""}">${over ? `${fmtHrs(-left)} hrs over` : `${fmtHrs(left)} hrs left`}</span>
-    </div>
-  </div>`;
-}
-
-function fmtHrs(n) {
-  return (Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 function renderDueDates(personId) {

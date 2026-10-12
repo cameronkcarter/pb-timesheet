@@ -40,12 +40,10 @@ export function toISODate(date) {
   return d.toISOString().slice(0, 10);
 }
 
-// Monday-start week containing the given date.
+// Sunday-start week containing the given date.
 export function getWeekStart(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
+  d.setDate(d.getDate() - d.getDay());
   return d;
 }
 
@@ -137,4 +135,22 @@ export function showToast(message) {
   el.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+// Hours progress bar: "12.5 of 20 hrs used · 7.5 hrs left" (red when over).
+export function hoursBarHtml(used, assigned, color, large = false) {
+  const pct = assigned > 0 ? Math.min(100, (used / assigned) * 100) : (used > 0 ? 100 : 0);
+  const left = assigned - used;
+  const over = left < -0.005;
+  return `<div class="hours-bar-wrap">
+    <div class="progress-bar ${large ? "large" : "task-bar"}"><div class="fill ${over ? "over" : ""}" style="width:${pct}%; ${over ? "" : `background:${color};`}"></div></div>
+    <div class="hours-captions">
+      <span><strong>${fmtHrs(used)}</strong> of ${fmtHrs(assigned)} hrs used</span>
+      <span class="${over ? "hours-over" : ""}">${over ? `${fmtHrs(-left)} hrs over` : `${fmtHrs(left)} hrs left`}</span>
+    </div>
+  </div>`;
+}
+
+export function fmtHrs(n) {
+  return (Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }

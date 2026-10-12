@@ -22,6 +22,21 @@
 <main>
   <h1>Log Hours</h1>
 
+  <div class="card">
+    <div class="cal-header">
+      <h2 style="margin:0;">Your Hours</h2>
+      <div class="cal-nav">
+        <button id="calPrev" class="secondary small" aria-label="Previous month">&lsaquo;</button>
+        <span id="calMonthLabel" class="cal-month-label"></span>
+        <button id="calNext" class="secondary small" aria-label="Next month">&rsaquo;</button>
+        <button id="calToday" class="secondary small">Today</button>
+      </div>
+    </div>
+    <div id="calLegend" class="cal-legend"></div>
+    <div id="calendar" class="cal-grid"></div>
+    <div id="dayDetail" class="day-detail"></div>
+  </div>
+
   <div class="card" id="projectCardSection">
     <h2>Project</h2>
     <div id="projectCards" class="project-card-row"></div>
@@ -68,20 +83,6 @@
     </div>
   </div>
 
-  <div class="card">
-    <div class="cal-header">
-      <h2 style="margin:0;">Your Hours</h2>
-      <div class="cal-nav">
-        <button id="calPrev" class="secondary small" aria-label="Previous month">&lsaquo;</button>
-        <span id="calMonthLabel" class="cal-month-label"></span>
-        <button id="calNext" class="secondary small" aria-label="Next month">&rsaquo;</button>
-        <button id="calToday" class="secondary small">Today</button>
-      </div>
-    </div>
-    <div id="calLegend" class="cal-legend"></div>
-    <div id="calendar" class="cal-grid"></div>
-    <div id="dayDetail" class="day-detail"></div>
-  </div>
 </main>
 
 <div id="toast" class="toast"></div>
