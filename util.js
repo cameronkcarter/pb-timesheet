@@ -18,8 +18,20 @@ export function daysAgo(dateStr) {
   return `${days} days ago`;
 }
 
+// Local date, not UTC — otherwise after ~6pm Mountain "today" becomes tomorrow.
 export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return toISODate(new Date());
+}
+
+// Stable color per project (same project = same color on every page).
+const PROJECT_COLORS = [
+  "#2f6db5", "#2e8b57", "#c0632a", "#8e44ad", "#b8860b",
+  "#c0392b", "#16808a", "#6d4c41", "#d14d8a", "#4a5d23",
+];
+export function projectColor(projectId) {
+  let hash = 0;
+  for (const ch of String(projectId || "")) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+  return PROJECT_COLORS[Math.abs(hash) % PROJECT_COLORS.length];
 }
 
 export function toISODate(date) {

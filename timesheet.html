@@ -12,7 +12,7 @@
   <a href="index.html" id="navBrandLink" class="brand">Place Builders</a>
   <a href="dashboard.html">Dashboard</a>
   <a href="timesheet.html" class="active">Timesheet</a>
-  <a href="schedule.html">Schedule</a>
+  <a href="projects.html">Projects</a>
   <a href="admin.html" id="navAdminLink" style="display:none;">Admin</a>
   <a href="invoice.html" id="navInvoiceLink" style="display:none;">Invoices</a>
   <span id="navUserName" class="nav-user-name" style="margin-left:auto;"></span>
@@ -69,15 +69,18 @@
   </div>
 
   <div class="card">
-    <h2>Your Recent Entries</h2>
-    <table id="entriesTable">
-      <thead>
-        <tr><th>Date</th><th>Project</th><th>Task</th><th>Hours</th><th>Status</th><th></th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-    <div id="entriesEmpty" class="empty" style="display:none;">No entries logged yet.</div>
-    <button id="loadMoreEntries" class="secondary small" style="display:none; margin-top:12px;">Load More</button>
+    <div class="cal-header">
+      <h2 style="margin:0;">Your Hours</h2>
+      <div class="cal-nav">
+        <button id="calPrev" class="secondary small" aria-label="Previous month">&lsaquo;</button>
+        <span id="calMonthLabel" class="cal-month-label"></span>
+        <button id="calNext" class="secondary small" aria-label="Next month">&rsaquo;</button>
+        <button id="calToday" class="secondary small">Today</button>
+      </div>
+    </div>
+    <div id="calLegend" class="cal-legend"></div>
+    <div id="calendar" class="cal-grid"></div>
+    <div id="dayDetail" class="day-detail"></div>
   </div>
 </main>
 

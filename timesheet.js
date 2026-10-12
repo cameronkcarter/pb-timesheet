@@ -1,6 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
   formatDate, todayISO, toISODate, getWeekStart, suggestedWeeklyHours, monthKey, showToast,
+  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 
@@ -15,8 +16,8 @@ let selectedProjectId = null;
 let selectedTaskId = null;
 let navChecked = false;
 let isDirty = false;
-let entriesShown = 10;
-const ENTRIES_PAGE_SIZE = 10;
+let calMonth = firstOfMonth(new Date()); // month shown in the calendar
+let selectedDay = todayISO();
 
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
@@ -33,12 +34,13 @@ const entryDate = document.getElementById("entryDate");
 const entryHours = document.getElementById("entryHours");
 const entryNote = document.getElementById("entryNote");
 
-const tbody = document.querySelector("#entriesTable tbody");
-const entriesEmpty = document.getElementById("entriesEmpty");
-const loadMoreEntries = document.getElementById("loadMoreEntries");
+const calendarEl = document.getElementById("calendar");
+const calLegend = document.getElementById("calLegend");
+const calMonthLabel = document.getElementById("calMonthLabel");
+const dayDetail = document.getElementById("dayDetail");
 
 function esc(str) {
-  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 wireLogout("logoutLink", "navBrandLink");
@@ -53,10 +55,10 @@ if (selectedPersonId) {
       renderNavUserName(me);
     }
   });
-  Projects.listen((data) => { projects = data; renderProjectCards(); });
-  Tasks.listen((data) => { tasks = data; renderLogCard(); });
+  Projects.listen((data) => { projects = data; renderProjectCards(); renderCalendar(); });
+  Tasks.listen((data) => { tasks = data; renderLogCard(); renderCalendar(); });
   Assignments.listen((data) => { assignments = data; renderProjectCards(); });
-  TimeEntries.listen((data) => { timeEntries = data; renderLogCard(); renderEntries(); });
+  TimeEntries.listen((data) => { timeEntries = data; renderLogCard(); renderCalendar(); });
 }
 
 // ---------- Project cards ----------
@@ -202,11 +204,6 @@ taskCardsEl.addEventListener("click", (e) => {
   });
 });
 
-loadMoreEntries.addEventListener("click", () => {
-  entriesShown += ENTRIES_PAGE_SIZE;
-  renderEntries();
-});
-
 document.getElementById("submitEntry").addEventListener("click", async () => {
   const personId = selectedPersonId;
   const projectId = selectedProjectId;
@@ -240,79 +237,150 @@ document.getElementById("submitEntry").addEventListener("click", async () => {
     entryHours.value = "";
     entryNote.value = "";
     isDirty = false;
+    selectDay(date);
   } catch (err) {
     showToast("Error: " + err.message);
   }
 });
 
-// ---------- Recent entries ----------
-function renderEntries() {
-  const allMine = timeEntries
+
+// ---------- Hours calendar ----------
+// Each day shows one small chip per project (colored by project): solid once
+// approved (or later), outlined while still pending approval. Clicking a day
+// lists that day's entries below and sets it as the date to log hours for.
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function fmtHours(n) {
+  return String(Math.round(n * 100) / 100);
+}
+
+function statusPill(e) {
+  if (e.paid) return '<span class="pill green">Paid</span>';
+  if (e.invoiced) return '<span class="pill blue">Invoiced</span>';
+  if (e.approved) return '<span class="pill teal">Approved</span>';
+  return '<span class="pill orange">Pending Approval</span>';
+}
+
+function myEntriesByDate() {
+  const byDate = {};
+  timeEntries
     .filter((e) => e.personId === selectedPersonId)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
-  const mine = allMine.slice(0, entriesShown);
+    .forEach((e) => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+  return byDate;
+}
 
-  loadMoreEntries.style.display = allMine.length > mine.length ? "inline-block" : "none";
+function dayChipsHtml(entries) {
+  // One chip per project + pending/approved state, in project-name order.
+  const groups = {};
+  entries.forEach((e) => {
+    const pending = !e.approved && !e.invoiced;
+    const key = `${e.projectId}|${pending}`;
+    if (!groups[key]) groups[key] = { projectId: e.projectId, pending, hours: 0 };
+    groups[key].hours += Number(e.hours || 0);
+  });
+  const name = (id) => projects.find((p) => p.id === id)?.name || "—";
+  return Object.values(groups)
+    .sort((a, b) => name(a.projectId).localeCompare(name(b.projectId)) || a.pending - b.pending)
+    .map((g) => `<span class="cal-chip ${g.pending ? "pending" : ""}" style="--c:${projectColor(g.projectId)};"
+      title="${esc(name(g.projectId))} — ${fmtHours(g.hours)} hrs${g.pending ? " (pending approval)" : ""}">${fmtHours(g.hours)}</span>`)
+    .join("");
+}
 
-  if (mine.length === 0) {
-    tbody.innerHTML = "";
-    entriesEmpty.style.display = "block";
-    entriesEmpty.textContent = "No entries logged yet.";
+function renderCalendar() {
+  if (!selectedPersonId) return;
+  const byDate = myEntriesByDate();
+  const today = todayISO();
+  const monthPrefix = monthKey(calMonth);
+  calMonthLabel.textContent = formatMonthLabel(calMonth);
+
+  // Monday-start weeks covering the whole month.
+  let cursor = getWeekStart(toISODate(calMonth));
+  const cells = WEEKDAYS.map((d) => `<div class="cal-weekday">${d}</div>`).concat('<div class="cal-weekday cal-week-col">Week</div>');
+  const monthProjectIds = new Set();
+  let monthTotal = 0;
+  do {
+    let weekTotal = 0;
+    for (let i = 0; i < 7; i++) {
+      const iso = toISODate(cursor);
+      const entries = byDate[iso] || [];
+      const dayTotal = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+      weekTotal += dayTotal;
+      const inMonth = iso.startsWith(monthPrefix);
+      if (inMonth) {
+        monthTotal += dayTotal;
+        entries.forEach((e) => monthProjectIds.add(e.projectId));
+      }
+      const classes = ["cal-day", inMonth ? "" : "out", iso === today ? "today" : "", iso === selectedDay ? "selected" : ""].join(" ");
+      cells.push(`<button type="button" class="${classes}" data-date="${iso}">
+        <span class="cal-date">${cursor.getDate()}</span>
+        <span class="cal-chips">${dayChipsHtml(entries)}</span>
+      </button>`);
+      cursor = addDays(cursor, 1);
+    }
+    cells.push(`<div class="cal-week-total cal-week-col">${weekTotal ? fmtHours(weekTotal) : ""}</div>`);
+  } while (toISODate(cursor).startsWith(monthPrefix));
+  calendarEl.innerHTML = cells.join("");
+
+  const legendProjects = projects.filter((p) => monthProjectIds.has(p.id));
+  calLegend.innerHTML = `
+    <span class="cal-legend-total">${fmtHours(monthTotal)} hrs this month</span>
+    ${legendProjects.map((p) => `<span><span class="cal-swatch" style="--c:${projectColor(p.id)};"></span>${esc(p.name)}</span>`).join("")}
+    <span class="cal-legend-key"><span class="cal-chip" style="--c:#746b7a;">2</span> Approved</span>
+    <span class="cal-legend-key"><span class="cal-chip pending" style="--c:#746b7a;">2</span> Pending approval</span>`;
+
+  renderDayDetail(byDate[selectedDay] || []);
+}
+
+function renderDayDetail(entries) {
+  const total = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+  const heading = new Date(selectedDay + "T00:00:00")
+    .toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+  if (entries.length === 0) {
+    dayDetail.innerHTML = `<h3>${heading}</h3><div class="empty">Nothing logged this day.</div>`;
     return;
   }
-  entriesEmpty.style.display = "none";
-
-  const dayTotals = {};
-  mine.forEach((e) => {
-    dayTotals[e.date] = (dayTotals[e.date] || 0) + Number(e.hours || 0);
-  });
-
-  let lastDate = null;
-  let shade = false;
-  tbody.innerHTML = mine.map((e) => {
+  const rows = entries.map((e) => {
     const project = projects.find((p) => p.id === e.projectId);
     const task = tasks.find((t) => t.id === e.taskId);
-    const statusPill = e.paid
-      ? '<span class="pill green">Paid</span>'
-      : e.invoiced
-      ? '<span class="pill blue">Invoiced</span>'
-      : e.approved
-      ? '<span class="pill teal">Approved</span>'
-      : '<span class="pill orange">Pending Approval</span>';
-    const deleteBtn = e.invoiced
-      ? ""
-      : `<button class="danger small" data-id="${e.id}">Delete</button>`;
-
-    const isNewDay = e.date !== lastDate;
-    if (isNewDay) shade = !shade;
-    lastDate = e.date;
-
-    const dateCell = isNewDay
-      ? `${formatDate(e.date)}${dayTotals[e.date] > Number(e.hours || 0) ? ` <span class="empty" style="padding:0;">(${dayTotals[e.date]} hrs)</span>` : ""}`
-      : "";
-
-    const noteHtml = e.note
-      ? `<div class="empty" style="padding:2px 0 0;">${esc(e.note)}</div>`
-      : "";
-
-    return `<tr class="entry-row ${shade ? "shade" : ""} ${isNewDay ? "new-day" : ""}">
-      <td>${dateCell}</td>
-      <td>${project ? project.name : "—"}</td>
-      <td>${task ? task.name : "—"}${noteHtml}</td>
+    const noteHtml = e.note ? `<div class="empty" style="padding:2px 0 0;">${esc(e.note)}</div>` : "";
+    return `<tr>
+      <td><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(project.name) : "—"}</td>
+      <td>${task ? esc(task.name) : "—"}${noteHtml}</td>
       <td>${e.hours}</td>
-      <td>${statusPill}</td>
-      <td>${deleteBtn}</td>
+      <td>${statusPill(e)}</td>
+      <td>${e.invoiced ? "" : `<button class="danger small" data-delete-entry="${e.id}">Delete</button>`}</td>
     </tr>`;
   }).join("");
-
-  tbody.querySelectorAll("button.danger").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("Delete this entry?")) return;
-      try {
-        await TimeEntries.remove(btn.dataset.id);
-      } catch (err) {
-        showToast("Error: " + err.message);
-      }
-    });
-  });
+  dayDetail.innerHTML = `<h3>${heading} <span class="empty" style="padding:0; font-weight:400;">— ${fmtHours(total)} hrs</span></h3>
+    <table>
+      <thead><tr><th>Project</th><th>Task</th><th>Hours</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
+
+function selectDay(iso) {
+  selectedDay = iso;
+  calMonth = firstOfMonth(new Date(iso + "T00:00:00"));
+  if (entryForm.style.display !== "none") entryDate.value = iso;
+  renderCalendar();
+}
+
+calendarEl.addEventListener("click", (e) => {
+  const day = e.target.closest(".cal-day");
+  if (day) selectDay(day.dataset.date);
+});
+
+document.getElementById("calPrev").addEventListener("click", () => { calMonth = addMonths(calMonth, -1); renderCalendar(); });
+document.getElementById("calNext").addEventListener("click", () => { calMonth = addMonths(calMonth, 1); renderCalendar(); });
+document.getElementById("calToday").addEventListener("click", () => selectDay(todayISO()));
+
+dayDetail.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-delete-entry]");
+  if (!btn) return;
+  if (!confirm("Delete this entry?")) return;
+  try {
+    await TimeEntries.remove(btn.dataset.deleteEntry);
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+});

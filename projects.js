@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween,
+  todayISO, toISODate, addDays, daysBetween, projectColor,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 
@@ -14,6 +14,8 @@ let assignments = [];
 let timeEntries = [];
 let dueDates = [];
 let navChecked = false;
+let selectedProjectId = loadSelectedProject();
+let expandedTaskId = null;
 let editingDueDateId = null;
 let modalMode = "event"; // "event" | "assignment"
 let openDotId = null;
@@ -22,6 +24,17 @@ let showCompleted = false;
 
 const PX_PER_DAY = 4;
 const LABEL_COL_WIDTH = 200;
+const SELECTED_PROJECT_KEY = "pb_projects_selected";
+
+const projectCardsEl = document.getElementById("projectCards");
+const projectCardsEmpty = document.getElementById("projectCardsEmpty");
+const projectDetail = document.getElementById("projectDetail");
+
+const budgetSummary = document.getElementById("budgetSummary");
+const budgetOverallFill = document.getElementById("budgetOverallFill");
+const budgetTbody = document.querySelector("#budgetTable tbody");
+const budgetEmpty = document.getElementById("budgetEmpty");
+const budgetHint = document.getElementById("budgetHint");
 
 const ganttChart = document.getElementById("ganttChart");
 const ganttEmpty = document.getElementById("ganttEmpty");
@@ -52,11 +65,24 @@ const timelineModalRows = document.getElementById("timelineModalRows");
 wireLogout("logoutLink", "navBrandLink");
 
 function esc(str) {
-  return String(str ?? "").replace(/"/g, "&quot;");
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function loadSelectedProject() {
+  try { return localStorage.getItem(SELECTED_PROJECT_KEY); } catch { return null; }
+}
+
+function saveSelectedProject(id) {
+  try { localStorage.setItem(SELECTED_PROJECT_KEY, id); } catch { /* not critical */ }
 }
 
 function currentPerson() {
   return people.find((p) => p.id === sessionPersonId);
+}
+
+function isAdmin() {
+  const me = currentPerson();
+  return !!(me && me.isAdmin);
 }
 
 function canManage(dueDateRecord) {
@@ -94,17 +120,64 @@ if (sessionPersonId) {
   });
   Projects.listen((data) => { projects = data; renderAll(); });
   Tasks.listen((data) => { tasks = data; renderAll(); });
-  Assignments.listen((data) => { assignments = data; });
-  TimeEntries.listen((data) => { timeEntries = data; renderGantt(); });
-  DueDates.listen((data) => { dueDates = data; renderAll(); });
+  Assignments.listen((data) => { assignments = data; renderAll(); });
+  TimeEntries.listen((data) => { timeEntries = data; renderBudget(); renderGantt(); });
+  DueDates.listen((data) => { dueDates = data; renderGantt(); renderAssignments(); });
+}
+
+// Admins see every project; everyone else sees the projects they're
+// assigned to a task on.
+function visibleProjects() {
+  if (isAdmin()) return projects;
+  const assignedProjectIds = new Set(
+    assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId)
+  );
+  return projects.filter((p) => assignedProjectIds.has(p.id));
 }
 
 function renderAll() {
+  renderProjectCards();
+  renderBudget();
   renderGantt();
   renderAssignments();
 }
 
-// ---------- Gantt ----------
+// ---------- Project picker ----------
+function renderProjectCards() {
+  const visible = visibleProjects();
+  if (visible.length === 0) {
+    projectCardsEl.innerHTML = "";
+    projectCardsEmpty.style.display = "block";
+    projectDetail.style.display = "none";
+    return;
+  }
+  projectCardsEmpty.style.display = "none";
+  projectDetail.style.display = "block";
+
+  if (!selectedProjectId || !visible.some((p) => p.id === selectedProjectId)) {
+    selectedProjectId = visible[0].id;
+  }
+
+  projectCardsEl.innerHTML = visible.map((p) => `
+    <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
+      <div class="name">${esc(p.name)}</div>
+      <div class="client">${p.client ? esc(p.client) : "&nbsp;"}</div>
+    </div>
+  `).join("");
+}
+
+projectCardsEl.addEventListener("click", (e) => {
+  const card = e.target.closest(".project-card");
+  if (!card || card.dataset.projectCard === selectedProjectId) return;
+  selectedProjectId = card.dataset.projectCard;
+  saveSelectedProject(selectedProjectId);
+  expandedTaskId = null;
+  userHasScrolledGantt = false;
+  closeDotPopover();
+  renderAll();
+});
+
+// ---------- Budget (read-only) ----------
 function entryRate(e) {
   if (e.rate != null) return e.rate;
   const person = people.find((p) => p.id === e.personId);
@@ -117,6 +190,90 @@ function spentOnTask(taskId) {
     .reduce((sum, e) => sum + Number(e.hours || 0) * entryRate(e), 0);
 }
 
+function selectedProjectTasks() {
+  return tasks.filter((t) => t.projectId === selectedProjectId)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function renderBudget() {
+  if (!selectedProjectId) return;
+  const projectTasks = selectedProjectTasks();
+
+  const totalBudget = projectTasks.reduce((s, t) => s + Number(t.budget || 0), 0);
+  const totalSpent = projectTasks.reduce((s, t) => s + spentOnTask(t.id), 0);
+  const totalRemaining = totalBudget - totalSpent;
+  budgetSummary.innerHTML = `
+    <span><span class="summary-label">Budget</span> ${formatCurrency(totalBudget)}</span>
+    <span><span class="summary-label">Spent</span> ${formatCurrency(totalSpent)}</span>
+    <span><span class="summary-label">Remaining</span> <span ${totalRemaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(totalRemaining)}</span></span>`;
+  budgetOverallFill.style.width = `${totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0}%`;
+  budgetOverallFill.classList.toggle("over", totalSpent > totalBudget);
+
+  if (projectTasks.length === 0) {
+    budgetTbody.innerHTML = "";
+    budgetEmpty.style.display = "block";
+    budgetHint.style.display = "none";
+    return;
+  }
+  budgetEmpty.style.display = "none";
+  budgetHint.style.display = "block";
+
+  budgetTbody.innerHTML = projectTasks.map((t) => {
+    const budget = Number(t.budget || 0);
+    const spent = spentOnTask(t.id);
+    const remaining = budget - spent;
+    const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+    const expanded = t.id === expandedTaskId;
+    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-task-row="${t.id}">
+      <td>${esc(t.name)}</td>
+      <td>${formatCurrency(budget)}</td>
+      <td>${formatCurrency(spent)}</td>
+      <td><div class="progress-bar"><div class="fill ${spent > budget ? "over" : ""}" style="width:${pct}%"></div></div></td>
+      <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>
+    </tr>`;
+    if (!expanded) return mainRow;
+    return mainRow + `<tr><td colspan="5" class="accordion-cell">${taskPeopleHtml(t)}</td></tr>`;
+  }).join("");
+}
+
+// Hours view of who's on a task: assigned hours come from each person's
+// dollar assignment divided by their current rate.
+function taskPeopleHtml(task) {
+  const taskAssignments = assignments.filter((a) => a.taskId === task.id);
+  const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
+  const personIds = [...new Set([...taskAssignments.map((a) => a.personId), ...taskEntries.map((e) => e.personId)])];
+  if (personIds.length === 0) return `<div class="empty">No one is assigned to this task yet.</div>`;
+
+  const rows = personIds.map((pid) => {
+    const person = people.find((p) => p.id === pid);
+    const rate = person ? Number(person.rate || 0) : 0;
+    const assignment = taskAssignments.find((a) => a.personId === pid);
+    const assignedHours = assignment && rate > 0 ? Number(assignment.capValue || 0) / rate : 0;
+    const spentHours = taskEntries.filter((e) => e.personId === pid).reduce((s, e) => s + Number(e.hours || 0), 0);
+    const remainingHours = assignedHours - spentHours;
+    return { name: person ? person.name : "—", assignedHours, spentHours, remainingHours, assigned: !!assignment };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+
+  return `<table>
+    <thead><tr><th>Person</th><th>Assigned</th><th>Spent</th><th>Remaining</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr>
+      <td>${esc(r.name)}${r.assigned ? "" : ' <span class="empty" style="padding:0;">(not assigned)</span>'}</td>
+      <td>${r.assignedHours.toFixed(2)} hrs</td>
+      <td>${r.spentHours.toFixed(2)} hrs</td>
+      <td ${r.remainingHours < 0 ? 'style="color:var(--red);"' : ""}>${r.remainingHours.toFixed(2)} hrs</td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+}
+
+budgetTbody.addEventListener("click", (e) => {
+  const row = e.target.closest("tr.task-row");
+  if (!row) return;
+  const taskId = row.dataset.taskRow;
+  expandedTaskId = expandedTaskId === taskId ? null : taskId;
+  renderBudget();
+});
+
+// ---------- Timeline (Gantt) for the selected project ----------
 function closeDotPopover() {
   openDotId = null;
   document.querySelectorAll(".gantt-dot-popover").forEach((el) => el.remove());
@@ -128,32 +285,31 @@ document.addEventListener("click", (e) => {
   }
 });
 
-function visibleProjects() {
-  const me = currentPerson();
-  if (me && me.isAdmin) return projects;
-  const assignedProjectIds = new Set(
-    assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId)
-  );
-  return projects.filter((p) => assignedProjectIds.has(p.id));
-}
-
 function renderGantt() {
-  const visible = visibleProjects();
-  if (visible.length === 0) {
+  const project = projects.find((p) => p.id === selectedProjectId);
+  if (!project) {
+    ganttChart.innerHTML = "";
+    return;
+  }
+
+  const projectTasks = selectedProjectTasks();
+  const scheduledTasks = projectTasks.filter((t) => t.startDate && t.endDate);
+  const projectDueDates = dueDates.filter((d) => d.dueDate && d.projectId === project.id);
+
+  if (scheduledTasks.length === 0 && projectDueDates.length === 0) {
     ganttChart.innerHTML = "";
     ganttEmpty.style.display = "block";
+    ganttEmpty.innerHTML = isAdmin()
+      ? `No task dates set for this project yet. <a href="#" data-edit-timeline="${project.id}">Set task dates</a>`
+      : "No task dates set for this project yet.";
     return;
   }
   ganttEmpty.style.display = "none";
 
-  const visibleProjectIds = new Set(visible.map((p) => p.id));
-  const scheduledTasks = tasks.filter((t) => t.startDate && t.endDate && visibleProjectIds.has(t.projectId));
-  const dueDatesWithDates = dueDates.filter((d) => d.dueDate);
-
+  const today = todayISO();
   const allStarts = scheduledTasks.map((t) => t.startDate);
   const allEnds = scheduledTasks.map((t) => t.endDate);
-  const allDueDates = dueDatesWithDates.map((d) => d.dueDate);
-  const today = todayISO();
+  const allDueDates = projectDueDates.map((d) => d.dueDate);
   const rangeStartRaw = [...allStarts, ...allDueDates, today].sort()[0];
   const rangeEndRaw = [...allEnds, ...allDueDates, today].sort().slice(-1)[0];
   const rangeStart = toISODate(addDays(rangeStartRaw + "T00:00:00", -4));
@@ -189,44 +345,30 @@ function renderGantt() {
     ${ticks.map((t) => `<div class="gantt-tick" style="left:${t.x}px;">${t.label}</div>`).join("")}
   </div>`;
 
-  const projectRowsHtml = visible.map((project) => {
-    const projectTasks = tasks.filter((t) => t.projectId === project.id)
-      .sort((a, b) => a.name.localeCompare(b.name));
+  const projectRemaining = projectTasks.reduce((s, t) => s + (Number(t.budget || 0) - spentOnTask(t.id)), 0);
+  const projectDotsHtml = projectDueDates.filter((d) => !d.taskId).map(dotHtml).join("");
+  const canEditTimeline = isAdmin();
 
-    const projectRemaining = projectTasks.reduce(
-      (s, t) => s + (Number(t.budget || 0) - spentOnTask(t.id)), 0
-    );
-
-    const projectDueDates = dueDatesWithDates.filter((d) => d.projectId === project.id && !d.taskId);
-    const projectDotsHtml = projectDueDates.map(dotHtml).join("");
-    const canEditTimeline = currentPerson() && currentPerson().isAdmin;
-
-    const taskRowsHtml = projectTasks.map((t) => {
-      const hasDates = t.startDate && t.endDate;
-      const barHtml = hasDates
-        ? `<div class="gantt-bar" style="left:${xFor(t.startDate)}px; width:${Math.max(4, xFor(t.endDate) - xFor(t.startDate))}px;"></div>`
-        : "";
-      const taskDueDates = dueDatesWithDates.filter((d) => d.taskId === t.id);
-      const dotsHtml = taskDueDates.map(dotHtml).join("");
-      const remaining = Number(t.budget || 0) - spentOnTask(t.id);
-
-      return `<div class="gantt-row">
-        <div class="gantt-label-col gantt-task-label">${t.name}</div>
-        <div class="gantt-track" style="width:${timelineWidth}px;">
-          ${barHtml}
-          ${dotsHtml}
-        </div>
-        <div class="gantt-remaining-col">${formatCurrency(remaining)}</div>
-      </div>`;
-    }).join("");
-
-    return `<div class="gantt-row gantt-project-row">
-        <div class="gantt-label-col ${canEditTimeline ? "gantt-project-clickable" : ""}" ${canEditTimeline ? `data-edit-timeline="${project.id}" title="Click to edit this project's timeline"` : ""}>${project.name}</div>
-        <div class="gantt-track" style="width:${timelineWidth}px;">${projectDotsHtml}</div>
-        <div class="gantt-remaining-col gantt-project-remaining">${formatCurrency(projectRemaining)}</div>
-      </div>
-      ${taskRowsHtml}`;
+  const taskRowsHtml = projectTasks.map((t) => {
+    const hasDates = t.startDate && t.endDate;
+    const barHtml = hasDates
+      ? `<div class="gantt-bar" style="left:${xFor(t.startDate)}px; width:${Math.max(4, xFor(t.endDate) - xFor(t.startDate))}px;"></div>`
+      : "";
+    const dotsHtml = projectDueDates.filter((d) => d.taskId === t.id).map(dotHtml).join("");
+    const remaining = Number(t.budget || 0) - spentOnTask(t.id);
+    return `<div class="gantt-row">
+      <div class="gantt-label-col gantt-task-label">${esc(t.name)}</div>
+      <div class="gantt-track" style="width:${timelineWidth}px;">${barHtml}${dotsHtml}</div>
+      <div class="gantt-remaining-col">${formatCurrency(remaining)}</div>
+    </div>`;
   }).join("");
+
+  const projectRowHtml = `<div class="gantt-row gantt-project-row">
+      <div class="gantt-label-col ${canEditTimeline ? "gantt-project-clickable" : ""}" ${canEditTimeline ? `data-edit-timeline="${project.id}" title="Click to edit task dates"` : ""}>${esc(project.name)}</div>
+      <div class="gantt-track" style="width:${timelineWidth}px;">${projectDotsHtml}</div>
+      <div class="gantt-remaining-col gantt-project-remaining">${formatCurrency(projectRemaining)}</div>
+    </div>
+    ${taskRowsHtml}`;
 
   const monthLinesHtml = ticks.map((t) =>
     `<div class="gantt-month-line" style="left:${LABEL_COL_WIDTH + t.x}px;"></div>`
@@ -237,11 +379,11 @@ function renderGantt() {
 
   ganttChart.innerHTML = `<div class="gantt-inner">
     <div class="gantt-row gantt-header-row">
-      <div class="gantt-label-col">Project / Task</div>
+      <div class="gantt-label-col">Task</div>
       ${rulerHtml}
       <div class="gantt-remaining-col">Remaining</div>
     </div>
-    ${projectRowsHtml}
+    ${projectRowHtml}
     ${monthLinesHtml}
     ${todayLineHtml}
   </div>`;
@@ -252,6 +394,13 @@ function renderGantt() {
     requestAnimationFrame(() => { isProgrammaticGanttScroll = false; });
   }
 }
+
+ganttEmpty.addEventListener("click", (e) => {
+  const link = e.target.closest("[data-edit-timeline]");
+  if (!link) return;
+  e.preventDefault();
+  openTimelineModal(link.dataset.editTimeline);
+});
 
 ganttChart.addEventListener("click", (e) => {
   const projectLabel = e.target.closest("[data-edit-timeline]");
@@ -273,15 +422,15 @@ ganttChart.addEventListener("click", (e) => {
   const d = dueDates.find((dd) => dd.id === id);
   if (!d) return;
   const names = (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean);
-  const project = projects.find((p) => p.id === d.projectId);
+  const task = tasks.find((t) => t.id === d.taskId);
   const manageable = canManage(d);
   const popover = document.createElement("div");
   popover.className = "gantt-dot-popover";
   popover.innerHTML = `
     <div class="gantt-dot-popover-title">${esc(d.title)}</div>
-    ${project ? `<div>${esc(project.name)}</div>` : ""}
+    ${task ? `<div>${esc(task.name)}</div>` : ""}
     <div>${formatDate(d.dueDate)} <span class="empty" style="padding:0;">(${dueLabel(d.dueDate)})</span></div>
-    ${names.length > 0 ? `<div>Assigned: ${names.join(", ")}</div>` : ""}
+    ${names.length > 0 ? `<div>Assigned: ${names.map(esc).join(", ")}</div>` : ""}
     ${manageable ? `<div class="gantt-dot-popover-actions">
       <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
     </div>` : ""}
@@ -301,33 +450,43 @@ document.body.addEventListener("click", async (e) => {
   await handleDueDateAction(action, id);
 });
 
-// ---------- Assignments (due dates with at least one assigned person) ----------
-function assignmentItems() {
-  return dueDates.filter((d) => isAssignment(d) && (showCompleted || !d.completed));
-}
-
+// ---------- Assignments for the selected project ----------
+// (due dates with at least one assigned person)
 function assignmentGroups() {
-  const items = assignmentItems();
+  const items = dueDates.filter((d) =>
+    d.projectId === selectedProjectId && isAssignment(d) && (showCompleted || !d.completed));
   const byPerson = {};
   items.forEach((d) => {
     (d.personIds || []).forEach((pid) => {
-      if (!byPerson[pid]) byPerson[pid] = [];
-      byPerson[pid].push(d);
+      (byPerson[pid] = byPerson[pid] || []).push(d);
     });
   });
-  return people.map((p) => ({
-    personId: p.id, name: p.name, items: (byPerson[p.id] || []).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)),
-  }));
+  // Everyone on the project's tasks gets a group (so "+ Assign" is handy),
+  // plus anyone else who has items here.
+  const projectPersonIds = new Set([
+    ...assignments.filter((a) => a.projectId === selectedProjectId).map((a) => a.personId),
+    ...Object.keys(byPerson),
+  ]);
+  return people
+    .filter((p) => projectPersonIds.has(p.id))
+    .map((p) => ({
+      personId: p.id, name: p.name,
+      items: (byPerson[p.id] || []).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)),
+    }));
 }
 
 function renderAssignments() {
+  if (!selectedProjectId) return;
   const groups = assignmentGroups();
+  if (groups.length === 0) {
+    assignmentsList.innerHTML = `<div class="empty">No one is assigned to this project yet.</div>`;
+    return;
+  }
 
   assignmentsList.innerHTML = groups.map((g) => {
     const itemsHtml = g.items.length === 0
-      ? `<div class="empty">No items assigned yet.</div>`
+      ? `<div class="empty">No items assigned.</div>`
       : g.items.map((d) => {
-          const project = projects.find((p) => p.id === d.projectId);
           const task = tasks.find((t) => t.id === d.taskId);
           const creator = people.find((p) => p.id === d.createdByPersonId);
           const manageable = canManage(d);
@@ -335,8 +494,8 @@ function renderAssignments() {
             <div class="assignment-item-main">
               <span class="creator-tag" style="background:${colorForPerson(d.createdByPersonId)};" title="Added by ${creator ? esc(creator.name) : "someone no longer on the team"}">${initialsFor(creator)}</span>
               <div>
-                <div class="assignment-item-title">${d.title}</div>
-                <div class="empty" style="padding:0;">${project ? project.name : "—"}${task ? ` / ${task.name}` : ""} &middot; ${formatDate(d.dueDate)} (${dueLabel(d.dueDate)})</div>
+                <div class="assignment-item-title">${esc(d.title)}</div>
+                <div class="empty" style="padding:0;">${task ? `${esc(task.name)} &middot; ` : ""}${formatDate(d.dueDate)} (${dueLabel(d.dueDate)})</div>
               </div>
             </div>
             ${d.completed
@@ -350,7 +509,7 @@ function renderAssignments() {
 
     return `<div class="assignment-group">
       <div class="assignment-group-header">
-        ${g.name} <span class="empty" style="padding:0;">(${g.items.length} ${g.items.length === 1 ? "item" : "items"})</span>
+        ${esc(g.name)} <span class="empty" style="padding:0;">(${g.items.length} ${g.items.length === 1 ? "item" : "items"})</span>
         <button class="small secondary" data-action="quick-assign" data-id="${g.personId}">+ Assign</button>
       </div>
       ${itemsHtml}
@@ -379,18 +538,18 @@ async function handleDueDateAction(action, id) {
   if (action === "edit-duedate") openDueDateModal(d, isAssignment(d) ? "assignment" : "event");
 }
 
-// ---------- Due date / assignment modal ----------
+// ---------- Event / assignment modal ----------
 function populateTaskOptions(projectId, selectedTaskId) {
   const projectTasks = tasks.filter((t) => t.projectId === projectId);
   ddTask.innerHTML = `<option value="">No specific task</option>` +
-    projectTasks.map((t) => `<option value="${t.id}" ${t.id === selectedTaskId ? "selected" : ""}>${t.name}</option>`).join("");
+    projectTasks.map((t) => `<option value="${t.id}" ${t.id === selectedTaskId ? "selected" : ""}>${esc(t.name)}</option>`).join("");
 }
 
 function renderPeoplePills(selectedIds) {
   const checked = selectedIds || [];
   ddPeoplePills.innerHTML = people.map((p) => `<label>
     <input type="checkbox" class="ddPerson" value="${p.id}" ${checked.includes(p.id) ? "checked" : ""} />
-    ${p.name}
+    ${esc(p.name)}
   </label>`).join("");
 }
 
@@ -408,8 +567,8 @@ function openDueDateModal(dueDateRecord, mode, presetPersonId) {
   ddTaskRow.style.display = "block";
   ddPeopleField.style.display = mode === "assignment" ? "block" : "none";
 
-  ddProject.innerHTML = projects.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
-  const projectId = dueDateRecord ? dueDateRecord.projectId : (projects[0] && projects[0].id);
+  ddProject.innerHTML = visibleProjects().map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  const projectId = dueDateRecord ? dueDateRecord.projectId : selectedProjectId;
   ddProject.value = projectId || "";
   populateTaskOptions(projectId, dueDateRecord ? dueDateRecord.taskId : "");
 
@@ -497,7 +656,7 @@ function openTimelineModal(projectId) {
   timelineModalTitle.textContent = project ? `Edit Timeline — ${project.name}` : "Edit Timeline";
   timelineModalRows.innerHTML = projectTasks.map((t) => `
     <div class="timeline-task-row" data-task-id="${t.id}">
-      <div class="timeline-task-name">${t.name}</div>
+      <div class="timeline-task-name">${esc(t.name)}</div>
       <div class="timeline-task-dates">
         <div>
           <label>Start</label>
