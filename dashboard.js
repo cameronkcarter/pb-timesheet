@@ -1,8 +1,9 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, daysAgo, dueLabel,
-  todayISO, toISODate, getWeekStart, addDays, monthKey,
+  todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor,
 } from "./util.js";
+import { paidAmount, assignmentRate } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 
 const selectedPersonId = requireSession();
@@ -45,7 +46,7 @@ function render() {
   if (!person) return;
 
   const myEntries = timeEntries.filter((e) => e.personId === personId);
-  const dollarsOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0) * (e.rate != null ? e.rate : person.rate), 0);
+  const dollarsOf = (entries) => paidAmount(entries, people); // the person's pay, not billing
   const pendingTotal = dollarsOf(myEntries.filter((e) => !e.approved && !e.invoiced));
   const approvedTotal = dollarsOf(myEntries.filter((e) => e.approved && !e.invoiced));
   const invoicedTotal = dollarsOf(myEntries.filter((e) => e.invoiced && !e.paid));
@@ -81,6 +82,9 @@ function render() {
     return;
   }
 
+  // Progress is shown in hours only: assigned hours are the person's dollar
+  // assignment at the project's bill rate (rates.js), so staff never see
+  // billing dollars, just their hours and their own pay above.
   projectSummaryCards.innerHTML = myProjectIds.map((projectId) => {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return "";
@@ -92,68 +96,62 @@ function render() {
         const taskB = tasks.find((t) => t.id === b.taskId);
         return (taskA?.name || "").localeCompare(taskB?.name || "");
       });
-    const projectOwed = projectEntries.filter((e) => !e.invoiced)
-      .reduce((s, e) => s + Number(e.hours || 0) * (e.rate != null ? e.rate : person.rate), 0);
+    const projectOwed = paidAmount(projectEntries.filter((e) => !e.invoiced), people);
     const lastInvoiced = projectEntries
       .filter((e) => e.invoiced && e.invoicedDate)
       .sort((a, b) => (a.invoicedDate < b.invoicedDate ? 1 : -1))[0];
     const lastInvoicedLabel = lastInvoiced
       ? `${formatDate(lastInvoiced.invoicedDate.slice(0, 10))} (${daysAgo(lastInvoiced.invoicedDate)})`
       : "—";
+    const rate = assignmentRate(project, person);
+    const color = projectColor(project.id);
 
-    let totalEarned = 0;
     let totalAssigned = 0;
-    let totalLoggedHours = 0;
-    const rate = person.rate || 0;
-
+    let totalUsed = 0;
     const taskRows = projectAssignments.map((a) => {
       const task = tasks.find((t) => t.id === a.taskId);
-      const taskEntries = timeEntries.filter((e) => e.taskId === a.taskId && e.personId === personId);
-      const logged = taskEntries.reduce((s, e) => s + Number(e.hours || 0), 0);
-      const used = taskEntries.reduce((s, e) => s + Number(e.hours || 0) * (e.rate != null ? e.rate : rate), 0);
-      totalEarned += used;
-      totalAssigned += Number(a.capValue || 0);
-      totalLoggedHours += logged;
-      const remaining = (a.capValue || 0) - used;
-      const remainingHours = rate > 0 ? remaining / rate : 0;
-      const pct = a.capValue > 0 ? Math.min(100, (used / a.capValue) * 100) : 0;
-      const over = used > a.capValue;
-      return `<div class="task-progress-row">
-        <div class="task-progress-header">
-          <div class="task-progress-name">${task ? task.name : "—"}</div>
-          <div class="task-progress-bar-wrap">
-            <div class="progress-bar task-bar"><div class="fill task-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
-            <div class="progress-captions">
-              <span>${formatCurrency(used)} (${logged.toFixed(2)} hrs) spent</span>
-              <span>${formatCurrency(remaining)} (${remainingHours.toFixed(2)} hrs) remaining</span>
-            </div>
-          </div>
-        </div>
+      const used = projectEntries
+        .filter((e) => e.taskId === a.taskId)
+        .reduce((s, e) => s + Number(e.hours || 0), 0);
+      const assigned = rate > 0 ? Number(a.capValue || 0) / rate : 0;
+      totalAssigned += assigned;
+      totalUsed += used;
+      return `<div class="hours-row">
+        <div class="hours-row-name" title="${task ? task.name : ""}">${task ? task.name : "—"}</div>
+        ${hoursBarHtml(used, assigned, color)}
       </div>`;
     }).join("");
 
-    const totalPct = totalAssigned > 0 ? Math.min(100, (totalEarned / totalAssigned) * 100) : 0;
-    const totalOver = totalEarned > totalAssigned;
-    const totalRemaining = totalAssigned - totalEarned;
-    const totalRemainingHours = rate > 0 ? totalRemaining / rate : 0;
-
     return `<div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px;">
-        <h2 style="margin:0;">${project.name}${project.client ? ` <span class="empty" style="font-weight:400;">(${project.client})</span>` : ""}</h2>
-        <div class="empty" style="text-align:right;">Owed: ${formatCurrency(projectOwed)} &middot; Last invoiced: ${lastInvoicedLabel}</div>
+      <div class="hours-card-header">
+        <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${project.name}${project.client ? ` <span class="empty" style="font-weight:400;">(${project.client})</span>` : ""}</h2>
+        <div class="empty" style="padding:0;">Your pay not yet invoiced: <strong>${formatCurrency(projectOwed)}</strong> &middot; Last invoiced: ${lastInvoicedLabel}</div>
       </div>
       ${taskRows ? `
-        <div style="margin-top:12px;">
-          <div class="summary-label">Overall Progress</div>
-          <div class="progress-bar large" style="margin-top:6px;"><div class="fill ${totalOver ? "over" : ""}" style="width:${totalPct}%"></div></div>
-          <div class="progress-captions">
-            <span>${formatCurrency(totalEarned)} (${totalLoggedHours.toFixed(2)} hrs) spent</span>
-            <span>${formatCurrency(totalRemaining)} (${totalRemainingHours.toFixed(2)} hrs) remaining</span>
-          </div>
+        <div class="hours-total">
+          <div class="summary-label">All tasks</div>
+          ${hoursBarHtml(totalUsed, totalAssigned, color, true)}
         </div>
-        <div style="margin-top:18px;">${taskRows}</div>` : '<div class="empty">No hour assignment set for this project.</div>'}
+        <div class="hours-rows">${taskRows}</div>` : '<div class="empty">No hours assigned to you on this project yet.</div>'}
     </div>`;
   }).join("");
+}
+
+function hoursBarHtml(used, assigned, color, large = false) {
+  const pct = assigned > 0 ? Math.min(100, (used / assigned) * 100) : (used > 0 ? 100 : 0);
+  const left = assigned - used;
+  const over = left < -0.005;
+  return `<div class="hours-bar-wrap">
+    <div class="progress-bar ${large ? "large" : "task-bar"}"><div class="fill ${over ? "over" : ""}" style="width:${pct}%; ${over ? "" : `background:${color};`}"></div></div>
+    <div class="hours-captions">
+      <span><strong>${fmtHrs(used)}</strong> of ${fmtHrs(assigned)} hrs used</span>
+      <span class="${over ? "hours-over" : ""}">${over ? `${fmtHrs(-left)} hrs over` : `${fmtHrs(left)} hrs left`}</span>
+    </div>
+  </div>`;
+}
+
+function fmtHrs(n) {
+  return (Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 function renderDueDates(personId) {

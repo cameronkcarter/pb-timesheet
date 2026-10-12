@@ -4,6 +4,7 @@ import {
   firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
+import { assignmentRate } from "./rates.js";
 
 const selectedPersonId = requireSession();
 
@@ -164,7 +165,7 @@ function renderLogCard() {
 
 function taskStatsFor({ assignment, task }) {
   const person = people.find((p) => p.id === selectedPersonId);
-  const rate = person ? person.rate : 0;
+  const rate = assignmentRate(projects.find((p) => p.id === task.projectId), person);
   const suggested = suggestedWeeklyHours(assignment.capValue, rate, task.startDate, task.endDate);
   const allLogged = timeEntries
     .filter((e) => e.personId === selectedPersonId && e.taskId === task.id)

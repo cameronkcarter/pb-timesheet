@@ -2,6 +2,7 @@ import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices }
 import { formatCurrency, formatDate, showToast } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
+import { DEFAULT_BILL_RATE, billRateOf, assignmentRate } from "./rates.js";
 
 const sessionPersonId = requireSession();
 
@@ -147,6 +148,7 @@ const modalBillToCompany = document.getElementById("modalBillToCompany");
 const modalBillToAddress1 = document.getElementById("modalBillToAddress1");
 const modalBillToAddress2 = document.getElementById("modalBillToAddress2");
 const modalProjectNumber = document.getElementById("modalProjectNumber");
+const modalProjectBillRate = document.getElementById("modalProjectBillRate");
 const modalTaskRows = document.getElementById("modalTaskRows");
 
 function renderProjectCards() {
@@ -166,6 +168,7 @@ function renderProjectCards() {
     <div class="project-card ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}">
       <div class="name">${p.name}</div>
       <div class="client">${p.client || "&nbsp;"}</div>
+      <div class="client">${p.billRate ? `Bills ${formatCurrency(p.billRate)}/hr` : "Bills at staff pay rates"}</div>
       <div class="card-actions">
         <button class="small secondary" data-action="edit-project" data-id="${p.id}">Edit</button>
         <button class="danger small" data-action="remove-project" data-id="${p.id}">Remove</button>
@@ -271,6 +274,9 @@ function openProjectModal(project) {
   modalBillToAddress1.value = project ? project.billToAddress1 || "" : "";
   modalBillToAddress2.value = project ? project.billToAddress2 || "" : "";
   modalProjectNumber.value = project ? project.projectNumber || "" : "";
+  // New projects start at the firm's standard rate; existing ones show their
+  // own (blank = bill each person at their pay rate).
+  modalProjectBillRate.value = project ? (project.billRate || "") : DEFAULT_BILL_RATE;
 
   const projectTasks = project ? tasks.filter((t) => t.projectId === project.id) : [];
   modalTaskRows.innerHTML = projectTasks.length > 0
@@ -309,10 +315,12 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
   const billToAddress1 = modalBillToAddress1.value.trim();
   const billToAddress2 = modalBillToAddress2.value.trim();
   const projectNumber = modalProjectNumber.value.trim();
+  const billRate = modalProjectBillRate.value === "" ? null : Number(modalProjectBillRate.value);
+  if (billRate != null && !(billRate > 0)) return showToast("Billing rate must be more than $0, or blank.");
   if (!name) return showToast("Enter a project name.");
   try {
     let projectId = modalEditingProjectId;
-    const projectData = { name, client, billToName, billToCompany, billToAddress1, billToAddress2, projectNumber };
+    const projectData = { name, client, billToName, billToCompany, billToAddress1, billToAddress2, projectNumber, billRate };
     if (projectId) {
       await Projects.update(projectId, projectData);
     } else {
@@ -355,16 +363,15 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
 const tasksTbody = document.querySelector("#tasksTable tbody");
 const tasksEmpty = document.getElementById("tasksEmpty");
 
-function entryRate(e) {
-  if (e.rate != null) return e.rate;
-  const person = people.find((p) => p.id === e.personId);
-  return person ? person.rate : 0;
+// Budgets are spent at the project's bill rate (see rates.js).
+function billRate(e) {
+  return billRateOf(e, { projects, people });
 }
 
 function spentOnTask(taskId) {
   return timeEntries
     .filter((e) => e.taskId === taskId)
-    .reduce((sum, e) => sum + Number(e.hours || 0) * entryRate(e), 0);
+    .reduce((sum, e) => sum + Number(e.hours || 0) * billRate(e), 0);
 }
 
 function assignedTotal(taskId) {
@@ -426,8 +433,8 @@ function renderAccordion(task, diff) {
     const person = people.find((p) => p.id === a.personId);
     const personEntries = timeEntries.filter((e) => e.taskId === a.taskId && e.personId === a.personId);
     const loggedHours = personEntries.reduce((sum, e) => sum + Number(e.hours || 0), 0);
-    const rate = person ? person.rate : 0;
-    const earned = personEntries.reduce((sum, e) => sum + Number(e.hours || 0) * entryRate(e), 0);
+    const rate = assignmentRate(projects.find((p) => p.id === task.projectId), person);
+    const earned = personEntries.reduce((sum, e) => sum + Number(e.hours || 0) * billRate(e), 0);
     const remaining = (a.capValue || 0) - earned;
 
     const remainingHours = rate > 0 ? remaining / rate : 0;
@@ -470,7 +477,7 @@ function renderAccordion(task, diff) {
       <span class="assignSumDiffPill">${assignedPill(budget - totalAssigned)}</span>
     </div>
     ${taskAssignments.length > 0 ? `<table style="margin-top:10px;">
-      <thead><tr><th>Person</th><th>Assigned</th><th>Earned</th><th>Remaining</th><th style="width:100px;"></th></tr></thead>
+      <thead><tr><th>Person</th><th>Assigned</th><th>Spent</th><th>Remaining</th><th style="width:100px;"></th></tr></thead>
       <tbody class="assignmentRows">${rows}</tbody>
     </table>
     <div class="row-actions" style="margin-top:10px;">

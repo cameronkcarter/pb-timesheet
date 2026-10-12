@@ -93,12 +93,12 @@ export function removeTest(name, id) {
   return Promise.resolve();
 }
 
-export function markInvoicedTest(ids, invoiceId) {
+export function markInvoicedTest(ids, invoiceId, billRates = {}) {
   const items = readData("timeEntries");
   const invoicedDate = new Date().toISOString();
   ids.forEach((id) => {
     const idx = items.findIndex((i) => i.id === id);
-    if (idx !== -1) items[idx] = { ...items[idx], invoiced: true, invoicedDate, invoiceId };
+    if (idx !== -1) items[idx] = { ...items[idx], invoiced: true, invoicedDate, invoiceId, billRate: billRates[id] ?? null };
   });
   writeData("timeEntries", items);
   notifyAll("timeEntries");

@@ -58,13 +58,14 @@ async function remove(name, id) {
   return deleteDoc(doc(db, name, id));
 }
 
-async function markInvoiced(ids, invoiceId) {
-  if (isTestMode()) return markInvoicedTest(ids, invoiceId);
+// billRates: { entryId: rate } — locks in the rate each hour was billed at.
+async function markInvoiced(ids, invoiceId, billRates = {}) {
+  if (isTestMode()) return markInvoicedTest(ids, invoiceId, billRates);
   await authReady;
   const batch = writeBatch(db);
   const invoicedDate = new Date().toISOString();
   ids.forEach((id) => {
-    batch.update(doc(db, "timeEntries", id), { invoiced: true, invoicedDate, invoiceId });
+    batch.update(doc(db, "timeEntries", id), { invoiced: true, invoicedDate, invoiceId, billRate: billRates[id] ?? null });
   });
   await batch.commit();
 }
@@ -122,7 +123,8 @@ export const Assignments = {
 };
 
 // TimeEntry documents look like:
-// { personId, taskId, projectId, date, hours, note, approved, approvedDate,
+// { personId, taskId, projectId, date, hours, note, rate (pay, locked when
+//   logged), billRate (locked when invoiced), approved, approvedDate,
 //   invoiced, invoicedDate, invoiceId, paid, paidDate }
 export const TimeEntries = {
   listen: (cb) => listenCollection("timeEntries", cb, "date"),

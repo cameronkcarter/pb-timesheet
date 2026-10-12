@@ -4,6 +4,7 @@ import {
   todayISO, toISODate, addDays, daysBetween, projectColor,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
+import { billRateOf, assignmentRate } from "./rates.js";
 
 const sessionPersonId = requireSession();
 
@@ -178,16 +179,11 @@ projectCardsEl.addEventListener("click", (e) => {
 });
 
 // ---------- Budget (read-only) ----------
-function entryRate(e) {
-  if (e.rate != null) return e.rate;
-  const person = people.find((p) => p.id === e.personId);
-  return person ? person.rate : 0;
-}
-
+// Budgets are spent at the project's bill rate (see rates.js).
 function spentOnTask(taskId) {
   return timeEntries
     .filter((e) => e.taskId === taskId)
-    .reduce((sum, e) => sum + Number(e.hours || 0) * entryRate(e), 0);
+    .reduce((sum, e) => sum + Number(e.hours || 0) * billRateOf(e, { projects, people }), 0);
 }
 
 function selectedProjectTasks() {
@@ -237,7 +233,8 @@ function renderBudget() {
 }
 
 // Hours view of who's on a task: assigned hours come from each person's
-// dollar assignment divided by their current rate.
+// dollar assignment divided by the project's bill rate (or their pay rate on
+// projects that bill at staff rates).
 function taskPeopleHtml(task) {
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
@@ -246,7 +243,7 @@ function taskPeopleHtml(task) {
 
   const rows = personIds.map((pid) => {
     const person = people.find((p) => p.id === pid);
-    const rate = person ? Number(person.rate || 0) : 0;
+    const rate = assignmentRate(projects.find((p) => p.id === task.projectId), person);
     const assignment = taskAssignments.find((a) => a.personId === pid);
     const assignedHours = assignment && rate > 0 ? Number(assignment.capValue || 0) / rate : 0;
     const spentHours = taskEntries.filter((e) => e.personId === pid).reduce((s, e) => s + Number(e.hours || 0), 0);

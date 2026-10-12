@@ -2,6 +2,7 @@
 // for the script that receives it and the one-time setup steps).
 import { isTestMode } from "./session.js";
 import { formatMonthLabel } from "./util.js";
+import { billRateOf, payRateOf } from "./rates.js";
 
 // ---------------------------------------------------------------------------
 // PASTE THESE IN after deploying apps-script/Code.gs as a web app.
@@ -16,20 +17,17 @@ export function sheetSyncEnabled() {
   return !!SHEET_WEBHOOK_URL && !isTestMode();
 }
 
-function entryRate(e, people) {
-  if (e.rate != null) return e.rate;
-  const person = people.find((p) => p.id === e.personId);
-  return person ? person.rate : 0;
-}
-
 // Rolls time entries up into one line per task x person x rate, dropping the
 // individual work dates (the sheet only cares about invoiced totals).
-function linesFromEntries(entries, { tasks, people }) {
+// rate/amount are what the client was billed; payRate/payAmount are what the
+// person earns (the same on projects that bill at staff pay rates).
+function linesFromEntries(entries, { tasks, people, projects }) {
   const groups = {};
   entries.forEach((e) => {
-    const rate = entryRate(e, people);
-    const key = `${e.taskId}|${e.personId}|${rate}`;
-    if (!groups[key]) groups[key] = { taskId: e.taskId, personId: e.personId, rate, hours: 0 };
+    const rate = billRateOf(e, { projects, people });
+    const payRate = payRateOf(e, people);
+    const key = `${e.taskId}|${e.personId}|${rate}|${payRate}`;
+    if (!groups[key]) groups[key] = { taskId: e.taskId, personId: e.personId, rate, payRate, hours: 0 };
     groups[key].hours += Number(e.hours || 0);
   });
   return Object.values(groups).map((g) => {
@@ -43,6 +41,8 @@ function linesFromEntries(entries, { tasks, people }) {
       hours: Math.round(g.hours * 100) / 100,
       rate: g.rate,
       amount: Math.round(g.hours * g.rate * 100) / 100,
+      payRate: g.payRate,
+      payAmount: Math.round(g.hours * g.payRate * 100) / 100,
     };
   });
 }
@@ -64,8 +64,10 @@ export function buildSheetPayload({ invoices, timeEntries, tasks, people, projec
         projectName: project ? project.name : inv.projectName,
         total: inv.total,
         paidDate: inv.paid && inv.paidDate ? inv.paidDate.slice(0, 10) : "",
-        lines: linesFromEntries(linked, { tasks, people }).map((l) => ({
-          ...l, lineKey: `${inv.id}|${l.taskId}|${l.personId}|${l.rate}`,
+        lines: linesFromEntries(linked, { tasks, people, projects }).map((l) => ({
+          // Pay rate is only added to the key when it differs from the bill
+          // rate, so lines synced before bill rates existed keep their keys.
+          ...l, lineKey: `${inv.id}|${l.taskId}|${l.personId}|${l.rate}${l.payRate !== l.rate ? `|pay${l.payRate}` : ""}`,
         })),
       };
     });
@@ -77,7 +79,7 @@ export function buildSheetPayload({ invoices, timeEntries, tasks, people, projec
     .filter((e) => e.invoiced && !e.invoiceId)
     .map((e) => {
       const project = projects.find((p) => p.id === e.projectId);
-      const [line] = linesFromEntries([e], { tasks, people });
+      const [line] = linesFromEntries([e], { tasks, people, projects });
       return {
         ...line,
         lineKey: `entry|${e.id}`,

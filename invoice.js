@@ -6,6 +6,7 @@ import {
 } from "./util.js";
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
 import { isTestMode } from "./session.js";
+import { billRateOf, paidAmount } from "./rates.js";
 
 function esc(str) {
   return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -63,15 +64,11 @@ if (sessionPersonId) {
   Invoices.listen((d) => { invoices = d; renderHistory(); renderSheetSync(); });
 }
 
-function rateOf(personId) {
-  const p = people.find((pp) => pp.id === personId);
-  return p ? p.rate : 0;
-}
-
-// Uses the rate locked in on the entry when it was logged, falling back to
-// the person's current rate for older entries logged before that existed.
+// Invoices charge the project's bill rate, or each person's pay rate on
+// projects without one; hours already invoiced keep the rate they were billed
+// at (see rates.js).
 function entryRate(e) {
-  return e.rate != null ? e.rate : rateOf(e.personId);
+  return billRateOf(e, { projects, people });
 }
 
 // ---------- Project cards ----------
@@ -269,6 +266,12 @@ function renderDraftBody(approved, pending) {
       </td></tr>` : ""}`;
   }).join("");
 
+  // Admin-only page, so show what the firm keeps when billing above pay rates.
+  const staffPay = paidAmount(entries, people);
+  const overheadHtml = entries.length && Math.abs(grand - staffPay) > 0.005
+    ? `<div class="empty" style="padding-top:10px;">Staff pay for these hours: ${formatCurrency(staffPay)} &middot; Firm overhead: <strong>${formatCurrency(grand - staffPay)}</strong></div>`
+    : "";
+
   body.innerHTML = `
     ${notices.map((n) => `<div class="draft-notice">${n}</div>`).join("")}
     ${entries.length === 0
@@ -277,7 +280,8 @@ function renderDraftBody(approved, pending) {
           <thead><tr><th>Person</th><th>Hours</th><th>Rate</th><th>Total</th><th></th></tr></thead>
           <tbody>${rowsHtml}</tbody>
           <tfoot><tr><td>Total</td><td>${hours.toFixed(2)}</td><td></td><td>${formatCurrency(grand)}</td><td></td></tr></tfoot>
-        </table>`}`;
+        </table>`}
+    ${overheadHtml}`;
   monthsContainer.querySelectorAll('[data-action="preview"], [data-action="generate"]')
     .forEach((b) => { b.disabled = entries.length === 0; });
 }
@@ -637,7 +641,8 @@ async function generate(isPreview) {
         total: computed.laborTotal,
         sheetSynced: false,
       });
-      await TimeEntries.markInvoiced(entries.map((e) => e.id), ref.id);
+      const billRates = Object.fromEntries(entries.map((e) => [e.id, entryRate(e)]));
+      await TimeEntries.markInvoiced(entries.map((e) => e.id), ref.id, billRates);
       draft = null;
       showToast("Invoice generated.");
       syncSheet();

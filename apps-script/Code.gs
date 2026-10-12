@@ -40,7 +40,7 @@ const LOG = {
   lines: {
     name: "Log: Lines",
     headers: ["Invoice Date", "Invoice #", "Billing Period", "Project", "Task", "Person", "Hours", "Rate", "Amount",
-      "Added to Sheet", "Note", "Invoice ID", "Project ID", "Task ID", "Person ID", "Line Key"],
+      "Added to Sheet", "Note", "Invoice ID", "Project ID", "Task ID", "Person ID", "Line Key", "Pay Rate", "Pay Amount"],
   },
   budgets: {
     name: "Log: Budgets",
@@ -52,13 +52,14 @@ const REPORTS = {
   invoices: {
     name: "Invoices",
     headers: ["Invoice Date", "Invoice #", "Project", "Billing Period", "Hours Invoiced", "Amount Invoiced",
-      "Invoiced to Date", "Remaining Budget", "Paid Date", "Note"],
-    formats: { A: "m/d/yyyy", E: "0.00", F: "$#,##0.00", G: "$#,##0.00", H: "$#,##0.00", I: "m/d/yyyy" },
+      "Staff Pay", "Overhead", "Invoiced to Date", "Remaining Budget", "Paid Date", "Note"],
+    formats: { A: "m/d/yyyy", E: "0.00", F: "$#,##0.00", G: "$#,##0.00", H: "$#,##0.00", I: "$#,##0.00", J: "$#,##0.00", K: "m/d/yyyy" },
   },
   staff: {
     name: "Staff Time",
-    headers: ["Invoice Date", "Invoice #", "Project", "Billing Period", "Person", "Hours", "Rate", "Amount", "Note"],
-    formats: { A: "m/d/yyyy", F: "0.00", G: "$#,##0.00", H: "$#,##0.00" },
+    headers: ["Invoice Date", "Invoice #", "Project", "Billing Period", "Person", "Hours", "Bill Rate", "Billed",
+      "Pay Rate", "Pay", "Note"],
+    formats: { A: "m/d/yyyy", F: "0.00", G: "$#,##0.00", H: "$#,##0.00", I: "$#,##0.00", J: "$#,##0.00" },
   },
   budgets: {
     name: "Task Budgets",
@@ -180,6 +181,7 @@ function lineRow_(l, now) {
     toDate_(l.invoiceDate), l.invoiceNumber || "", l.periodLabel || "", l.projectName, l.taskName, l.personName,
     l.hours, l.rate, l.amount, now, l.note || "", l.invoiceId || "", l.projectId || "", l.taskId || "",
     l.personId || "", l.lineKey,
+    l.payRate != null ? l.payRate : l.rate, l.payAmount != null ? l.payAmount : l.amount,
   ];
 }
 
@@ -206,16 +208,24 @@ function rebuildReports_(ss) {
 
   // --- Invoices: real invoices plus any "no invoice record" lines, which the
   // site counts as already billed, so running totals match the app.
+  // Lines logged before bill rates existed have no pay columns; they were
+  // billed at the person's pay rate, so pay = amount billed.
+  const payOf = (l) => (l["Pay Amount"] === "" || l["Pay Amount"] == null ? Number(l.Amount || 0) : Number(l["Pay Amount"]));
   const hoursByInvoice = {};
+  const payByInvoice = {};
   lines.forEach((l) => {
-    if (l["Invoice ID"]) hoursByInvoice[l["Invoice ID"]] = (hoursByInvoice[l["Invoice ID"]] || 0) + Number(l.Hours || 0);
+    const id = l["Invoice ID"];
+    if (!id) return;
+    hoursByInvoice[id] = (hoursByInvoice[id] || 0) + Number(l.Hours || 0);
+    payByInvoice[id] = (payByInvoice[id] || 0) + payOf(l);
   });
   const invoiceRecords = invoices.map((inv) => ({
     date: inv["Invoice Date"], number: inv["Invoice #"], project: inv.Project, period: inv["Billing Period"],
-    hours: hoursByInvoice[inv["Invoice ID"]] || 0, amount: Number(inv.Total || 0), paid: inv["Paid Date"], note: "",
+    hours: hoursByInvoice[inv["Invoice ID"]] || 0, amount: Number(inv.Total || 0),
+    pay: payByInvoice[inv["Invoice ID"]] || 0, paid: inv["Paid Date"], note: "",
   })).concat(lines.filter((l) => !l["Invoice ID"]).map((l) => ({
     date: l["Invoice Date"], number: "", project: l.Project, period: l["Billing Period"],
-    hours: Number(l.Hours || 0), amount: Number(l.Amount || 0), paid: "", note: l.Note,
+    hours: Number(l.Hours || 0), amount: Number(l.Amount || 0), pay: payOf(l), paid: "", note: l.Note,
   }))).sort(byDateThenNumber);
 
   const budgetByProject = {};
@@ -224,8 +234,8 @@ function rebuildReports_(ss) {
   const invoiceRows = invoiceRecords.map((r) => {
     runningByProject[r.project] = (runningByProject[r.project] || 0) + r.amount;
     const toDate = runningByProject[r.project];
-    return [r.date, r.number, r.project, r.period, round2(r.hours), r.amount, round2(toDate),
-      round2((budgetByProject[r.project] || 0) - toDate), r.paid, r.note];
+    return [r.date, r.number, r.project, r.period, round2(r.hours), r.amount, round2(r.pay), round2(r.amount - r.pay),
+      round2(toDate), round2((budgetByProject[r.project] || 0) - toDate), r.paid, r.note];
   });
   writeReport_(ss, REPORTS.invoices, invoiceRows);
 
@@ -235,15 +245,17 @@ function rebuildReports_(ss) {
     const key = (l["Invoice ID"] || l["Line Key"]) + "|" + (l["Person ID"] || l.Person);
     if (!staff[key]) {
       staff[key] = { date: l["Invoice Date"], number: l["Invoice #"], project: l.Project, period: l["Billing Period"],
-        person: l.Person, hours: 0, amount: 0, note: l.Note || "" };
+        person: l.Person, hours: 0, amount: 0, pay: 0, note: l.Note || "" };
     }
     staff[key].hours += Number(l.Hours || 0);
     staff[key].amount += Number(l.Amount || 0);
+    staff[key].pay += payOf(l);
   });
   const staffRows = Object.keys(staff).map((k) => staff[k])
     .sort((a, b) => byDateThenNumber(a, b) || a.person.localeCompare(b.person))
     .map((s) => [s.date, s.number, s.project, s.period, s.person, round2(s.hours),
-      s.hours > 0 ? round2(s.amount / s.hours) : "", round2(s.amount), s.note]);
+      s.hours > 0 ? round2(s.amount / s.hours) : "", round2(s.amount),
+      s.hours > 0 ? round2(s.pay / s.hours) : "", round2(s.pay), s.note]);
   writeReport_(ss, REPORTS.staff, staffRows);
 
   // --- Task Budgets: matched to invoiced lines by task ID, so renaming a task
@@ -311,22 +323,22 @@ function buildSummary_(sheet) {
 
   title("G1", "By Person & Project");
   sheet.getRange("G2").setFormula(
-    "=QUERY('Staff Time'!A:H,\"select C, E, sum(F), sum(H) where E is not null group by C, E order by C, E " +
-    "label C 'Project', E 'Person', sum(F) 'Hours', sum(H) 'Pay'\",1)");
+    "=QUERY('Staff Time'!A:J,\"select C, E, sum(F), sum(H), sum(J) where E is not null group by C, E order by C, E " +
+    "label C 'Project', E 'Person', sum(F) 'Hours', sum(H) 'Billed', sum(J) 'Pay'\",1)");
   sheet.getRange("I3:I").setNumberFormat("0.00");
-  sheet.getRange("J3:J").setNumberFormat("$#,##0.00");
+  ["J", "K"].forEach((c) => sheet.getRange(`${c}3:${c}`).setNumberFormat("$#,##0.00"));
 
-  title("L1", "By Project & Task");
-  sheet.getRange("L2").setFormula(
+  title("M1", "By Project & Task");
+  sheet.getRange("M2").setFormula(
     "=QUERY('Task Budgets'!A:F,\"select A, B, C, D, E, F where A is not null order by A, B " +
     "label A 'Project', B 'Task', C 'Budget', D 'Invoiced', E 'Hours', F 'Remaining'\",1)");
-  ["N", "O", "Q"].forEach((c) => sheet.getRange(`${c}3:${c}`).setNumberFormat("$#,##0.00"));
-  sheet.getRange("P3:P").setNumberFormat("0.00");
+  ["O", "P", "R"].forEach((c) => sheet.getRange(`${c}3:${c}`).setNumberFormat("$#,##0.00"));
+  sheet.getRange("Q3:Q").setNumberFormat("0.00");
 
-  sheet.getRange("A2:Q2").setFontWeight("bold").setBackground("#eeeeee");
+  sheet.getRange("A2:R2").setFontWeight("bold").setBackground("#eeeeee");
   sheet.setFrozenRows(2);
-  sheet.setColumnWidths(1, 17, 110);
-  [1, 7, 12, 13].forEach((c) => sheet.setColumnWidth(c, 200));
+  sheet.setColumnWidths(1, 18, 110);
+  [1, 7, 13, 14].forEach((c) => sheet.setColumnWidth(c, 200));
 }
 
 // ---------- Sheet scaffolding ----------
@@ -341,6 +353,8 @@ function ensureSheets_(ss) {
       sheet = ss.insertSheet(log.name);
       sheet.getRange(1, 1, 1, log.headers.length).setValues([log.headers]).setFontWeight("bold");
       sheet.setFrozenRows(1);
+    } else if (sheet.getRange(1, log.headers.length).getValue() !== log.headers[log.headers.length - 1]) {
+      sheet.getRange(1, 1, 1, log.headers.length).setValues([log.headers]).setFontWeight("bold");
     }
     if (!sheet.isSheetHidden()) sheet.hideSheet();
   });
