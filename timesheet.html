@@ -20,7 +20,7 @@
 </nav>
 
 <main>
-  <h1>Log Hours</h1>
+  <h1>Timesheet</h1>
 
   <div class="card">
     <div class="cal-header">
@@ -34,55 +34,42 @@
     </div>
     <div id="calLegend" class="cal-legend"></div>
     <div id="calendar" class="cal-grid"></div>
-    <div id="dayDetail" class="day-detail"></div>
-  </div>
 
-  <div class="card" id="projectCardSection">
-    <h2>Project</h2>
-    <div id="projectCards" class="project-card-row"></div>
-    <div id="projectCardsEmpty" class="empty" style="display:none;">No projects assigned to you yet.</div>
-  </div>
+    <div class="day-detail">
+      <h3 id="dayHeading"></h3>
+      <div id="dayEntries"></div>
 
-  <div class="card" id="logCard" style="display:none;">
-    <h2 id="logCardHeading"></h2>
+      <div class="day-log">
+        <div class="day-log-title" id="logTitle"></div>
 
-    <div class="stat-row">
-      <div class="stat">
-        <div class="label">Logged This Week</div>
-        <div class="value" id="statProjectWeek">0</div>
-      </div>
-      <div class="stat">
-        <div class="label" id="monthLabel">Logged This Month</div>
-        <div class="value" id="statProjectMonth">0</div>
-      </div>
-    </div>
+        <label>Project</label>
+        <div id="projectCards" class="project-card-row" style="margin-top:6px;"></div>
+        <div id="projectCardsEmpty" class="empty" style="display:none;">No projects assigned to you yet.</div>
+        <div id="noAssignmentsEmpty" class="empty" style="display:none;">You're not assigned to any tasks on this project yet.</div>
 
-    <div id="noAssignmentsEmpty" class="empty" style="display:none; margin-top:16px;">You're not assigned to any tasks on this project yet.</div>
+        <div id="entryForm" style="display:none;">
+          <label style="margin-top:14px;">Task</label>
+          <div id="taskCards" class="project-card-row" style="margin-top:6px;"></div>
 
-    <div id="entryForm" style="margin-top:20px;">
-      <label>Task</label>
-      <div id="taskCards" class="project-card-row"></div>
+          <div class="inline-form" style="margin-top:14px;">
+            <div style="flex:0 0 140px;">
+              <label for="entryHours">Hours</label>
+              <input type="number" id="entryHours" min="0" step="0.25" placeholder="2" />
+            </div>
+          </div>
 
-      <div class="inline-form" style="margin-top:16px;">
-        <div>
-          <label for="entryDate">Date</label>
-          <input type="date" id="entryDate" />
+          <label for="entryNote">Note — what did you work on?</label>
+          <textarea id="entryNote" rows="3" placeholder="Briefly describe what you worked on..."></textarea>
+
+          <div id="existingHint" class="draft-notice" style="display:none;"></div>
+          <div class="row-actions" style="margin-top:14px;">
+            <button id="submitEntry" style="margin:0;">Log Hours</button>
+            <button id="cancelEdit" class="secondary" style="margin:0; display:none;">Cancel</button>
+          </div>
         </div>
-        <div>
-          <label for="entryHours">Hours</label>
-          <input type="number" id="entryHours" min="0" step="0.25" placeholder="2" />
-        </div>
-      </div>
-
-      <label for="entryNote">Note — what did you work on?</label>
-      <textarea id="entryNote" rows="3" placeholder="Briefly describe what you worked on..."></textarea>
-
-      <div class="save-week-bar">
-        <button id="submitEntry" class="save-week-btn">Log Hours</button>
       </div>
     </div>
   </div>
-
 </main>
 
 <div id="toast" class="toast"></div>

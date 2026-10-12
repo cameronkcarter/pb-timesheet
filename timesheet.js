@@ -1,10 +1,13 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
-  formatDate, todayISO, toISODate, getWeekStart, suggestedWeeklyHours, monthKey, showToast,
+  todayISO, toISODate, getWeekStart, suggestedWeeklyHours, monthKey, showToast,
   firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { assignmentRate } from "./rates.js";
+
+// The page is one calendar: click a day to see what you logged that day and
+// log more hours for it (project -> task -> hours + note) right below.
 
 const selectedPersonId = requireSession();
 
@@ -20,28 +23,34 @@ let isDirty = false;
 let calMonth = firstOfMonth(new Date()); // month shown in the calendar
 let selectedDay = todayISO();
 
-const projectCardsEl = document.getElementById("projectCards");
-const projectCardsEmpty = document.getElementById("projectCardsEmpty");
-
-const logCard = document.getElementById("logCard");
-const logCardHeading = document.getElementById("logCardHeading");
-const statProjectWeek = document.getElementById("statProjectWeek");
-const statProjectMonth = document.getElementById("statProjectMonth");
-const monthLabel = document.getElementById("monthLabel");
-const noAssignmentsEmpty = document.getElementById("noAssignmentsEmpty");
-const entryForm = document.getElementById("entryForm");
-const taskCardsEl = document.getElementById("taskCards");
-const entryDate = document.getElementById("entryDate");
-const entryHours = document.getElementById("entryHours");
-const entryNote = document.getElementById("entryNote");
-
 const calendarEl = document.getElementById("calendar");
 const calLegend = document.getElementById("calLegend");
 const calMonthLabel = document.getElementById("calMonthLabel");
-const dayDetail = document.getElementById("dayDetail");
+
+const dayHeading = document.getElementById("dayHeading");
+const dayEntries = document.getElementById("dayEntries");
+const logTitle = document.getElementById("logTitle");
+const projectCardsEl = document.getElementById("projectCards");
+const projectCardsEmpty = document.getElementById("projectCardsEmpty");
+const noAssignmentsEmpty = document.getElementById("noAssignmentsEmpty");
+const entryForm = document.getElementById("entryForm");
+const taskCardsEl = document.getElementById("taskCards");
+const entryHours = document.getElementById("entryHours");
+const entryNote = document.getElementById("entryNote");
+const existingHint = document.getElementById("existingHint");
+const submitEntry = document.getElementById("submitEntry");
+const cancelEdit = document.getElementById("cancelEdit");
 
 function esc(str) {
   return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function fmtHours(n) {
+  return String(Math.round(n * 100) / 100);
+}
+
+function dayLabel(iso, opts = { weekday: "long", month: "short", day: "numeric", year: "numeric" }) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", opts);
 }
 
 wireLogout("logoutLink", "navBrandLink");
@@ -55,53 +64,18 @@ if (selectedPersonId) {
       applyAdminNavVisibility(me);
       renderNavUserName(me);
     }
+    renderLogForm();
   });
-  Projects.listen((data) => { projects = data; renderProjectCards(); renderCalendar(); });
-  Tasks.listen((data) => { tasks = data; renderLogCard(); renderCalendar(); });
-  Assignments.listen((data) => { assignments = data; renderProjectCards(); });
-  TimeEntries.listen((data) => { timeEntries = data; renderLogCard(); renderCalendar(); });
+  Projects.listen((data) => { projects = data; renderAll(); });
+  Tasks.listen((data) => { tasks = data; renderAll(); });
+  Assignments.listen((data) => { assignments = data; renderLogForm(); });
+  TimeEntries.listen((data) => { timeEntries = data; renderAll(); });
 }
 
-// ---------- Project cards ----------
-function renderProjectCards() {
-  const myProjectIds = [...new Set(
-    assignments.filter((a) => a.personId === selectedPersonId).map((a) => a.projectId)
-  )];
-  const myProjects = projects.filter((p) => myProjectIds.includes(p.id));
-
-  if (myProjects.length === 0) {
-    projectCardsEl.innerHTML = "";
-    projectCardsEmpty.style.display = "block";
-    logCard.style.display = "none";
-    return;
-  }
-  projectCardsEmpty.style.display = "none";
-
-  projectCardsEl.innerHTML = myProjects.map((p) => `
-    <div class="project-card ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}">
-      <div class="name">${p.name}</div>
-      <div class="client">${p.client || "&nbsp;"}</div>
-    </div>
-  `).join("");
-
-  renderLogCard();
+function renderAll() {
+  renderCalendar();
+  renderLogForm();
 }
-
-function confirmDiscardIfDirty() {
-  if (!isDirty) return true;
-  if (!confirm("You have an unsaved entry on this screen. Discard it?")) return false;
-  isDirty = false;
-  return true;
-}
-
-projectCardsEl.addEventListener("click", (e) => {
-  const card = e.target.closest(".project-card");
-  if (!card) return;
-  if (!confirmDiscardIfDirty()) return;
-  selectedProjectId = card.dataset.projectCard;
-  selectedTaskId = null;
-  renderProjectCards();
-});
 
 window.addEventListener("beforeunload", (e) => {
   if (!isDirty) return;
@@ -109,151 +83,10 @@ window.addEventListener("beforeunload", (e) => {
   e.returnValue = "";
 });
 
-// ---------- Log card ----------
-function myTaskOptions() {
-  const myAssignments = assignments.filter(
-    (a) => a.personId === selectedPersonId && a.projectId === selectedProjectId
-  );
-  return myAssignments
-    .map((a) => ({ assignment: a, task: tasks.find((t) => t.id === a.taskId) }))
-    .filter((c) => c.task)
-    .sort((a, b) => a.task.name.localeCompare(b.task.name));
-}
-
-function renderLogCard() {
-  if (!selectedPersonId || !selectedProjectId) {
-    logCard.style.display = "none";
-    return;
-  }
-  logCard.style.display = "block";
-
-  const project = projects.find((p) => p.id === selectedProjectId);
-  logCardHeading.textContent = project ? project.name : "";
-
-  const weekStart = toISODate(getWeekStart(todayISO()));
-  const monthPrefix = monthKey(new Date());
-  const myProjectEntries = timeEntries.filter(
-    (e) => e.personId === selectedPersonId && e.projectId === selectedProjectId
-  );
-  const weekTotal = myProjectEntries
-    .filter((e) => e.date >= weekStart)
-    .reduce((s, e) => s + Number(e.hours || 0), 0);
-  const monthTotal = myProjectEntries
-    .filter((e) => e.date.startsWith(monthPrefix))
-    .reduce((s, e) => s + Number(e.hours || 0), 0);
-  statProjectWeek.textContent = weekTotal.toFixed(2);
-  statProjectMonth.textContent = monthTotal.toFixed(2);
-  monthLabel.textContent = `Logged This Month`;
-
-  const columns = myTaskOptions();
-  if (columns.length === 0) {
-    noAssignmentsEmpty.style.display = "block";
-    entryForm.style.display = "none";
-    return;
-  }
-  noAssignmentsEmpty.style.display = "none";
-  entryForm.style.display = "block";
-
-  if (!selectedTaskId || !columns.some((c) => c.task.id === selectedTaskId)) {
-    selectedTaskId = columns[0].task.id;
-  }
-
-  if (!entryDate.value) entryDate.value = todayISO();
-
-  renderTaskCards(columns);
-}
-
-function taskStatsFor({ assignment, task }) {
-  const person = people.find((p) => p.id === selectedPersonId);
-  const rate = assignmentRate(projects.find((p) => p.id === task.projectId), person);
-  const suggested = suggestedWeeklyHours(assignment.capValue, rate, task.startDate, task.endDate);
-  const allLogged = timeEntries
-    .filter((e) => e.personId === selectedPersonId && e.taskId === task.id)
-    .reduce((sum, e) => sum + Number(e.hours || 0), 0);
-  const totalHours = rate > 0 ? (assignment.capValue || 0) / rate : 0;
-  const remainingHours = totalHours - allLogged;
-  return {
-    suggestedLabel: suggested != null ? `${suggested.toFixed(1)} hrs` : "—",
-    remainingLabel: `${remainingHours.toFixed(1)} hrs`,
-  };
-}
-
-function renderTaskCards(columns) {
-  taskCardsEl.innerHTML = columns.map((c) => {
-    const active = c.task.id === selectedTaskId;
-    const { suggestedLabel, remainingLabel } = taskStatsFor(c);
-    return `<div class="project-card task-card ${active ? "active" : ""}" data-task-card="${c.task.id}">
-      <div class="name">${c.task.name}</div>
-      <div class="task-card-stats">
-        <div><span class="summary-label">Suggested</span><div class="summary-value">${suggestedLabel}/wk</div></div>
-        <div><span class="summary-label">Remaining</span><div class="summary-value">${remainingLabel}</div></div>
-      </div>
-    </div>`;
-  }).join("");
-}
-
-taskCardsEl.addEventListener("click", (e) => {
-  const card = e.target.closest(".task-card");
-  if (!card) return;
-  selectedTaskId = card.dataset.taskCard;
-  renderTaskCards(myTaskOptions());
-});
-
-[entryHours, entryNote].forEach((el) => {
-  el.addEventListener("input", () => {
-    isDirty = entryHours.value.trim() !== "" || entryNote.value.trim() !== "";
-  });
-});
-
-document.getElementById("submitEntry").addEventListener("click", async () => {
-  const personId = selectedPersonId;
-  const projectId = selectedProjectId;
-  const taskId = selectedTaskId;
-  const date = entryDate.value;
-  const hours = Number(entryHours.value);
-  const note = entryNote.value.trim();
-
-  if (!projectId || !taskId) return showToast("Select a task first.");
-  if (!date) return showToast("Choose a date.");
-  if (!hours || hours <= 0) return showToast("Enter hours worked.");
-  if (!note) return showToast("Add a note describing what you worked on.");
-
-  const existing = timeEntries.find(
-    (e) => e.personId === personId && e.taskId === taskId && e.date === date
-  );
-
-  if (existing && existing.invoiced) {
-    return showToast("This day/task has already been invoiced and can't be changed here.");
-  }
-
-  try {
-    if (existing) {
-      await TimeEntries.update(existing.id, { hours, note, approved: false, approvedDate: null });
-      showToast("Entry updated.");
-    } else {
-      const person = people.find((p) => p.id === personId);
-      await TimeEntries.add({ personId, projectId, taskId, date, hours, note, rate: person ? person.rate : 0 });
-      showToast("Hours logged.");
-    }
-    entryHours.value = "";
-    entryNote.value = "";
-    isDirty = false;
-    selectDay(date);
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-});
-
-
-// ---------- Hours calendar ----------
+// ---------- Calendar ----------
 // Each day shows one small chip per project (colored by project): solid once
-// approved (or later), outlined while still pending approval. Clicking a day
-// lists that day's entries below and sets it as the date to log hours for.
+// approved (or later), dashed while still pending approval.
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function fmtHours(n) {
-  return String(Math.round(n * 100) / 100);
-}
 
 function statusPill(e) {
   if (e.paid) return '<span class="pill green">Paid</span>';
@@ -271,7 +104,6 @@ function myEntriesByDate() {
 }
 
 function dayChipsHtml(entries) {
-  // One chip per project + pending/approved state, in project-name order.
   const groups = {};
   entries.forEach((e) => {
     const pending = !e.approved && !e.invoiced;
@@ -329,15 +161,14 @@ function renderCalendar() {
     <span class="cal-legend-key"><span class="cal-chip" style="--c:#746b7a;">2</span> Approved</span>
     <span class="cal-legend-key"><span class="cal-chip pending" style="--c:#746b7a;">2</span> Pending approval</span>`;
 
-  renderDayDetail(byDate[selectedDay] || []);
+  renderDayEntries(byDate[selectedDay] || []);
 }
 
-function renderDayDetail(entries) {
+function renderDayEntries(entries) {
   const total = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
-  const heading = new Date(selectedDay + "T00:00:00")
-    .toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+  dayHeading.innerHTML = `${dayLabel(selectedDay)}${entries.length ? ` <span class="empty" style="padding:0; font-weight:400;">— ${fmtHours(total)} hrs logged</span>` : ""}`;
   if (entries.length === 0) {
-    dayDetail.innerHTML = `<h3>${heading}</h3><div class="empty">Nothing logged this day.</div>`;
+    dayEntries.innerHTML = `<div class="empty" style="padding-top:0;">Nothing logged this day yet.</div>`;
     return;
   }
   const rows = entries.map((e) => {
@@ -349,21 +180,22 @@ function renderDayDetail(entries) {
       <td>${task ? esc(task.name) : "—"}${noteHtml}</td>
       <td>${e.hours}</td>
       <td>${statusPill(e)}</td>
-      <td>${e.invoiced ? "" : `<button class="danger small" data-delete-entry="${e.id}">Delete</button>`}</td>
+      <td>${e.invoiced ? "" : `<div class="row-actions">
+        <button class="small secondary" data-edit-entry="${e.id}">Edit</button>
+        <button class="danger small" data-delete-entry="${e.id}">Delete</button>
+      </div>`}</td>
     </tr>`;
   }).join("");
-  dayDetail.innerHTML = `<h3>${heading} <span class="empty" style="padding:0; font-weight:400;">— ${fmtHours(total)} hrs</span></h3>
-    <table>
-      <thead><tr><th>Project</th><th>Task</th><th>Hours</th><th>Status</th><th></th></tr></thead>
+  dayEntries.innerHTML = `<div class="table-scroll"><table>
+      <thead><tr><th>Project</th><th>Task</th><th>Hours</th><th>Status</th><th style="width:140px;"></th></tr></thead>
       <tbody>${rows}</tbody>
-    </table>`;
+    </table></div>`;
 }
 
 function selectDay(iso) {
   selectedDay = iso;
   calMonth = firstOfMonth(new Date(iso + "T00:00:00"));
-  if (entryForm.style.display !== "none") entryDate.value = iso;
-  renderCalendar();
+  renderAll();
 }
 
 calendarEl.addEventListener("click", (e) => {
@@ -375,12 +207,202 @@ document.getElementById("calPrev").addEventListener("click", () => { calMonth = 
 document.getElementById("calNext").addEventListener("click", () => { calMonth = addMonths(calMonth, 1); renderCalendar(); });
 document.getElementById("calToday").addEventListener("click", () => selectDay(todayISO()));
 
-dayDetail.addEventListener("click", async (e) => {
-  const btn = e.target.closest("[data-delete-entry]");
-  if (!btn) return;
+dayEntries.addEventListener("click", async (e) => {
+  const editBtn = e.target.closest("[data-edit-entry]");
+  if (editBtn) {
+    const entry = timeEntries.find((x) => x.id === editBtn.dataset.editEntry);
+    if (!entry) return;
+    selectedProjectId = entry.projectId;
+    selectedTaskId = entry.taskId;
+    entryHours.value = entry.hours;
+    entryNote.value = entry.note || "";
+    isDirty = true;
+    renderLogForm();
+    entryHours.focus();
+    return;
+  }
+  const delBtn = e.target.closest("[data-delete-entry]");
+  if (!delBtn) return;
   if (!confirm("Delete this entry?")) return;
   try {
-    await TimeEntries.remove(btn.dataset.deleteEntry);
+    await TimeEntries.remove(delBtn.dataset.deleteEntry);
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+});
+
+// ---------- Log hours for the selected day ----------
+function myProjects() {
+  const ids = new Set(assignments.filter((a) => a.personId === selectedPersonId).map((a) => a.projectId));
+  return projects.filter((p) => ids.has(p.id));
+}
+
+function myTaskOptions() {
+  return assignments
+    .filter((a) => a.personId === selectedPersonId && a.projectId === selectedProjectId)
+    .map((a) => ({ assignment: a, task: tasks.find((t) => t.id === a.taskId) }))
+    .filter((c) => c.task)
+    .sort((a, b) => a.task.name.localeCompare(b.task.name));
+}
+
+// The entry this person already has for the selected day + task, if any —
+// logging again replaces it rather than adding a second one.
+function existingEntry() {
+  return timeEntries.find((e) =>
+    e.personId === selectedPersonId && e.taskId === selectedTaskId && e.date === selectedDay);
+}
+
+function renderLogForm() {
+  if (!selectedPersonId) return;
+  logTitle.textContent = `Log hours for ${dayLabel(selectedDay, { weekday: "long", month: "long", day: "numeric" })}`;
+
+  const mine = myProjects();
+  if (mine.length === 0) {
+    projectCardsEl.innerHTML = "";
+    projectCardsEmpty.style.display = "block";
+    noAssignmentsEmpty.style.display = "none";
+    entryForm.style.display = "none";
+    return;
+  }
+  projectCardsEmpty.style.display = "none";
+  if (selectedProjectId && !mine.some((p) => p.id === selectedProjectId)) selectedProjectId = null;
+  if (!selectedProjectId && mine.length === 1) selectedProjectId = mine[0].id;
+
+  projectCardsEl.innerHTML = mine.map((p) => `
+    <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
+      <div class="name">${esc(p.name)}</div>
+      <div class="client">${p.client ? esc(p.client) : "&nbsp;"}</div>
+    </div>`).join("");
+
+  if (!selectedProjectId) {
+    noAssignmentsEmpty.style.display = "none";
+    entryForm.style.display = "none";
+    return;
+  }
+
+  const options = myTaskOptions();
+  if (options.length === 0) {
+    noAssignmentsEmpty.style.display = "block";
+    entryForm.style.display = "none";
+    return;
+  }
+  noAssignmentsEmpty.style.display = "none";
+  entryForm.style.display = "block";
+  if (!selectedTaskId || !options.some((c) => c.task.id === selectedTaskId)) {
+    selectedTaskId = options[0].task.id;
+  }
+  renderTaskCards(options);
+  renderExistingHint();
+}
+
+function taskStatsFor({ assignment, task }) {
+  const person = people.find((p) => p.id === selectedPersonId);
+  const rate = assignmentRate(projects.find((p) => p.id === task.projectId), person);
+  const suggested = suggestedWeeklyHours(assignment.capValue, rate, task.startDate, task.endDate);
+  const allLogged = timeEntries
+    .filter((e) => e.personId === selectedPersonId && e.taskId === task.id)
+    .reduce((sum, e) => sum + Number(e.hours || 0), 0);
+  const totalHours = rate > 0 ? (assignment.capValue || 0) / rate : 0;
+  const remainingHours = totalHours - allLogged;
+  return {
+    suggestedLabel: suggested != null ? `${suggested.toFixed(1)} hrs` : "—",
+    remainingLabel: `${remainingHours.toFixed(1)} hrs`,
+  };
+}
+
+function renderTaskCards(options) {
+  taskCardsEl.innerHTML = options.map((c) => {
+    const active = c.task.id === selectedTaskId;
+    const { suggestedLabel, remainingLabel } = taskStatsFor(c);
+    return `<div class="project-card task-card ${active ? "active" : ""}" data-task-card="${c.task.id}">
+      <div class="name">${esc(c.task.name)}</div>
+      <div class="task-card-stats">
+        <div><span class="summary-label">Suggested</span><div class="summary-value">${suggestedLabel}/wk</div></div>
+        <div><span class="summary-label">Remaining</span><div class="summary-value">${remainingLabel}</div></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderExistingHint() {
+  const existing = existingEntry();
+  if (existing && existing.invoiced) {
+    existingHint.style.display = "block";
+    existingHint.textContent = "Hours on this task for this day have already been invoiced and can't be changed.";
+    submitEntry.textContent = "Log Hours";
+    submitEntry.disabled = true;
+  } else if (existing) {
+    existingHint.style.display = "block";
+    existingHint.textContent = `You already logged ${existing.hours} hrs on this task this day — saving will replace it.`;
+    submitEntry.textContent = "Update Entry";
+    submitEntry.disabled = false;
+  } else {
+    existingHint.style.display = "none";
+    submitEntry.textContent = "Log Hours";
+    submitEntry.disabled = false;
+  }
+  cancelEdit.style.display = isDirty ? "inline-block" : "none";
+}
+
+projectCardsEl.addEventListener("click", (e) => {
+  const card = e.target.closest(".project-card");
+  if (!card || card.dataset.projectCard === selectedProjectId) return;
+  selectedProjectId = card.dataset.projectCard;
+  selectedTaskId = null;
+  renderLogForm();
+});
+
+taskCardsEl.addEventListener("click", (e) => {
+  const card = e.target.closest(".task-card");
+  if (!card) return;
+  selectedTaskId = card.dataset.taskCard;
+  renderTaskCards(myTaskOptions());
+  renderExistingHint();
+});
+
+[entryHours, entryNote].forEach((el) => {
+  el.addEventListener("input", () => {
+    isDirty = entryHours.value.trim() !== "" || entryNote.value.trim() !== "";
+    cancelEdit.style.display = isDirty ? "inline-block" : "none";
+  });
+});
+
+function clearForm() {
+  entryHours.value = "";
+  entryNote.value = "";
+  isDirty = false;
+  renderLogForm();
+}
+
+cancelEdit.addEventListener("click", clearForm);
+
+submitEntry.addEventListener("click", async () => {
+  const personId = selectedPersonId;
+  const projectId = selectedProjectId;
+  const taskId = selectedTaskId;
+  const date = selectedDay;
+  const hours = Number(entryHours.value);
+  const note = entryNote.value.trim();
+
+  if (!projectId || !taskId) return showToast("Pick a project and task first.");
+  if (!hours || hours <= 0) return showToast("Enter hours worked.");
+  if (!note) return showToast("Add a note describing what you worked on.");
+
+  const existing = existingEntry();
+  if (existing && existing.invoiced) {
+    return showToast("This day/task has already been invoiced and can't be changed here.");
+  }
+
+  try {
+    if (existing) {
+      await TimeEntries.update(existing.id, { hours, note, approved: false, approvedDate: null });
+      showToast("Entry updated.");
+    } else {
+      const person = people.find((p) => p.id === personId);
+      await TimeEntries.add({ personId, projectId, taskId, date, hours, note, rate: person ? person.rate : 0 });
+      showToast("Hours logged.");
+    }
+    clearForm();
   } catch (err) {
     showToast("Error: " + err.message);
   }
