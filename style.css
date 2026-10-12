@@ -1361,3 +1361,12 @@ body.login-page {
 .budget-summary .summary-label {
   margin-right: 4px;
 }
+
+.draft-notice {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fdf3e7;
+  color: #7a4a14;
+  font-size: 13px;
+}

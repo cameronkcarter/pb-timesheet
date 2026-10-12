@@ -2,7 +2,7 @@ import { People, Projects, Tasks, TimeEntries, Invoices } from "./db.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
   formatCurrency, formatDate, daysAgo, showToast,
-  lastDayOfMonth, formatMonthLabel, formatMonthShort, formatShortMDY, toISODate,
+  lastDayOfMonth, formatShortMDY, toISODate,
 } from "./util.js";
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
 import { isTestMode } from "./session.js";
@@ -55,11 +55,11 @@ if (sessionPersonId) {
       if (!enforceAdmin(me)) return;
       renderNavUserName(me);
     }
-    renderMonths();
+    renderDraft();
   });
   Projects.listen((d) => { projects = d; renderProjectCards(); });
-  Tasks.listen((d) => { tasks = d; renderMonths(); });
-  TimeEntries.listen((d) => { timeEntries = d; renderMonths(); });
+  Tasks.listen((d) => { tasks = d; renderDraft(); });
+  TimeEntries.listen((d) => { timeEntries = d; renderDraft(); });
   Invoices.listen((d) => { invoices = d; renderHistory(); renderSheetSync(); });
 }
 
@@ -98,7 +98,7 @@ function renderProjectCards() {
     </div>
   `).join("");
 
-  renderMonths();
+  renderDraft();
   renderHistory();
 }
 
@@ -111,16 +111,38 @@ projectCardsEl.addEventListener("click", (e) => {
   renderProjectCards();
 });
 
-// ---------- Outstanding (uninvoiced) hours, grouped by month ----------
-function entriesForMonth(monthKeyStr) {
+// ---------- Ready to invoice (all approved, uninvoiced hours) ----------
+// One draft invoice per project covering every approved hour not yet invoiced.
+// The date range defaults to the earliest/latest such hours but can be
+// narrowed, and the billing period label (e.g. "August – September 2026")
+// follows the range unless it's been typed over.
+let draft = null; // { projectId, from, to, label, rangeTouched, labelTouched }
+
+function uninvoicedEntries({ approved }) {
   if (!selectedProjectId) return [];
   return timeEntries.filter((e) =>
-    e.projectId === selectedProjectId && e.approved && !e.invoiced && e.date.startsWith(monthKeyStr)
-  );
+    e.projectId === selectedProjectId && !e.invoiced && !!e.approved === approved);
 }
 
-function notesForPersonMonth(personId, monthKeyStr) {
-  return entriesForMonth(monthKeyStr)
+function inDraftRange(e) {
+  return !!draft && e.date >= draft.from && e.date <= draft.to;
+}
+
+function draftEntries() {
+  return uninvoicedEntries({ approved: true }).filter(inDraftRange);
+}
+
+function periodLabelFor(from, to) {
+  const a = new Date(from + "T00:00:00");
+  const b = new Date(to + "T00:00:00");
+  const month = (d) => d.toLocaleDateString("en-US", { month: "long" });
+  if (a.getFullYear() !== b.getFullYear()) return `${month(a)} ${a.getFullYear()} – ${month(b)} ${b.getFullYear()}`;
+  if (a.getMonth() !== b.getMonth()) return `${month(a)} – ${month(b)} ${b.getFullYear()}`;
+  return `${month(a)} ${a.getFullYear()}`;
+}
+
+function notesForPerson(personId) {
+  return draftEntries()
     .filter((e) => e.personId === personId && e.note)
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
@@ -141,56 +163,12 @@ function groupByPerson(entries) {
   });
 }
 
-function outstandingMonthKeys() {
-  if (!selectedProjectId) return [];
-  const entries = timeEntries.filter((e) => e.projectId === selectedProjectId && e.approved && !e.invoiced);
-  const keys = new Set(entries.map((e) => e.date.slice(0, 7)));
-  return [...keys].sort(); // oldest first, so forgotten months surface at the top
+function hoursSummary(entries) {
+  const hours = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+  return `${hours.toFixed(2)} hrs (${entries.length} ${entries.length === 1 ? "entry" : "entries"})`;
 }
 
-function monthSectionHtml(monthKeyStr) {
-  const monthDate = new Date(monthKeyStr + "-01T00:00:00");
-  const laborRows = groupByPerson(entriesForMonth(monthKeyStr));
-  const grand = laborRows.reduce((s, r) => s + r.total, 0);
-
-  const rowsHtml = laborRows.map((r) => {
-    const notesKey = `${monthKeyStr}|${r.personId}`;
-    const isOpen = expandedNotesKey === notesKey;
-    const notes = notesForPersonMonth(r.personId, monthKeyStr);
-    return `
-      <tr>
-        <td>${esc(r.name)}</td>
-        <td>${r.hours.toFixed(2)}</td>
-        <td>${formatCurrency(r.rate)}</td>
-        <td>${formatCurrency(r.total)}</td>
-        <td><button class="small secondary" data-action="toggle-notes" data-key="${notesKey}">${isOpen ? "Hide notes" : "View notes"}</button></td>
-      </tr>
-      ${isOpen ? `<tr class="notes-row"><td colspan="5">
-        ${notes.length === 0
-          ? '<div class="empty">No notes logged for this person this month.</div>'
-          : notes.map((e) => `<div>${formatDate(e.date)} — ${Number(e.hours).toFixed(2)}h: ${esc(e.note)}</div>`).join("")}
-      </td></tr>` : ""}
-    `;
-  }).join("");
-
-  return `<div class="card month-section">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0;">${formatMonthLabel(monthDate)}</h2>
-      <span class="pill orange">Not yet invoiced</span>
-    </div>
-    <table style="margin-top:16px;">
-      <thead><tr><th>Person</th><th>Hours</th><th>Rate</th><th>Total</th><th></th></tr></thead>
-      <tbody>${rowsHtml}</tbody>
-      <tfoot><tr><td>Total</td><td></td><td></td><td>${formatCurrency(grand)}</td><td></td></tr></tfoot>
-    </table>
-    <div class="row-actions" style="margin-top:16px;">
-      <button class="secondary" data-action="preview" data-month="${monthKeyStr}">Preview PDF (Test)</button>
-      <button data-action="generate" data-month="${monthKeyStr}">Generate Invoice</button>
-    </div>
-  </div>`;
-}
-
-function renderMonths() {
+function renderDraft() {
   if (!selectedProjectId || projects.length === 0) {
     outstandingHeading.style.display = "none";
     monthsContainer.innerHTML = "";
@@ -198,33 +176,150 @@ function renderMonths() {
     return;
   }
 
-  const monthKeys = outstandingMonthKeys();
-  if (monthKeys.length === 0) {
+  const approved = uninvoicedEntries({ approved: true });
+  const pending = uninvoicedEntries({ approved: false });
+  if (approved.length === 0) {
+    draft = null;
     outstandingHeading.style.display = "none";
     monthsContainer.innerHTML = "";
     monthsEmpty.style.display = "block";
+    monthsEmpty.textContent = pending.length
+      ? `Nothing ready to invoice — ${hoursSummary(pending)} still waiting for approval in Admin.`
+      : "No uninvoiced hours for this project — everything logged so far has already been invoiced.";
     return;
   }
-
   outstandingHeading.style.display = "block";
   monthsEmpty.style.display = "none";
-  monthsContainer.innerHTML = monthKeys.map(monthSectionHtml).join("");
+
+  const dates = approved.map((e) => e.date).sort();
+  if (!draft || draft.projectId !== selectedProjectId) {
+    draft = { projectId: selectedProjectId, rangeTouched: false, labelTouched: false };
+  }
+  if (!draft.rangeTouched) {
+    draft.from = dates[0];
+    draft.to = dates[dates.length - 1];
+  }
+  if (!draft.labelTouched) draft.label = periodLabelFor(draft.from, draft.to);
+
+  if (!monthsContainer.querySelector("#draftFrom")) {
+    monthsContainer.innerHTML = `<div class="card">
+      <div class="inline-form">
+        <div>
+          <label for="draftFrom">Hours from</label>
+          <input type="date" id="draftFrom" />
+        </div>
+        <div>
+          <label for="draftTo">Through</label>
+          <input type="date" id="draftTo" />
+        </div>
+        <div style="flex:2;">
+          <label for="draftLabel">Billing period (shown on the invoice)</label>
+          <input type="text" id="draftLabel" />
+        </div>
+      </div>
+      <div id="draftBody"></div>
+      <div class="row-actions" style="margin-top:16px;">
+        <button class="secondary" data-action="preview">Preview PDF (Test)</button>
+        <button data-action="generate">Generate Invoice</button>
+      </div>
+    </div>`;
+  }
+  const setIfIdle = (id, value) => {
+    const el = document.getElementById(id);
+    if (document.activeElement !== el) el.value = value;
+  };
+  setIfIdle("draftFrom", draft.from);
+  setIfIdle("draftTo", draft.to);
+  setIfIdle("draftLabel", draft.label);
+  renderDraftBody(approved, pending);
 }
+
+function renderDraftBody(approved, pending) {
+  const body = document.getElementById("draftBody");
+  const entries = approved.filter(inDraftRange);
+  const laborRows = groupByPerson(entries).sort((a, b) => a.name.localeCompare(b.name));
+  const grand = laborRows.reduce((s, r) => s + r.total, 0);
+  const hours = laborRows.reduce((s, r) => s + r.hours, 0);
+
+  const notices = [];
+  const pendingInRange = pending.filter(inDraftRange);
+  if (pendingInRange.length) {
+    notices.push(`${hoursSummary(pendingInRange)} in this range ${pendingInRange.length === 1 ? "is" : "are"} still pending approval and won't be included — approve in Admin first.`);
+  }
+  const outside = approved.filter((e) => !inDraftRange(e));
+  if (outside.length) {
+    notices.push(`${hoursSummary(outside)} of approved hours fall outside this range and will stay uninvoiced. <a href="#" data-action="reset-range">Include all</a>`);
+  }
+
+  const rowsHtml = laborRows.map((r) => {
+    const isOpen = expandedNotesKey === r.personId;
+    const notes = notesForPerson(r.personId);
+    return `
+      <tr>
+        <td>${esc(r.name)}</td>
+        <td>${r.hours.toFixed(2)}</td>
+        <td>${formatCurrency(r.rate)}</td>
+        <td>${formatCurrency(r.total)}</td>
+        <td><button class="small secondary" data-action="toggle-notes" data-key="${r.personId}">${isOpen ? "Hide notes" : "View notes"}</button></td>
+      </tr>
+      ${isOpen ? `<tr class="notes-row"><td colspan="5">
+        ${notes.length === 0
+          ? '<div class="empty">No notes logged for this person in this range.</div>'
+          : notes.map((e) => `<div>${formatDate(e.date)} — ${Number(e.hours).toFixed(2)}h: ${esc(e.note)}</div>`).join("")}
+      </td></tr>` : ""}`;
+  }).join("");
+
+  body.innerHTML = `
+    ${notices.map((n) => `<div class="draft-notice">${n}</div>`).join("")}
+    ${entries.length === 0
+      ? '<div class="empty">No approved hours in this date range.</div>'
+      : `<table style="margin-top:16px;">
+          <thead><tr><th>Person</th><th>Hours</th><th>Rate</th><th>Total</th><th></th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot><tr><td>Total</td><td>${hours.toFixed(2)}</td><td></td><td>${formatCurrency(grand)}</td><td></td></tr></tfoot>
+        </table>`}`;
+  monthsContainer.querySelectorAll('[data-action="preview"], [data-action="generate"]')
+    .forEach((b) => { b.disabled = entries.length === 0; });
+}
+
+monthsContainer.addEventListener("input", (e) => {
+  if (!draft) return;
+  if (e.target.id === "draftFrom" || e.target.id === "draftTo") {
+    const value = e.target.value;
+    if (!value) return;
+    draft.rangeTouched = true;
+    if (e.target.id === "draftFrom") draft.from = value; else draft.to = value;
+    if (!draft.labelTouched) {
+      draft.label = periodLabelFor(draft.from, draft.to);
+      document.getElementById("draftLabel").value = draft.label;
+    }
+    renderDraft();
+  }
+  if (e.target.id === "draftLabel") {
+    draft.label = e.target.value;
+    draft.labelTouched = e.target.value.trim() !== "";
+  }
+});
 
 monthsContainer.addEventListener("click", async (e) => {
   const notesBtn = e.target.closest('[data-action="toggle-notes"]');
   if (notesBtn) {
     const key = notesBtn.dataset.key;
     expandedNotesKey = expandedNotesKey === key ? null : key;
-    renderMonths();
+    renderDraft();
     return;
   }
-
+  if (e.target.closest('[data-action="reset-range"]')) {
+    e.preventDefault();
+    draft.rangeTouched = false;
+    draft.labelTouched = false;
+    document.getElementById("draftLabel").blur();
+    renderDraft();
+    return;
+  }
   const actionBtn = e.target.closest('[data-action="preview"], [data-action="generate"]');
   if (!actionBtn) return;
-  const monthKeyStr = actionBtn.dataset.month;
-  const isPreview = actionBtn.dataset.action === "preview";
-  await generate(isPreview, monthKeyStr);
+  await generate(actionBtn.dataset.action === "preview");
 });
 
 // ---------- Shared invoice math ----------
@@ -329,6 +424,8 @@ async function buildPdf(data) {
     ["Date", formatShortMDY(data.invoiceDate)],
     ["Due", formatShortMDY(data.dueDate)],
     ["Project", data.project.name],
+    // The PDF's built-in font can't draw en/em dashes, so use plain hyphens.
+    ["Period", data.periodLabel.replace(/[–—]/g, "-")],
   ];
   if (data.project.projectNumber) {
     details.push(["Project #", data.project.projectNumber]);
@@ -401,7 +498,7 @@ async function buildPdf(data) {
   y = doc.lastAutoTable.finalY + 8;
 
   const laborBody = data.laborRows.map((r) => [
-    `${r.name} - for work completed in ${data.periodLabel}`,
+    r.name,
     r.hours.toFixed(2),
     formatCurrency(r.rate),
     formatCurrency(r.total),
@@ -500,20 +597,20 @@ async function buildPdf(data) {
   doc.save(`${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`);
 }
 
-async function generate(isPreview, monthKeyStr) {
+async function generate(isPreview) {
   const project = projects.find((p) => p.id === selectedProjectId);
-  const entries = entriesForMonth(monthKeyStr);
+  const entries = draftEntries();
   if (!project || entries.length === 0) return;
-  const monthDate = new Date(monthKeyStr + "-01T00:00:00");
+  if (draft.from > draft.to) return showToast("The start date is after the end date.");
+  const periodLabel = draft.label.trim() || periodLabelFor(draft.from, draft.to);
 
-  const monthButtons = [...monthsContainer.querySelectorAll(`[data-month="${monthKeyStr}"]`)];
-  monthButtons.forEach((b) => { b.disabled = true; });
+  const buttons = [...monthsContainer.querySelectorAll('[data-action="preview"], [data-action="generate"]')];
+  buttons.forEach((b) => { b.disabled = true; });
   try {
     const computed = computeInvoiceData(project, entries);
     const invoiceDate = new Date();
     const dueDate = lastDayOfMonth(invoiceDate);
     const invoiceNumber = toISODate(invoiceDate);
-    const periodLabel = formatMonthShort(monthDate);
 
     await buildPdf({
       project, invoiceNumber, invoiceDate, dueDate,
@@ -527,7 +624,9 @@ async function generate(isPreview, monthKeyStr) {
         invoiceNumber,
         date: toISODate(invoiceDate),
         dueDate: toISODate(dueDate),
-        periodLabel: formatMonthLabel(monthDate),
+        periodLabel,
+        periodStart: draft.from,
+        periodEnd: draft.to,
         taskRows: computed.taskRows,
         laborRows: computed.laborRows,
         feeTotal: computed.feeTotal,
@@ -539,6 +638,7 @@ async function generate(isPreview, monthKeyStr) {
         sheetSynced: false,
       });
       await TimeEntries.markInvoiced(entries.map((e) => e.id), ref.id);
+      draft = null;
       showToast("Invoice generated.");
       syncSheet();
     } else {
@@ -546,7 +646,9 @@ async function generate(isPreview, monthKeyStr) {
     }
   } catch (err) {
     showToast("Error: " + err.message);
-    monthButtons.forEach((b) => { b.disabled = false; });
+  } finally {
+    buttons.forEach((b) => { b.disabled = false; });
+    renderDraft();
   }
 }
 
