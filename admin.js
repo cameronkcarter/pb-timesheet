@@ -1,6 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import { formatCurrency, formatDate, showToast } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
+import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
 
 const sessionPersonId = requireSession();
 
@@ -299,6 +300,13 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
     renderProjectCards();
     closeProjectModal();
     showToast(modalEditingProjectId ? "Project updated." : "Project added.");
+
+    // Keep the Google Sheet's Task Budgets tab current. Best-effort: if it
+    // fails, the next invoice sync rewrites budgets anyway.
+    if (sheetSyncEnabled()) {
+      postToSheet({ budgets: buildBudgets({ tasks, projects }) })
+        .catch((err) => console.warn("Sheet budget sync failed:", err));
+    }
   } catch (err) {
     showToast("Error: " + err.message);
   }

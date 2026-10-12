@@ -1135,3 +1135,26 @@ body.login-page {
 .login-btn.test-btn:hover {
   background: #c47a2c;
 }
+
+.sheet-sync-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.button-link {
+  color: var(--navy);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.button-link:hover {
+  background: #eef0f3;
+}

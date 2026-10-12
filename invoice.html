@@ -22,6 +22,17 @@
 <main>
   <h1>Invoices</h1>
 
+  <div class="card sheet-sync-bar" id="sheetSyncBar" style="display:none;">
+    <div>
+      <div class="summary-label">Google Sheet Log</div>
+      <div id="sheetSyncStatus" style="margin-top:2px;"></div>
+    </div>
+    <div class="row-actions">
+      <a id="sheetOpenLink" class="button-link" target="_blank" rel="noopener" style="display:none;">Open Sheet</a>
+      <button id="sheetSyncBtn" class="small">Sync Now</button>
+    </div>
+  </div>
+
   <div class="card">
     <h2>Project</h2>
     <div id="projectCards" class="project-card-row"></div>
