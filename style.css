@@ -2003,3 +2003,20 @@ button:disabled:hover {
   color: #fff;
   cursor: not-allowed;
 }
+
+/* Internal project task: hours logged per person. */
+.logged-list {
+  max-width: 360px;
+}
+
+.logged-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.logged-row:last-child {
+  border-bottom: none;
+}

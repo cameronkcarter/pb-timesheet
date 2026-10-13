@@ -45,7 +45,7 @@ if (sessionPersonId) {
     migrateLegacyAssignments();
     migrateEntryRates();
   });
-  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); migrateLegacyAssignments(); migrateProjectBilling(); });
+  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); migrateLegacyAssignments(); migrateProjectBilling(); migrateEntryRates(); });
   Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
   Assignments.listen((d) => { assignments = d; assignmentsLoaded = true; migrateLegacyAssignments(); renderTasks(); renderPendingApproval(); });
   TimeEntries.listen((d) => { timeEntries = d; entriesLoaded = true; migrateEntryRates(); renderTasks(); renderPendingApproval(); });
@@ -529,7 +529,22 @@ function addPersonHtml(task) {
   </div>`;
 }
 
+// Internal projects have no assignments — just show who has logged time.
+function loggedByPersonHtml(task) {
+  const byPerson = {};
+  timeEntries.filter((e) => e.taskId === task.id).forEach((e) => {
+    byPerson[e.personId] = (byPerson[e.personId] || 0) + Number(e.hours || 0);
+  });
+  const rows = Object.entries(byPerson)
+    .map(([pid, hours]) => ({ name: personById(pid)?.name || "—", hours }))
+    .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
+  if (rows.length === 0) return '<div class="empty" style="padding:4px 0;">No hours logged yet.</div>';
+  return `<div class="logged-list">${rows.map((r) =>
+    `<div class="logged-row"><span>${esc(r.name)}</span><strong>${fmtHrs(r.hours)} hrs</strong></div>`).join("")}</div>`;
+}
+
 function taskDetailHtml(task, project) {
+  if (isInternal(project)) return loggedByPersonHtml(task);
   const color = projectColor(project.id);
   const rows = assignments.filter((a) => a.taskId === task.id)
     .sort((a, b) => (personById(a.personId)?.name || "").localeCompare(personById(b.personId)?.name || ""))
@@ -560,19 +575,17 @@ function renderTasks() {
   const internal = isInternal(project);
 
   const head = internal
-    ? `<tr><th>Task</th><th>Assigned</th><th>Logged</th><th style="width:160px;">Progress</th></tr>`
+    ? `<tr><th>Task</th><th>Hours logged</th><th>People</th></tr>`
     : `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th><th>Unassigned</th></tr>`;
-  const cols = internal ? 4 : 6;
+  const cols = internal ? 3 : 6;
 
   const body = projectTasks.map((t, i) => {
     const open = openTaskIds.has(t.id);
     let cells;
     if (internal) {
-      const assigned = assignments.filter((a) => a.taskId === t.id).reduce((s, a) => s + assignedHours(a, ctx()), 0);
-      const logged = loggedHours(t.id);
-      const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 0;
-      cells = `<td class="unassignedCell">${fmtHrs(assigned)} hrs</td><td>${fmtHrs(logged)} hrs</td>
-        <td><div class="progress-bar"><div class="fill ${logged > assigned ? "over-soft" : ""}" style="width:${pct}%"></div></div></td>`;
+      const taskEntries = timeEntries.filter((e) => e.taskId === t.id);
+      const peopleCount = new Set(taskEntries.map((e) => e.personId)).size;
+      cells = `<td>${fmtHrs(loggedHours(t.id))} hrs</td><td>${peopleCount || "—"}</td>`;
     } else {
       const budget = Number(t.budget || 0);
       const spent = spentOnTask(t.id);
@@ -750,8 +763,13 @@ async function migrateLegacyAssignments() {
 // invoice's labor lines); anything else gets today's pay rate.
 let entryRatesMigrated = false;
 async function migrateEntryRates() {
-  if (entryRatesMigrated || !entriesLoaded || !invoicesLoaded || !people.length) return;
+  if (entryRatesMigrated || !entriesLoaded || !invoicesLoaded || !people.length || !projects.length) return;
   entryRatesMigrated = true;
+  const internalPending = timeEntries.filter((e) =>
+    !e.approved && !e.invoiced && isInternal(projects.find((p) => p.id === e.projectId)));
+  if (internalPending.length) {
+    try { await TimeEntries.approve(internalPending.map((e) => e.id)); } catch (err) { console.warn("Auto-approve failed:", err); }
+  }
   for (const e of timeEntries) {
     const person = personById(e.personId);
     const update = {};
@@ -786,6 +804,7 @@ function pendingEntries() {
 
 // True when this person has logged more on the entry's task than assigned.
 function isOverAssigned(e) {
+  if (isInternal(projects.find((p) => p.id === e.projectId))) return false;
   const assignment = assignments.find((a) => a.taskId === e.taskId && a.personId === e.personId);
   const assigned = assignment ? assignedHours(assignment, ctx()) : 0;
   return loggedHours(e.taskId, e.personId) - assigned > 0.005;

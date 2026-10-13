@@ -133,7 +133,7 @@ function visibleProjects() {
   const assignedProjectIds = new Set(
     assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId)
   );
-  return projects.filter((p) => assignedProjectIds.has(p.id));
+  return projects.filter((p) => assignedProjectIds.has(p.id) || isInternal(p));
 }
 
 function renderAll() {
@@ -195,12 +195,6 @@ function loggedHours(entries) {
   return entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 }
 
-function assignedOnTask(taskId) {
-  return assignments
-    .filter((a) => a.taskId === taskId)
-    .reduce((s, a) => s + assignedHours(a, { projects, people }), 0);
-}
-
 // Billed projects show dollars (budget / spent / remaining). Internal projects
 // have no budget, so they show hours (assigned / logged) instead.
 function renderBudget() {
@@ -211,15 +205,13 @@ function renderBudget() {
   const thead = document.querySelector("#budgetTable thead");
 
   if (internal) {
-    const assigned = projectTasks.reduce((s, t) => s + assignedOnTask(t.id), 0);
-    const logged = loggedHours(timeEntries.filter((e) => e.projectId === selectedProjectId));
+    const projectEntries = timeEntries.filter((e) => e.projectId === selectedProjectId);
     budgetSummary.innerHTML = `
-      <span class="pill blue">Internal &middot; not billed</span>
-      <span><span class="summary-label">Assigned</span> ${fmtHrs(assigned)} hrs</span>
-      <span><span class="summary-label">Logged</span> ${fmtHrs(logged)} hrs</span>`;
-    // No budget on internal projects: the bar is hours logged vs. assigned.
-    budgetOverallBar.innerHTML = budgetBarHtml(logged, Math.max(assigned, logged), Math.max(assigned, logged), true);
-    thead.innerHTML = `<tr><th>Task</th><th>Assigned</th><th>Logged</th><th style="width:160px;">Progress</th><th></th></tr>`;
+      <span class="pill blue">Internal &middot; just tracking hours</span>
+      <span><span class="summary-label">Logged</span> ${fmtHrs(loggedHours(projectEntries))} hrs</span>
+      <span><span class="summary-label">People</span> ${new Set(projectEntries.map((e) => e.personId)).size}</span>`;
+    budgetOverallBar.innerHTML = "";
+    thead.innerHTML = `<tr><th>Task</th><th>Hours logged</th><th>People</th><th></th><th></th></tr>`;
   } else {
     const totalBudget = projectTasks.reduce((s, t) => s + Number(t.budget || 0), 0);
     const totalSpent = projectTasks.reduce((s, t) => s + spentOnTask(t.id), 0);
@@ -241,16 +233,14 @@ function renderBudget() {
   }
   budgetEmpty.style.display = "none";
   budgetHint.style.display = "block";
+  budgetHint.textContent = internal ? "Click a task to see who has logged time on it." : "Click a task to see who's assigned to it.";
 
   budgetTbody.innerHTML = projectTasks.map((t, i) => {
     const expanded = t.id === expandedTaskId;
     let cells;
     if (internal) {
-      const assigned = assignedOnTask(t.id);
-      const logged = loggedHours(timeEntries.filter((e) => e.taskId === t.id));
-      const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 0;
-      cells = `<td>${fmtHrs(assigned)} hrs</td><td>${fmtHrs(logged)} hrs</td>
-        <td><div class="progress-bar"><div class="fill ${logged > assigned ? "over-soft" : ""}" style="width:${pct}%"></div></div></td><td></td>`;
+      const taskEntries = timeEntries.filter((e) => e.taskId === t.id);
+      cells = `<td>${fmtHrs(loggedHours(taskEntries))} hrs</td><td>${new Set(taskEntries.map((e) => e.personId)).size || "—"}</td><td></td><td></td>`;
     } else {
       const budget = Number(t.budget || 0);
       const spent = spentOnTask(t.id);
@@ -268,6 +258,19 @@ function renderBudget() {
 
 // Who's on a task: each person's assigned hours vs. hours logged.
 function taskPeopleHtml(task) {
+  if (isInternal(projects.find((p) => p.id === task.projectId))) {
+    // Internal: who has logged how much, most first.
+    const byPerson = {};
+    timeEntries.filter((e) => e.taskId === task.id).forEach((e) => {
+      byPerson[e.personId] = (byPerson[e.personId] || 0) + Number(e.hours || 0);
+    });
+    const rows = Object.entries(byPerson)
+      .map(([pid, hours]) => ({ name: people.find((p) => p.id === pid)?.name || "—", hours }))
+      .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
+    if (rows.length === 0) return `<div class="empty">No hours logged yet.</div>`;
+    return `<div class="logged-list">${rows.map((r) =>
+      `<div class="logged-row"><span>${esc(r.name)}</span><strong>${fmtHrs(r.hours)} hrs</strong></div>`).join("")}</div>`;
+  }
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
   const personIds = [...new Set([...taskAssignments.map((a) => a.personId), ...taskEntries.map((e) => e.personId)])];

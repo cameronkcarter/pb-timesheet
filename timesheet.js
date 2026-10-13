@@ -4,7 +4,7 @@ import {
   firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
-import { assignedHours } from "./rates.js";
+import { assignedHours, isInternal } from "./rates.js";
 
 // The page is one calendar: click a day to see what you logged that day and
 // log more hours for it (project -> task -> hours + note) right below.
@@ -232,12 +232,25 @@ dayEntries.addEventListener("click", async (e) => {
 });
 
 // ---------- Log hours for the selected day ----------
+// Projects you can log to: the ones you're assigned on, plus every internal
+// project (e.g. Proposals & Pursuits), which is open to everyone.
 function myProjects() {
   const ids = new Set(assignments.filter((a) => a.personId === selectedPersonId).map((a) => a.projectId));
-  return projects.filter((p) => ids.has(p.id));
+  return projects.filter((p) => ids.has(p.id) || isInternal(p));
+}
+
+function selectedProjectIsInternal() {
+  return isInternal(projects.find((p) => p.id === selectedProjectId));
 }
 
 function myTaskOptions() {
+  if (selectedProjectIsInternal()) {
+    // No assignments on internal projects: every task is available.
+    return tasks
+      .filter((t) => t.projectId === selectedProjectId)
+      .map((task) => ({ assignment: null, task }))
+      .sort((a, b) => a.task.name.localeCompare(b.task.name));
+  }
   return assignments
     .filter((a) => a.personId === selectedPersonId && a.projectId === selectedProjectId)
     .map((a) => ({ assignment: a, task: tasks.find((t) => t.id === a.taskId) }))
@@ -305,8 +318,17 @@ function loggedOnTask(taskId, exceptEntryId = null) {
 function renderTaskCards(options) {
   taskCardsEl.innerHTML = options.map((c) => {
     const active = c.task.id === selectedTaskId;
-    const assigned = assignedHours(c.assignment, { projects, people });
     const logged = loggedOnTask(c.task.id);
+    if (!c.assignment) {
+      // Internal task: just how much you've logged.
+      return `<div class="project-card task-card ${active ? "active" : ""}" data-task-card="${c.task.id}">
+        <div class="name">${esc(c.task.name)}</div>
+        <div class="task-card-stats">
+          <div><span class="summary-label">You've logged</span><div class="summary-value">${fmtHours(logged)} hrs</div></div>
+        </div>
+      </div>`;
+    }
+    const assigned = assignedHours(c.assignment, { projects, people });
     const over = logged - assigned > 0.005;
     return `<div class="project-card task-card ${active ? "active" : ""}" data-task-card="${c.task.id}">
       <div class="name">${esc(c.task.name)}</div>
@@ -343,7 +365,7 @@ function renderExistingHint() {
 
     const option = myTaskOptions().find((c) => c.task.id === selectedTaskId);
     const hours = Number(entryHours.value) || 0;
-    if (option && hours > 0) {
+    if (option && option.assignment && hours > 0) {
       const assigned = assignedHours(option.assignment, { projects, people });
       const after = loggedOnTask(selectedTaskId, existing ? existing.id : null) + hours;
       if (after - assigned > 0.005) {
@@ -406,13 +428,17 @@ submitEntry.addEventListener("click", async () => {
     return showToast("This day/task has already been invoiced and can't be changed here.");
   }
 
+  const autoApprove = selectedProjectIsInternal();
+  const approval = autoApprove
+    ? { approved: true, approvedDate: new Date().toISOString() }
+    : { approved: false, approvedDate: null };
   try {
     if (existing) {
-      await TimeEntries.update(existing.id, { hours, note, approved: false, approvedDate: null });
+      await TimeEntries.update(existing.id, { hours, note, ...approval });
       showToast("Entry updated.");
     } else {
       const person = people.find((p) => p.id === personId);
-      await TimeEntries.add({ personId, projectId, taskId, date, hours, note, rate: person ? person.rate : 0 });
+      await TimeEntries.add({ personId, projectId, taskId, date, hours, note, rate: person ? person.rate : 0, ...approval });
       showToast("Hours logged.");
     }
     clearForm();
