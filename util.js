@@ -120,7 +120,7 @@ export function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
 }
 
-// Hours bar for someone's assignment. Leads with hours LEFT (the number
+// Hours bar for someone's assignment. Leads with hours REMAINING (the number
 // people act on), with logged and assigned alongside. The bar is the
 // assignment: a light band of the project color for assigned hours, filled
 // solid as hours are logged. Logging past the assignment is allowed (more
@@ -130,7 +130,7 @@ export function hoursBarHtml(logged, assigned, color, large = false) {
   const over = logged - assigned > 0.005;
   const headline = assigned <= 0 && logged <= 0
     ? "No hours assigned"
-    : over ? `${fmtHrs(logged - assigned)} hrs over` : `${fmtHrs(assigned - logged)} hrs left`;
+    : over ? `${fmtHrs(logged - assigned)} hrs over` : `${fmtHrs(assigned - logged)} hrs remaining`;
   return `<div class="hours-bar-wrap">
     <div class="progress-bar hours-progress ${large ? "large" : "task-bar"} ${over ? "over" : ""}" style="--c:${color};">
       ${assigned > 0 ? `<div class="fill assigned-band"></div>` : ""}
