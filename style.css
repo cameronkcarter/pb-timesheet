@@ -1462,3 +1462,40 @@ body.login-page {
 .table-scroll table {
   min-width: 560px;
 }
+
+.fill.over-soft {
+  background: var(--accent);
+}
+
+.hours-over {
+  color: #b5651d;
+}
+
+/* ---------- Admin: hours-based assignments ---------- */
+.assign-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  align-items: baseline;
+  font-size: 14px;
+}
+
+.assign-summary .summary-label {
+  margin-right: 4px;
+}
+
+.assign-hours {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.assign-hours .editHours {
+  width: 76px;
+  margin: 0;
+}
+
+#modalTaskRows.internal .modalTaskBudget {
+  display: none;
+}

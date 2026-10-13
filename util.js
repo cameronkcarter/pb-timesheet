@@ -68,23 +68,6 @@ export function formatWeekday(date) {
   return date.toLocaleDateString("en-US", { weekday: "short" });
 }
 
-// Number of 7-day weeks spanning a date range (at least 1).
-export function weeksBetween(startStr, endStr) {
-  if (!startStr || !endStr) return 0;
-  const start = new Date(startStr + "T00:00:00");
-  const end = new Date(endStr + "T00:00:00");
-  const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
-  return Math.max(1, days / 7);
-}
-
-// Suggested weekly hours for a person's dollar assignment on a task, spread
-// evenly across the task's scheduled date range.
-export function suggestedWeeklyHours(capValue, rate, startDate, endDate) {
-  if (!capValue || !rate || !startDate || !endDate) return null;
-  const totalHours = capValue / rate;
-  return totalHours / weeksBetween(startDate, endDate);
-}
-
 // Human-readable countdown/overdue label for a due date.
 export function dueLabel(dateStr) {
   if (!dateStr) return "";
@@ -137,16 +120,18 @@ export function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
 }
 
-// Hours progress bar: "12.5 of 20 hrs used · 7.5 hrs left" (red when over).
-export function hoursBarHtml(used, assigned, color, large = false) {
-  const pct = assigned > 0 ? Math.min(100, (used / assigned) * 100) : (used > 0 ? 100 : 0);
-  const left = assigned - used;
-  const over = left < -0.005;
+// Hours bar for someone's assignment: leads with how many hours they're
+// assigned, then how many they've logged. Logging past the assignment is
+// allowed (more hours are often added later), so it's flagged in amber rather
+// than treated as an error.
+export function hoursBarHtml(logged, assigned, color, large = false) {
+  const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : (logged > 0 ? 100 : 0);
+  const over = logged - assigned > 0.005;
   return `<div class="hours-bar-wrap">
-    <div class="progress-bar ${large ? "large" : "task-bar"}"><div class="fill ${over ? "over" : ""}" style="width:${pct}%; ${over ? "" : `background:${color};`}"></div></div>
+    <div class="progress-bar ${large ? "large" : "task-bar"}"><div class="fill ${over ? "over-soft" : ""}" style="width:${pct}%; ${over ? "" : `background:${color};`}"></div></div>
     <div class="hours-captions">
-      <span><strong>${fmtHrs(used)}</strong> of ${fmtHrs(assigned)} hrs used</span>
-      <span class="${over ? "hours-over" : ""}">${over ? `${fmtHrs(-left)} hrs over` : `${fmtHrs(left)} hrs left`}</span>
+      <span>Assigned <strong>${fmtHrs(assigned)} hrs</strong></span>
+      <span class="${over ? "hours-over" : ""}">${fmtHrs(logged)} logged${over ? ` · ${fmtHrs(logged - assigned)} over assigned` : ` · ${fmtHrs(assigned - logged)} left`}</span>
     </div>
   </div>`;
 }

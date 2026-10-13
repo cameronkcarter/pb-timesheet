@@ -25,7 +25,7 @@ function linesFromEntries(entries, { tasks, people, projects }) {
   const groups = {};
   entries.forEach((e) => {
     const rate = billRateOf(e, { projects, people });
-    const payRate = payRateOf(e, people);
+    const payRate = payRateOf(e, { projects, people });
     const key = `${e.taskId}|${e.personId}|${rate}|${payRate}`;
     if (!groups[key]) groups[key] = { taskId: e.taskId, personId: e.personId, rate, payRate, hours: 0 };
     groups[key].hours += Number(e.hours || 0);
@@ -99,7 +99,8 @@ export function buildBudgets({ tasks, projects }) {
   return tasks
     .map((t) => {
       const project = projects.find((p) => p.id === t.projectId);
-      if (!project) return null;
+      // Internal projects (not billed) have no budget to track in the sheet.
+      if (!project || project.internal) return null;
       return {
         projectId: project.id, projectName: project.name,
         taskId: t.id, taskName: t.name, budget: Number(t.budget || 0),

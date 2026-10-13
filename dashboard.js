@@ -3,7 +3,7 @@ import {
   formatCurrency, formatDate, daysAgo, dueLabel,
   todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor, hoursBarHtml,
 } from "./util.js";
-import { paidAmount, assignmentRate } from "./rates.js";
+import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 
 const selectedPersonId = requireSession();
@@ -46,7 +46,7 @@ function render() {
   if (!person) return;
 
   const myEntries = timeEntries.filter((e) => e.personId === personId);
-  const dollarsOf = (entries) => paidAmount(entries, people); // the person's pay, not billing
+  const dollarsOf = (entries) => paidAmount(entries, { projects, people }); // the person's pay, not billing
   const pendingTotal = dollarsOf(myEntries.filter((e) => !e.approved && !e.invoiced));
   const approvedTotal = dollarsOf(myEntries.filter((e) => e.approved && !e.invoiced));
   const invoicedTotal = dollarsOf(myEntries.filter((e) => e.invoiced && !e.paid));
@@ -82,9 +82,10 @@ function render() {
     return;
   }
 
-  // Progress is shown in hours only: assigned hours are the person's dollar
-  // assignment at the project's bill rate (rates.js), so staff never see
-  // billing dollars, just their hours and their own pay above.
+  // Progress is shown in hours only (assigned vs. logged), so staff never see
+  // billing dollars, just their hours and their own pay above. The project's
+  // overall budget is shown as a percentage — that's the real limit, since
+  // individual assignments grow as work goes on.
   projectSummaryCards.innerHTML = myProjectIds.map((projectId) => {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return "";
@@ -96,15 +97,18 @@ function render() {
         const taskB = tasks.find((t) => t.id === b.taskId);
         return (taskA?.name || "").localeCompare(taskB?.name || "");
       });
-    const projectOwed = paidAmount(projectEntries.filter((e) => !e.invoiced), people);
+    const projectOwed = paidAmount(projectEntries.filter((e) => !e.invoiced), { projects, people });
     const lastInvoiced = projectEntries
       .filter((e) => e.invoiced && e.invoicedDate)
       .sort((a, b) => (a.invoicedDate < b.invoicedDate ? 1 : -1))[0];
     const lastInvoicedLabel = lastInvoiced
       ? `${formatDate(lastInvoiced.invoicedDate.slice(0, 10))} (${daysAgo(lastInvoiced.invoicedDate)})`
       : "—";
-    const rate = assignmentRate(project, person);
     const color = projectColor(project.id);
+    const internal = isInternal(project);
+    const projectBudget = tasks.filter((t) => t.projectId === projectId).reduce((s, t) => s + Number(t.budget || 0), 0);
+    const projectSpent = billedAmount(timeEntries.filter((e) => e.projectId === projectId), { projects, people });
+    const budgetPct = projectBudget > 0 ? Math.round((projectSpent / projectBudget) * 100) : null;
 
     let totalAssigned = 0;
     let totalUsed = 0;
@@ -113,7 +117,7 @@ function render() {
       const used = projectEntries
         .filter((e) => e.taskId === a.taskId)
         .reduce((s, e) => s + Number(e.hours || 0), 0);
-      const assigned = rate > 0 ? Number(a.capValue || 0) / rate : 0;
+      const assigned = assignedHours(a, { projects, people });
       totalAssigned += assigned;
       totalUsed += used;
       return `<div class="hours-row">
@@ -125,7 +129,9 @@ function render() {
     return `<div class="card">
       <div class="hours-card-header">
         <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${project.name}${project.client ? ` <span class="empty" style="font-weight:400;">(${project.client})</span>` : ""}</h2>
-        <div class="empty" style="padding:0;">Your pay not yet invoiced: <strong>${formatCurrency(projectOwed)}</strong> &middot; Last invoiced: ${lastInvoicedLabel}</div>
+        <div class="empty" style="padding:0;">${internal
+          ? "Internal &middot; not billed or paid"
+          : `${budgetPct != null ? `Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong> &middot; ` : ""}Your pay not yet invoiced: <strong>${formatCurrency(projectOwed)}</strong> &middot; Last invoiced: ${lastInvoicedLabel}`}</div>
       </div>
       ${taskRows ? `
         <div class="hours-total">

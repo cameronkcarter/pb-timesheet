@@ -72,8 +72,14 @@ function entryRate(e) {
 }
 
 // ---------- Project cards ----------
+// Internal projects (e.g. Proposals & Pursuits) are never invoiced.
+function billableProjects() {
+  return projects.filter((p) => !p.internal);
+}
+
 function renderProjectCards() {
-  if (projects.length === 0) {
+  const billable = billableProjects();
+  if (billable.length === 0) {
     projectCardsEl.innerHTML = "";
     projectCardsEmpty.style.display = "block";
     outstandingHeading.style.display = "none";
@@ -84,11 +90,11 @@ function renderProjectCards() {
   }
   projectCardsEmpty.style.display = "none";
 
-  if (!selectedProjectId || !projects.some((p) => p.id === selectedProjectId)) {
-    selectedProjectId = projects[0].id;
+  if (!selectedProjectId || !billable.some((p) => p.id === selectedProjectId)) {
+    selectedProjectId = billable[0].id;
   }
 
-  projectCardsEl.innerHTML = projects.map((p) => `
+  projectCardsEl.innerHTML = billable.map((p) => `
     <div class="project-card ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}">
       <div class="name">${p.name}</div>
       <div class="client">${p.client || "&nbsp;"}</div>
@@ -267,7 +273,7 @@ function renderDraftBody(approved, pending) {
   }).join("");
 
   // Admin-only page, so show what the firm keeps when billing above pay rates.
-  const staffPay = paidAmount(entries, people);
+  const staffPay = paidAmount(entries, { projects, people });
   const overheadHtml = entries.length && Math.abs(grand - staffPay) > 0.005
     ? `<div class="empty" style="padding-top:10px;">Staff pay for these hours: ${formatCurrency(staffPay)} &middot; Firm overhead: <strong>${formatCurrency(grand - staffPay)}</strong></div>`
     : "";

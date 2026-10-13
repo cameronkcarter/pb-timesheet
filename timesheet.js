@@ -1,10 +1,10 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
-  todayISO, toISODate, getWeekStart, suggestedWeeklyHours, monthKey, showToast,
+  todayISO, toISODate, getWeekStart, monthKey, showToast,
   firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
-import { assignmentRate } from "./rates.js";
+import { assignedHours } from "./rates.js";
 
 // The page is one calendar: click a day to see what you logged that day and
 // log more hours for it (project -> task -> hours + note) right below.
@@ -295,52 +295,57 @@ function renderLogForm() {
   renderExistingHint();
 }
 
-function taskStatsFor({ assignment, task }) {
-  const person = people.find((p) => p.id === selectedPersonId);
-  const rate = assignmentRate(projects.find((p) => p.id === task.projectId), person);
-  const suggested = suggestedWeeklyHours(assignment.capValue, rate, task.startDate, task.endDate);
-  const allLogged = timeEntries
-    .filter((e) => e.personId === selectedPersonId && e.taskId === task.id)
+// Hours this person has logged on a task, optionally leaving out one entry
+// (the one being replaced when re-logging the same day).
+function loggedOnTask(taskId, exceptEntryId = null) {
+  return timeEntries
+    .filter((e) => e.personId === selectedPersonId && e.taskId === taskId && e.id !== exceptEntryId)
     .reduce((sum, e) => sum + Number(e.hours || 0), 0);
-  const totalHours = rate > 0 ? (assignment.capValue || 0) / rate : 0;
-  const remainingHours = totalHours - allLogged;
-  return {
-    suggestedLabel: suggested != null ? `${suggested.toFixed(1)} hrs` : "—",
-    remainingLabel: `${remainingHours.toFixed(1)} hrs`,
-  };
 }
 
 function renderTaskCards(options) {
   taskCardsEl.innerHTML = options.map((c) => {
     const active = c.task.id === selectedTaskId;
-    const { suggestedLabel, remainingLabel } = taskStatsFor(c);
+    const assigned = assignedHours(c.assignment, { projects, people });
+    const logged = loggedOnTask(c.task.id);
+    const over = logged - assigned > 0.005;
     return `<div class="project-card task-card ${active ? "active" : ""}" data-task-card="${c.task.id}">
       <div class="name">${esc(c.task.name)}</div>
       <div class="task-card-stats">
-        <div><span class="summary-label">Suggested</span><div class="summary-value">${suggestedLabel}/wk</div></div>
-        <div><span class="summary-label">Remaining</span><div class="summary-value">${remainingLabel}</div></div>
+        <div><span class="summary-label">Assigned</span><div class="summary-value">${fmtHours(assigned)} hrs</div></div>
+        <div><span class="summary-label">Logged</span><div class="summary-value ${over ? "hours-over" : ""}">${fmtHours(logged)} hrs</div></div>
       </div>
     </div>`;
   }).join("");
 }
 
+// Notes under the form: replacing an existing entry for this day, and/or
+// going past the hours assigned on this task (allowed — it's flagged for
+// admins so they can add hours).
 function renderExistingHint() {
   const existing = existingEntry();
+  const notes = [];
   if (existing && existing.invoiced) {
-    existingHint.style.display = "block";
-    existingHint.textContent = "Hours on this task for this day have already been invoiced and can't be changed.";
+    notes.push("Hours on this task for this day have already been invoiced and can't be changed.");
     submitEntry.textContent = "Log Hours";
     submitEntry.disabled = true;
-  } else if (existing) {
-    existingHint.style.display = "block";
-    existingHint.textContent = `You already logged ${existing.hours} hrs on this task this day — saving will replace it.`;
-    submitEntry.textContent = "Update Entry";
-    submitEntry.disabled = false;
   } else {
-    existingHint.style.display = "none";
-    submitEntry.textContent = "Log Hours";
+    if (existing) notes.push(`You already logged ${existing.hours} hrs on this task this day — saving will replace it.`);
+    submitEntry.textContent = existing ? "Update Entry" : "Log Hours";
     submitEntry.disabled = false;
+
+    const option = myTaskOptions().find((c) => c.task.id === selectedTaskId);
+    const hours = Number(entryHours.value) || 0;
+    if (option && hours > 0) {
+      const assigned = assignedHours(option.assignment, { projects, people });
+      const after = loggedOnTask(selectedTaskId, existing ? existing.id : null) + hours;
+      if (after - assigned > 0.005) {
+        notes.push(`This puts you at ${fmtHours(after)} of your ${fmtHours(assigned)} assigned hrs on this task. That's OK — it'll be flagged so your PM can add hours.`);
+      }
+    }
   }
+  existingHint.style.display = notes.length ? "block" : "none";
+  existingHint.innerHTML = notes.map(esc).join("<br>");
   cancelEdit.style.display = isDirty ? "inline-block" : "none";
 }
 
@@ -363,7 +368,7 @@ taskCardsEl.addEventListener("click", (e) => {
 [entryHours, entryNote].forEach((el) => {
   el.addEventListener("input", () => {
     isDirty = entryHours.value.trim() !== "" || entryNote.value.trim() !== "";
-    cancelEdit.style.display = isDirty ? "inline-block" : "none";
+    renderExistingHint();
   });
 });
 

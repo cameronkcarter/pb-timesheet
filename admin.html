@@ -74,6 +74,12 @@
     <label for="modalProjectClient">Client</label>
     <input type="text" id="modalProjectClient" placeholder="Cache County" />
 
+    <label class="checkbox-label">
+      <input type="checkbox" id="modalProjectInternal" />
+      Internal project — not billed to a client, staff not paid for these hours (e.g. Proposals &amp; Pursuits)
+    </label>
+
+    <div id="modalBillingFields">
     <hr class="divider" />
     <label>Bill To (for invoices)</label>
     <div class="inline-form">
@@ -101,6 +107,7 @@
     <label for="modalProjectBillRate">Billing rate ($/hr)</label>
     <input type="number" id="modalProjectBillRate" min="0" step="0.01" placeholder="Blank = each person's pay rate" />
     <div class="empty" style="padding:2px 0 0;">What the client is charged per hour for everyone on this project, and the rate the budget is spent at. Leave blank to bill each person at their own pay rate.</div>
+    </div>
 
     <hr class="divider" />
     <label>Tasks &amp; Budgets</label>

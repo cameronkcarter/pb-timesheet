@@ -1,8 +1,8 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices } from "./db.js";
-import { formatCurrency, formatDate, showToast } from "./util.js";
+import { formatCurrency, formatDate, showToast, fmtHrs } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
-import { DEFAULT_BILL_RATE, billRateOf, assignmentRate } from "./rates.js";
+import { DEFAULT_BILL_RATE, billRateOf, assignmentRate, assignedHours, isInternal } from "./rates.js";
 
 const sessionPersonId = requireSession();
 
@@ -14,6 +14,7 @@ let timeEntries = [];
 let dueDates = [];
 let invoices = [];
 let adminCheckDone = false;
+let assignmentsLoaded = false;
 
 let modalEditingPersonId = null;
 let expandedTaskId = null;
@@ -35,10 +36,11 @@ if (sessionPersonId) {
     renderPeople();
     renderTasks();
     renderPendingApproval();
+    migrateLegacyAssignments();
   });
-  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); });
+  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); migrateLegacyAssignments(); });
   Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
-  Assignments.listen((d) => { assignments = d; renderTasks(); });
+  Assignments.listen((d) => { assignments = d; assignmentsLoaded = true; migrateLegacyAssignments(); renderTasks(); renderPendingApproval(); });
   TimeEntries.listen((d) => { timeEntries = d; renderTasks(); renderPendingApproval(); });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; });
@@ -149,6 +151,15 @@ const modalBillToAddress1 = document.getElementById("modalBillToAddress1");
 const modalBillToAddress2 = document.getElementById("modalBillToAddress2");
 const modalProjectNumber = document.getElementById("modalProjectNumber");
 const modalProjectBillRate = document.getElementById("modalProjectBillRate");
+const modalProjectInternal = document.getElementById("modalProjectInternal");
+const modalBillingFields = document.getElementById("modalBillingFields");
+
+// Internal projects have no client billing or budgets — hide those fields.
+function syncInternalFields() {
+  const internal = modalProjectInternal.checked;
+  modalBillingFields.style.display = internal ? "none" : "block";
+  modalTaskRows.classList.toggle("internal", internal);
+}
 const modalTaskRows = document.getElementById("modalTaskRows");
 
 function renderProjectCards() {
@@ -168,7 +179,7 @@ function renderProjectCards() {
     <div class="project-card ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}">
       <div class="name">${p.name}</div>
       <div class="client">${p.client || "&nbsp;"}</div>
-      <div class="client">${p.billRate ? `Bills ${formatCurrency(p.billRate)}/hr` : "Bills at staff pay rates"}</div>
+      <div class="client">${p.internal ? "Internal &middot; not billed or paid" : p.billRate ? `Bills ${formatCurrency(p.billRate)}/hr` : "Bills at staff pay rates"}</div>
       <div class="card-actions">
         <button class="small secondary" data-action="edit-project" data-id="${p.id}">Edit</button>
         <button class="danger small" data-action="remove-project" data-id="${p.id}">Remove</button>
@@ -277,11 +288,13 @@ function openProjectModal(project) {
   // New projects start at the firm's standard rate; existing ones show their
   // own (blank = bill each person at their pay rate).
   modalProjectBillRate.value = project ? (project.billRate || "") : DEFAULT_BILL_RATE;
+  modalProjectInternal.checked = !!(project && project.internal);
 
   const projectTasks = project ? tasks.filter((t) => t.projectId === project.id) : [];
   modalTaskRows.innerHTML = projectTasks.length > 0
     ? projectTasks.map((t) => modalTaskRowHtml(t.id, t.name, t.budget, t.startDate, t.endDate)).join("")
     : modalTaskRowHtml();
+  syncInternalFields();
 
   projectModal.style.display = "flex";
   modalProjectName.focus();
@@ -292,6 +305,7 @@ function closeProjectModal() {
 }
 
 document.getElementById("openAddProject").addEventListener("click", () => openProjectModal(null));
+modalProjectInternal.addEventListener("change", syncInternalFields);
 document.getElementById("modalAddTaskRow").addEventListener("click", () => {
   modalTaskRows.insertAdjacentHTML("beforeend", modalTaskRowHtml());
 });
@@ -315,12 +329,13 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
   const billToAddress1 = modalBillToAddress1.value.trim();
   const billToAddress2 = modalBillToAddress2.value.trim();
   const projectNumber = modalProjectNumber.value.trim();
-  const billRate = modalProjectBillRate.value === "" ? null : Number(modalProjectBillRate.value);
+  const internal = modalProjectInternal.checked;
+  const billRate = internal || modalProjectBillRate.value === "" ? null : Number(modalProjectBillRate.value);
   if (billRate != null && !(billRate > 0)) return showToast("Billing rate must be more than $0, or blank.");
   if (!name) return showToast("Enter a project name.");
   try {
     let projectId = modalEditingProjectId;
-    const projectData = { name, client, billToName, billToCompany, billToAddress1, billToAddress2, projectNumber, billRate };
+    const projectData = { name, client, billToName, billToCompany, billToAddress1, billToAddress2, projectNumber, billRate, internal };
     if (projectId) {
       await Projects.update(projectId, projectData);
     } else {
@@ -332,7 +347,7 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
     for (const row of rows) {
       const taskId = row.dataset.taskId;
       const taskName = row.querySelector(".modalTaskName").value.trim();
-      const taskBudget = Number(row.querySelector(".modalTaskBudget").value) || 0;
+      const taskBudget = internal ? 0 : Number(row.querySelector(".modalTaskBudget").value) || 0;
       const startDate = row.querySelector(".modalTaskStart").value || null;
       const endDate = row.querySelector(".modalTaskEnd").value || null;
       if (!taskName) continue;
@@ -360,12 +375,18 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
 });
 
 // ---------- Tasks + Assignments (merged) ----------
+// Assignments are hours per person per task, usually added a bit at a time as
+// work goes on — so unassigned budget is normal, not a warning. The real limit
+// is the task's budget: red only when assigned or spent goes past it. People
+// logging past their own assigned hours are flagged (amber) so you can add more.
 const tasksTbody = document.querySelector("#tasksTable tbody");
 const tasksEmpty = document.getElementById("tasksEmpty");
 
+const ctx = () => ({ projects, people });
+
 // Budgets are spent at the project's bill rate (see rates.js).
 function billRate(e) {
-  return billRateOf(e, { projects, people });
+  return billRateOf(e, ctx());
 }
 
 function spentOnTask(taskId) {
@@ -374,21 +395,42 @@ function spentOnTask(taskId) {
     .reduce((sum, e) => sum + Number(e.hours || 0) * billRate(e), 0);
 }
 
-function assignedTotal(taskId) {
-  return assignments
-    .filter((a) => a.taskId === taskId)
-    .reduce((sum, a) => sum + Number(a.capValue || 0), 0);
+function loggedHours(taskId, personId = null) {
+  return timeEntries
+    .filter((e) => e.taskId === taskId && (!personId || e.personId === personId))
+    .reduce((sum, e) => sum + Number(e.hours || 0), 0);
 }
 
-function assignedPill(diff) {
-  if (Math.abs(diff) < 0.005) return `<span class="pill green">Balanced</span>`;
-  if (diff > 0) return `<span class="pill orange">${formatCurrency(diff)} unassigned</span>`;
-  return `<span class="pill red">${formatCurrency(-diff)} over</span>`;
+function personById(id) {
+  return people.find((p) => p.id === id);
+}
+
+// Assigned hours/dollars for a task. Dollars are hours at each person's
+// budget rate (the project's bill rate, or their pay rate on staff-rate projects).
+function taskAssignmentTotals(task) {
+  const project = projects.find((p) => p.id === task.projectId);
+  return assignments.filter((a) => a.taskId === task.id).reduce((t, a) => {
+    const hours = assignedHours(a, ctx());
+    t.hours += hours;
+    t.dollars += hours * assignmentRate(project, personById(a.personId));
+    if (loggedHours(task.id, a.personId) - hours > 0.005) t.overPeople += 1;
+    return t;
+  }, { hours: 0, dollars: 0, overPeople: 0 });
+}
+
+// "40 hrs" on projects with one bill rate; dollars on staff-rate projects,
+// where an hour costs a different amount depending on who works it.
+function availableLabel(project, dollars) {
+  return project && project.billRate ? `${fmtHrs(dollars / project.billRate)} hrs` : formatCurrency(dollars);
 }
 
 function renderTasks() {
-  const projectId = selectedProjectId;
-  const projectTasks = tasks.filter((t) => t.projectId === projectId);
+  const project = projects.find((p) => p.id === selectedProjectId);
+  const internal = isInternal(project);
+  const projectTasks = tasks.filter((t) => t.projectId === selectedProjectId);
+  document.querySelector("#tasksTable thead").innerHTML = internal
+    ? `<tr><th>Task</th><th></th><th>Logged</th><th style="width:160px;">Progress</th><th>Assigned</th></tr>`
+    : `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Assigned</th></tr>`;
   if (projectTasks.length === 0) {
     tasksTbody.innerHTML = "";
     tasksEmpty.style.display = "block";
@@ -397,73 +439,75 @@ function renderTasks() {
   tasksEmpty.style.display = "none";
 
   tasksTbody.innerHTML = projectTasks.map((t) => {
-    const spent = spentOnTask(t.id);
-    const budget = Number(t.budget || 0);
-    const assigned = assignedTotal(t.id);
-    const diff = budget - assigned;
-
-    const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
-    const over = spent > budget;
+    const totals = taskAssignmentTotals(t);
+    const overFlag = totals.overPeople
+      ? ` <span class="pill orange" title="Logged more than their assigned hours">${totals.overPeople} over assigned</span>` : "";
+    let cells;
+    if (internal) {
+      const logged = loggedHours(t.id);
+      const pct = totals.hours > 0 ? Math.min(100, (logged / totals.hours) * 100) : 0;
+      cells = `<td></td><td>${fmtHrs(logged)} hrs</td>
+        <td><div class="progress-bar"><div class="fill ${logged > totals.hours ? "over-soft" : ""}" style="width:${pct}%"></div></div></td>
+        <td>${fmtHrs(totals.hours)} hrs${overFlag}</td>`;
+    } else {
+      const budget = Number(t.budget || 0);
+      const spent = spentOnTask(t.id);
+      const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+      const available = budget - totals.dollars;
+      const assignedCell = available < -0.005
+        ? `<span class="pill red">Over-assigned by ${availableLabel(project, -available)}</span>`
+        : `${fmtHrs(totals.hours)} hrs <span class="empty" style="padding:0;">&middot; ${availableLabel(project, available)} available</span>`;
+      cells = `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
+        <td><div class="progress-bar"><div class="fill ${spent > budget ? "over" : ""}" style="width:${pct}%"></div></div></td>
+        <td>${assignedCell}${overFlag}</td>`;
+    }
     const expanded = t.id === expandedTaskId;
-    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-task-row="${t.id}">
-      <td>${t.name}</td>
-      <td>${formatCurrency(budget)}</td>
-      <td>${formatCurrency(spent)}</td>
-      <td>
-        <div class="progress-bar"><div class="fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
-      </td>
-      <td>${assignedPill(diff)}</td>
-    </tr>`;
-
+    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td>${esc(t.name)}</td>${cells}</tr>`;
     if (!expanded) return mainRow;
-
-    return mainRow + `<tr>
-      <td colspan="5" class="accordion-cell">${renderAccordion(t, diff)}</td>
-    </tr>`;
+    return mainRow + `<tr><td colspan="5" class="accordion-cell">${renderAccordion(t, project)}</td></tr>`;
   }).join("");
 }
 
-function renderAccordion(task, diff) {
-  const budget = Number(task.budget || 0);
-  const taskAssignments = assignments.filter((a) => a.taskId === task.id);
+function renderAccordion(task, project) {
+  const internal = isInternal(project);
+  const taskAssignments = assignments.filter((a) => a.taskId === task.id)
+    .sort((a, b) => (personById(a.personId)?.name || "").localeCompare(personById(b.personId)?.name || ""));
   const assignedPersonIds = taskAssignments.map((a) => a.personId);
   const availablePeople = people.filter((p) => !assignedPersonIds.includes(p.id));
 
   const rows = taskAssignments.map((a) => {
-    const person = people.find((p) => p.id === a.personId);
-    const personEntries = timeEntries.filter((e) => e.taskId === a.taskId && e.personId === a.personId);
-    const loggedHours = personEntries.reduce((sum, e) => sum + Number(e.hours || 0), 0);
-    const rate = assignmentRate(projects.find((p) => p.id === task.projectId), person);
-    const earned = personEntries.reduce((sum, e) => sum + Number(e.hours || 0) * billRate(e), 0);
-    const remaining = (a.capValue || 0) - earned;
-
-    const remainingHours = rate > 0 ? remaining / rate : 0;
-
-    return `<tr class="assignmentRow" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-earned="${earned}" data-rate="${rate}">
-      <td>${person ? esc(person.name) : "—"}</td>
-      <td><input type="number" class="editAmount" min="0" step="${rate || 1}" data-person-id="${a.personId}" value="${a.capValue}" style="width:100px;" /></td>
-      <td>${formatCurrency(earned)} <span class="empty">(${loggedHours.toFixed(2)} hrs)</span></td>
-      <td class="remainingCell">${formatCurrency(remaining)} <span class="empty">(${remainingHours.toFixed(2)} hrs)</span></td>
-      <td class="row-actions">
-        <button class="danger small" data-action="remove-assignment" data-id="${a.id}">Remove</button>
+    const person = personById(a.personId);
+    const rate = assignmentRate(project, person);
+    const hours = assignedHours(a, ctx());
+    const logged = loggedHours(task.id, a.personId);
+    return `<tr class="assignmentRow" data-assignment-id="${a.id}" data-rate="${rate}" data-logged="${logged}">
+      <td>${person ? esc(person.name) : "—"} <span class="empty" style="padding:0;">(${person ? formatCurrency(person.rate) : "$0"}/hr)</span></td>
+      <td>
+        <div class="assign-hours">
+          <input type="number" class="editHours" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" /> hrs
+          <button class="small secondary" data-action="bump" data-amount="5">+5</button>
+          <button class="small secondary" data-action="bump" data-amount="10">+10</button>
+        </div>
+        ${internal ? "" : `<div class="empty assignDollars" style="padding:2px 0 0;">${formatCurrency(hours * rate)}</div>`}
       </td>
+      <td>${fmtHrs(logged)} hrs${internal ? "" : `<div class="empty" style="padding:2px 0 0;">${formatCurrency(spentByPerson(task.id, a.personId))}</div>`}</td>
+      <td class="leftCell">${leftHtml(hours, logged)}</td>
+      <td><button class="danger small" data-action="remove-assignment" data-id="${a.id}">Remove</button></td>
     </tr>`;
   }).join("");
 
-  const totalAssigned = taskAssignments.reduce((s, a) => s + Number(a.capValue || 0), 0);
-
   const addRow = availablePeople.length === 0
     ? `<div class="empty">Everyone on the team is already assigned to this task.</div>`
-    : `<div class="inline-form" style="margin-top:12px;">
+    : `<div class="inline-form" style="margin-top:4px;">
         <div>
-          <label>Person</label>
+          <label>Assign someone</label>
           <select class="newAssignPerson">
-            ${availablePeople.map((p) => `<option value="${p.id}">${p.name}</option>`).join("")}
+            ${availablePeople.map((p) => `<option value="${p.id}">${esc(p.name)} (${formatCurrency(p.rate)}/hr)</option>`).join("")}
           </select>
         </div>
-        <div>
-          <label>Amount ($)</label>
-          <input type="number" class="newAssignAmount" min="0" step="1" value="0" placeholder="${diff > 0 ? diff.toFixed(0) : "0"}" />
+        <div style="flex:0 0 120px;">
+          <label>Hours</label>
+          <input type="number" class="newAssignHours" min="0" step="0.5" placeholder="20" />
         </div>
         <div style="flex:0;">
           <label>&nbsp;</label>
@@ -472,16 +516,14 @@ function renderAccordion(task, diff) {
       </div>`;
 
   return `
-    <div class="assign-summary" data-task-budget="${budget}">
-      Assigned: <strong class="assignSumAssigned">${formatCurrency(totalAssigned)}</strong> of ${formatCurrency(budget)} budget
-      <span class="assignSumDiffPill">${assignedPill(budget - totalAssigned)}</span>
-    </div>
+    <div class="assign-summary" data-task-id="${task.id}">${assignSummaryHtml(task, project)}</div>
     ${taskAssignments.length > 0 ? `<table style="margin-top:10px;">
-      <thead><tr><th>Person</th><th>Assigned</th><th>Spent</th><th>Remaining</th><th style="width:100px;"></th></tr></thead>
+      <thead><tr><th>Person</th><th>Assigned</th><th>Logged</th><th>Left</th><th style="width:90px;"></th></tr></thead>
       <tbody class="assignmentRows">${rows}</tbody>
     </table>
-    <div class="row-actions" style="margin-top:10px;">
+    <div class="row-actions" style="margin-top:10px; align-items:center;">
       <button class="small" data-action="save-assignments" data-task-id="${task.id}">Save Changes</button>
+      <span class="empty unsavedNote" style="padding:0; display:none;">Unsaved changes</span>
     </div>` : `<div class="empty">No one assigned to this task yet.</div>`}
     <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border);">
       ${addRow}
@@ -489,28 +531,62 @@ function renderAccordion(task, diff) {
   `;
 }
 
+function spentByPerson(taskId, personId) {
+  return timeEntries
+    .filter((e) => e.taskId === taskId && e.personId === personId)
+    .reduce((sum, e) => sum + Number(e.hours || 0) * billRate(e), 0);
+}
+
+function leftHtml(assigned, logged) {
+  const left = assigned - logged;
+  return left < -0.005
+    ? `<span class="hours-over">${fmtHrs(-left)} hrs over</span>`
+    : `${fmtHrs(left)} hrs`;
+}
+
+// Totals line above the people table. overrideHours (from unsaved inputs)
+// lets it update live while editing.
+function assignSummaryHtml(task, project, override = null) {
+  const totals = override || taskAssignmentTotals(task);
+  const logged = loggedHours(task.id);
+  const part = (label, value) => `<span><span class="summary-label">${label}</span> ${value}</span>`;
+  if (isInternal(project)) {
+    return part("Assigned", `<strong>${fmtHrs(totals.hours)} hrs</strong>`) + part("Logged", `${fmtHrs(logged)} hrs`);
+  }
+  const budget = Number(task.budget || 0);
+  const spent = spentOnTask(task.id);
+  const available = budget - totals.dollars;
+  const budgetHours = project && project.billRate ? ` <span class="empty" style="padding:0;">(${fmtHrs(budget / project.billRate)} hrs at ${formatCurrency(project.billRate)}/hr)</span>` : "";
+  return part("Budget", `${formatCurrency(budget)}${budgetHours}`)
+    + part("Assigned", `<strong>${fmtHrs(totals.hours)} hrs</strong> <span class="empty" style="padding:0;">(${formatCurrency(totals.dollars)})</span>`)
+    + part("Logged", `${fmtHrs(logged)} hrs <span class="empty" style="padding:0;">(${formatCurrency(spent)})</span>`)
+    + part("Available to assign", available < -0.005
+      ? `<span class="pill red">Over by ${availableLabel(project, -available)}</span>`
+      : `<strong>${availableLabel(project, available)}</strong>`);
+}
+
 function liveRecomputeAssignments(accordionCell) {
   const summaryEl = accordionCell.querySelector(".assign-summary");
   if (!summaryEl) return;
-  const budget = Number(summaryEl.dataset.taskBudget || 0);
-  const inputs = [...accordionCell.querySelectorAll(".editAmount")];
-  const total = inputs.reduce((s, inp) => s + (Number(inp.value) || 0), 0);
-  summaryEl.querySelector(".assignSumAssigned").textContent = formatCurrency(total);
-  summaryEl.querySelector(".assignSumDiffPill").innerHTML = assignedPill(budget - total);
-
+  const task = tasks.find((t) => t.id === summaryEl.dataset.taskId);
+  const project = projects.find((p) => p.id === task.projectId);
+  const totals = { hours: 0, dollars: 0 };
   accordionCell.querySelectorAll(".assignmentRow").forEach((row) => {
-    const input = row.querySelector(".editAmount");
-    const earned = Number(row.dataset.earned || 0);
+    const hours = Number(row.querySelector(".editHours").value) || 0;
     const rate = Number(row.dataset.rate || 0);
-    const remaining = (Number(input.value) || 0) - earned;
-    const remainingHours = rate > 0 ? remaining / rate : 0;
-    row.querySelector(".remainingCell").innerHTML =
-      `${formatCurrency(remaining)} <span class="empty">(${remainingHours.toFixed(2)} hrs)</span>`;
+    totals.hours += hours;
+    totals.dollars += hours * rate;
+    row.querySelector(".leftCell").innerHTML = leftHtml(hours, Number(row.dataset.logged || 0));
+    const dollarsEl = row.querySelector(".assignDollars");
+    if (dollarsEl) dollarsEl.textContent = formatCurrency(hours * rate);
   });
+  summaryEl.innerHTML = assignSummaryHtml(task, project, totals);
+  const note = accordionCell.querySelector(".unsavedNote");
+  if (note) note.style.display = "inline";
 }
 
 tasksTbody.addEventListener("input", (e) => {
-  if (!e.target.classList.contains("editAmount")) return;
+  if (!e.target.classList.contains("editHours")) return;
   const cell = e.target.closest(".accordion-cell");
   if (cell) liveRecomputeAssignments(cell);
 });
@@ -530,8 +606,14 @@ tasksTbody.addEventListener("click", async (e) => {
 
   const { action, id } = btn.dataset;
 
+  if (action === "bump") {
+    const input = btn.closest(".assign-hours").querySelector(".editHours");
+    input.value = Math.round(((Number(input.value) || 0) + Number(btn.dataset.amount)) * 100) / 100;
+    liveRecomputeAssignments(btn.closest(".accordion-cell"));
+    return;
+  }
   if (action === "remove-assignment") {
-    if (!confirm("Remove this assignment?")) return;
+    if (!confirm("Remove this person from the task?")) return;
     try { await Assignments.remove(id); } catch (err) { showToast("Error: " + err.message); }
   }
   if (action === "save-assignments") {
@@ -539,30 +621,42 @@ tasksTbody.addEventListener("click", async (e) => {
     try {
       for (const row of cell.querySelectorAll(".assignmentRow")) {
         const assignmentId = row.dataset.assignmentId;
-        const capValue = Number(row.querySelector(".editAmount").value) || 0;
+        const hours = Number(row.querySelector(".editHours").value) || 0;
         const original = assignments.find((a) => a.id === assignmentId);
-        if (original && Number(original.capValue) !== capValue) {
-          await Assignments.update(assignmentId, { capValue });
+        if (original && (original.hours == null || Math.abs(Number(original.hours) - hours) > 0.001)) {
+          await Assignments.update(assignmentId, { hours });
         }
       }
-      showToast("Assignments updated.");
+      showToast("Assignments saved.");
     } catch (err) { showToast("Error: " + err.message); }
   }
   if (action === "add-assignment") {
-    const taskId = btn.dataset.taskId;
-    const projectId = btn.dataset.projectId;
     const container = btn.closest(".accordion-cell");
     const personId = container.querySelector(".newAssignPerson").value;
-    const amountInput = container.querySelector(".newAssignAmount");
-    const capValue = amountInput.value === "" ? 0 : Number(amountInput.value);
+    const hoursInput = container.querySelector(".newAssignHours");
+    const hours = hoursInput.value === "" ? 0 : Number(hoursInput.value);
     if (!personId) return showToast("Select a person.");
-    if (isNaN(capValue) || capValue < 0) return showToast("Enter a valid dollar amount.");
+    if (isNaN(hours) || hours < 0) return showToast("Enter a valid number of hours.");
     try {
-      await Assignments.add({ projectId, taskId, personId, capValue });
+      await Assignments.add({ projectId: btn.dataset.projectId, taskId: btn.dataset.taskId, personId, hours });
       showToast("Assigned.");
     } catch (err) { showToast("Error: " + err.message); }
   }
 });
+
+// Assignments used to be stored as dollar amounts. Convert any old ones to
+// hours once (at the rate they were entered against) so they stop shifting
+// when someone's pay rate changes.
+let assignmentsMigrated = false;
+async function migrateLegacyAssignments() {
+  if (assignmentsMigrated || !assignmentsLoaded || !people.length || !projects.length) return;
+  const legacy = assignments.filter((a) => a.hours == null);
+  assignmentsMigrated = true;
+  for (const a of legacy) {
+    const hours = Math.round(assignedHours(a, ctx()) * 100) / 100;
+    try { await Assignments.update(a.id, { hours }); } catch (err) { console.warn("Assignment migration failed:", err); }
+  }
+}
 
 // ---------- Pending Approval ----------
 const pendingApprovalCard = document.getElementById("pendingApprovalCard");
@@ -575,6 +669,13 @@ function pendingEntries() {
   return timeEntries
     .filter((e) => !e.approved && !e.invoiced)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+// True when this person has logged more on the entry's task than assigned.
+function isOverAssigned(e) {
+  const assignment = assignments.find((a) => a.taskId === e.taskId && a.personId === e.personId);
+  const assigned = assignment ? assignedHours(assignment, ctx()) : 0;
+  return loggedHours(e.taskId, e.personId) - assigned > 0.005;
 }
 
 function pendingByPerson() {
@@ -601,7 +702,7 @@ function renderPendingApproval() {
   pendingApprovalTbody.innerHTML = groups.map((g) => {
     const expanded = g.personId === expandedApprovalPersonId;
     const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-person-row="${g.personId}">
-      <td colspan="4">${g.name} <span class="empty" style="padding:0;">(${g.entries.length} ${g.entries.length === 1 ? "entry" : "entries"})</span></td>
+      <td colspan="4">${g.name} <span class="empty" style="padding:0;">(${g.entries.length} ${g.entries.length === 1 ? "entry" : "entries"})</span>${g.entries.some(isOverAssigned) ? " <span class=\"pill orange\">Over assigned hours</span>" : ""}</td>
       <td>${g.totalHours.toFixed(2)}</td>
       <td class="row-actions">
         <button class="small" data-action="approve-person" data-id="${g.personId}">Approve All</button>
@@ -618,7 +719,7 @@ function renderPendingApproval() {
         <td>${formatDate(e.date)}</td>
         <td></td>
         <td>${project ? project.name : "—"}</td>
-        <td>${task ? task.name : "—"}${noteHtml}</td>
+        <td>${task ? task.name : "—"}${isOverAssigned(e) ? " <span class=\"pill orange\" title=\"This person has logged more on this task than they are assigned\">Over assigned</span>" : ""}${noteHtml}</td>
         <td>${e.hours}</td>
         <td class="row-actions">
           <button class="small" data-action="approve-entry" data-id="${e.id}">Approve</button>

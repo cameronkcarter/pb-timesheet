@@ -1,10 +1,10 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
-import { billRateOf, assignmentRate } from "./rates.js";
+import { billRateOf, assignedHours, isInternal } from "./rates.js";
 
 const sessionPersonId = requireSession();
 
@@ -191,19 +191,47 @@ function selectedProjectTasks() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function loggedHours(entries) {
+  return entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+}
+
+function assignedOnTask(taskId) {
+  return assignments
+    .filter((a) => a.taskId === taskId)
+    .reduce((s, a) => s + assignedHours(a, { projects, people }), 0);
+}
+
+// Billed projects show dollars (budget / spent / remaining). Internal projects
+// have no budget, so they show hours (assigned / logged) instead.
 function renderBudget() {
   if (!selectedProjectId) return;
+  const project = projects.find((p) => p.id === selectedProjectId);
+  const internal = isInternal(project);
   const projectTasks = selectedProjectTasks();
+  const thead = document.querySelector("#budgetTable thead");
 
-  const totalBudget = projectTasks.reduce((s, t) => s + Number(t.budget || 0), 0);
-  const totalSpent = projectTasks.reduce((s, t) => s + spentOnTask(t.id), 0);
-  const totalRemaining = totalBudget - totalSpent;
-  budgetSummary.innerHTML = `
-    <span><span class="summary-label">Budget</span> ${formatCurrency(totalBudget)}</span>
-    <span><span class="summary-label">Spent</span> ${formatCurrency(totalSpent)}</span>
-    <span><span class="summary-label">Remaining</span> <span ${totalRemaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(totalRemaining)}</span></span>`;
-  budgetOverallFill.style.width = `${totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0}%`;
-  budgetOverallFill.classList.toggle("over", totalSpent > totalBudget);
+  if (internal) {
+    const assigned = projectTasks.reduce((s, t) => s + assignedOnTask(t.id), 0);
+    const logged = loggedHours(timeEntries.filter((e) => e.projectId === selectedProjectId));
+    budgetSummary.innerHTML = `
+      <span class="pill blue">Internal &middot; not billed</span>
+      <span><span class="summary-label">Assigned</span> ${fmtHrs(assigned)} hrs</span>
+      <span><span class="summary-label">Logged</span> ${fmtHrs(logged)} hrs</span>`;
+    budgetOverallFill.style.width = `${assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 0}%`;
+    budgetOverallFill.classList.remove("over");
+    thead.innerHTML = `<tr><th>Task</th><th>Assigned</th><th>Logged</th><th style="width:160px;">Progress</th><th></th></tr>`;
+  } else {
+    const totalBudget = projectTasks.reduce((s, t) => s + Number(t.budget || 0), 0);
+    const totalSpent = projectTasks.reduce((s, t) => s + spentOnTask(t.id), 0);
+    const totalRemaining = totalBudget - totalSpent;
+    budgetSummary.innerHTML = `
+      <span><span class="summary-label">Budget</span> ${formatCurrency(totalBudget)}</span>
+      <span><span class="summary-label">Spent</span> ${formatCurrency(totalSpent)}</span>
+      <span><span class="summary-label">Remaining</span> <span ${totalRemaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(totalRemaining)}</span></span>`;
+    budgetOverallFill.style.width = `${totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0}%`;
+    budgetOverallFill.classList.toggle("over", totalSpent > totalBudget);
+    thead.innerHTML = `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th></tr>`;
+  }
 
   if (projectTasks.length === 0) {
     budgetTbody.innerHTML = "";
@@ -215,26 +243,30 @@ function renderBudget() {
   budgetHint.style.display = "block";
 
   budgetTbody.innerHTML = projectTasks.map((t) => {
-    const budget = Number(t.budget || 0);
-    const spent = spentOnTask(t.id);
-    const remaining = budget - spent;
-    const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
     const expanded = t.id === expandedTaskId;
-    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-task-row="${t.id}">
-      <td>${esc(t.name)}</td>
-      <td>${formatCurrency(budget)}</td>
-      <td>${formatCurrency(spent)}</td>
-      <td><div class="progress-bar"><div class="fill ${spent > budget ? "over" : ""}" style="width:${pct}%"></div></div></td>
-      <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>
-    </tr>`;
+    let cells;
+    if (internal) {
+      const assigned = assignedOnTask(t.id);
+      const logged = loggedHours(timeEntries.filter((e) => e.taskId === t.id));
+      const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 0;
+      cells = `<td>${fmtHrs(assigned)} hrs</td><td>${fmtHrs(logged)} hrs</td>
+        <td><div class="progress-bar"><div class="fill ${logged > assigned ? "over-soft" : ""}" style="width:${pct}%"></div></div></td><td></td>`;
+    } else {
+      const budget = Number(t.budget || 0);
+      const spent = spentOnTask(t.id);
+      const remaining = budget - spent;
+      const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+      cells = `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
+        <td><div class="progress-bar"><div class="fill ${spent > budget ? "over" : ""}" style="width:${pct}%"></div></div></td>
+        <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>`;
+    }
+    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td>${esc(t.name)}</td>${cells}</tr>`;
     if (!expanded) return mainRow;
     return mainRow + `<tr><td colspan="5" class="accordion-cell">${taskPeopleHtml(t)}</td></tr>`;
   }).join("");
 }
 
-// Hours view of who's on a task: assigned hours come from each person's
-// dollar assignment divided by the project's bill rate (or their pay rate on
-// projects that bill at staff rates).
+// Who's on a task: each person's assigned hours vs. hours logged.
 function taskPeopleHtml(task) {
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
@@ -243,18 +275,19 @@ function taskPeopleHtml(task) {
 
   const rows = personIds.map((pid) => {
     const person = people.find((p) => p.id === pid);
-    const rate = assignmentRate(projects.find((p) => p.id === task.projectId), person);
     const assignment = taskAssignments.find((a) => a.personId === pid);
-    const assignedHours = assignment && rate > 0 ? Number(assignment.capValue || 0) / rate : 0;
-    const spentHours = taskEntries.filter((e) => e.personId === pid).reduce((s, e) => s + Number(e.hours || 0), 0);
-    const remainingHours = assignedHours - spentHours;
-    return { name: person ? person.name : "—", assignedHours, spentHours, remainingHours, assigned: !!assignment };
+    return {
+      name: person ? person.name : "—",
+      assigned: assignment ? assignedHours(assignment, { projects, people }) : 0,
+      logged: loggedHours(taskEntries.filter((e) => e.personId === pid)),
+      isAssigned: !!assignment,
+    };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   const color = projectColor(task.projectId);
   return `<div class="hours-rows" style="margin-top:0;">${rows.map((r) => `<div class="hours-row">
-      <div class="hours-row-name">${esc(r.name)}${r.assigned ? "" : ' <span class="empty" style="padding:0; font-weight:400;">(not assigned)</span>'}</div>
-      ${hoursBarHtml(r.spentHours, r.assignedHours, color)}
+      <div class="hours-row-name">${esc(r.name)}${r.isAssigned ? "" : ' <span class="empty" style="padding:0; font-weight:400;">(not assigned)</span>'}</div>
+      ${hoursBarHtml(r.logged, r.assigned, color)}
     </div>`).join("")}</div>`;
 }
 
@@ -352,14 +385,14 @@ function renderGantt() {
     return `<div class="gantt-row">
       <div class="gantt-label-col gantt-task-label">${esc(t.name)}</div>
       <div class="gantt-track" style="width:${timelineWidth}px;">${barHtml}${dotsHtml}</div>
-      <div class="gantt-remaining-col">${formatCurrency(remaining)}</div>
+      <div class="gantt-remaining-col">${isInternal(project) ? "" : formatCurrency(remaining)}</div>
     </div>`;
   }).join("");
 
   const projectRowHtml = `<div class="gantt-row gantt-project-row">
       <div class="gantt-label-col ${canEditTimeline ? "gantt-project-clickable" : ""}" ${canEditTimeline ? `data-edit-timeline="${project.id}" title="Click to edit task dates"` : ""}>${esc(project.name)}</div>
       <div class="gantt-track" style="width:${timelineWidth}px;">${projectDotsHtml}</div>
-      <div class="gantt-remaining-col gantt-project-remaining">${formatCurrency(projectRemaining)}</div>
+      <div class="gantt-remaining-col gantt-project-remaining">${isInternal(project) ? "Internal" : formatCurrency(projectRemaining)}</div>
     </div>
     ${taskRowsHtml}`;
 
