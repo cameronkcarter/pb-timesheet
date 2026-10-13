@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { billRateOf, assignedHours, isInternal } from "./rates.js";
@@ -626,9 +626,7 @@ toggleCompletedBtn.addEventListener("click", () => {
   renderAssignments();
 });
 document.getElementById("modalCancelDueDate").addEventListener("click", closeDueDateModal);
-dueDateModal.addEventListener("click", (e) => {
-  if (e.target === dueDateModal) closeDueDateModal();
-});
+closeOnBackdropClick(dueDateModal, closeDueDateModal);
 ddProject.addEventListener("change", () => populateTaskOptions(ddProject.value, ""));
 
 modalDeleteDueDate.addEventListener("click", async () => {
@@ -704,9 +702,7 @@ function closeTimelineModal() {
 }
 
 document.getElementById("modalCancelTimeline").addEventListener("click", closeTimelineModal);
-timelineModal.addEventListener("click", (e) => {
-  if (e.target === timelineModal) closeTimelineModal();
-});
+closeOnBackdropClick(timelineModal, closeTimelineModal);
 
 document.getElementById("modalSaveTimeline").addEventListener("click", async () => {
   const rows = [...timelineModalRows.querySelectorAll("[data-task-id]")];

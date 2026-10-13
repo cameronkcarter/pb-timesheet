@@ -994,14 +994,6 @@ tr.notes-row td {
   font-size: 13px;
 }
 
-.assign-summary {
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .empty {
   color: var(--text-muted);
   font-size: 14px;
@@ -1471,31 +1463,189 @@ body.login-page {
   color: #b5651d;
 }
 
-/* ---------- Admin: hours-based assignments ---------- */
-.assign-summary {
+#modalTaskRows.internal .modalTaskBudget {
+  display: none;
+}
+
+/* ---------- Admin: task blocks with assignments ---------- */
+.task-block {
+  padding: 16px 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-block:last-child {
+  border-bottom: none;
+}
+
+.task-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.task-block-name {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.task-block-budget {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Logged (dark) over assigned (light) over the full budget (track). */
+.budget-bar {
+  position: relative;
+  height: 10px;
+  margin-top: 8px;
+  border-radius: 5px;
+  background: #eceaef;
+  overflow: hidden;
+}
+
+.budget-bar .bb-assigned,
+.budget-bar .bb-logged {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 5px;
+}
+
+.budget-bar .bb-assigned {
+  background: #c9b3d4;
+}
+
+.budget-bar .bb-logged {
+  background: var(--navy);
+}
+
+.budget-bar.over .bb-logged {
+  background: var(--red);
+}
+
+.bb-keys {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 22px;
-  align-items: baseline;
+  gap: 4px 16px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.bb-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.bb-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.bb-swatch.logged { background: var(--navy); }
+.bb-swatch.assigned { background: #c9b3d4; }
+.bb-swatch.open { background: #eceaef; border: 1px solid #d6d2db; }
+
+.hours-over-strong {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.assign-list {
+  margin-top: 10px;
+}
+
+.assign-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) 120px minmax(120px, 240px) 32px;
+  justify-content: start;
+  gap: 12px;
+  align-items: center;
+  padding: 5px 0;
   font-size: 14px;
 }
 
-.assign-summary .summary-label {
-  margin-right: 4px;
+.assign-row.assign-add {
+  grid-template-columns: minmax(160px, 240px) 120px auto;
 }
 
-.assign-hours {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.assign-hours .editHours {
-  width: 76px;
+.assign-name select {
   margin: 0;
 }
 
-#modalTaskRows.internal .modalTaskBudget {
-  display: none;
+.assign-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.assign-input input {
+  width: 80px;
+  margin: 0;
+  padding: 6px 8px;
+}
+
+.assign-logged {
+  color: var(--text-muted);
+}
+
+.assign-logged.hours-over {
+  color: #b5651d;
+  font-weight: 600;
+}
+
+button.icon-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  margin: 0;
+  padding: 2px 8px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+button.icon-btn:hover {
+  background: #f6e9e7;
+  color: var(--red);
+}
+
+button.link-btn {
+  background: transparent;
+  color: var(--navy);
+  border: none;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+button.link-btn:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .assign-row {
+    grid-template-columns: 1fr auto 32px;
+    grid-template-areas: "name input x" "logged logged logged";
+    row-gap: 2px;
+  }
+  .assign-row .assign-name { grid-area: name; }
+  .assign-row .assign-input { grid-area: input; }
+  .assign-row .icon-btn { grid-area: x; }
+  .assign-row .assign-logged {
+    grid-area: logged;
+    font-size: 12px;
+  }
+  .assign-row.assign-add {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: none;
+  }
+  .assign-row.assign-add .assign-name,
+  .assign-row.assign-add .assign-input { grid-area: auto; }
+  .assign-row.assign-add .row-actions { grid-column: 1 / -1; }
 }

@@ -72,10 +72,12 @@ function render() {
 
   renderDueDates(personId);
 
+  // Internal projects (e.g. Proposals & Pursuits) are just for logging time
+  // on the Timesheet, so they are left off the Dashboard.
   const myProjectIds = [...new Set([
     ...assignments.filter((a) => a.personId === personId).map((a) => a.projectId),
     ...myEntries.map((e) => e.projectId),
-  ])];
+  ])].filter((id) => !isInternal(projects.find((p) => p.id === id)));
 
   if (myProjectIds.length === 0) {
     projectSummaryCards.innerHTML = '<div class="card empty">No projects yet. Ask your PM to assign you to a task.</div>';
@@ -105,7 +107,6 @@ function render() {
       ? `${formatDate(lastInvoiced.invoicedDate.slice(0, 10))} (${daysAgo(lastInvoiced.invoicedDate)})`
       : "—";
     const color = projectColor(project.id);
-    const internal = isInternal(project);
     const projectBudget = tasks.filter((t) => t.projectId === projectId).reduce((s, t) => s + Number(t.budget || 0), 0);
     const projectSpent = billedAmount(timeEntries.filter((e) => e.projectId === projectId), { projects, people });
     const budgetPct = projectBudget > 0 ? Math.round((projectSpent / projectBudget) * 100) : null;
@@ -129,9 +130,7 @@ function render() {
     return `<div class="card">
       <div class="hours-card-header">
         <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${project.name}${project.client ? ` <span class="empty" style="font-weight:400;">(${project.client})</span>` : ""}</h2>
-        <div class="empty" style="padding:0;">${internal
-          ? "Internal &middot; not billed or paid"
-          : `${budgetPct != null ? `Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong> &middot; ` : ""}Your pay not yet invoiced: <strong>${formatCurrency(projectOwed)}</strong> &middot; Last invoiced: ${lastInvoicedLabel}`}</div>
+        <div class="empty" style="padding:0;">${budgetPct != null ? `Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong> &middot; ` : ""}Your pay not yet invoiced: <strong>${formatCurrency(projectOwed)}</strong> &middot; Last invoiced: ${lastInvoicedLabel}</div>
       </div>
       ${taskRows ? `
         <div class="hours-total">

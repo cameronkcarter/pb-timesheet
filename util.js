@@ -139,3 +139,15 @@ export function hoursBarHtml(logged, assigned, color, large = false) {
 export function fmtHrs(n) {
   return (Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
+
+// Close a modal when its dark backdrop is clicked — but only if the click
+// both started and ended on the backdrop. Otherwise dragging to select text
+// in a field and releasing outside the dialog would close it.
+export function closeOnBackdropClick(overlay, close) {
+  let downOnBackdrop = false;
+  overlay.addEventListener("mousedown", (e) => { downOnBackdrop = e.target === overlay; });
+  overlay.addEventListener("click", (e) => {
+    if (downOnBackdrop && e.target === overlay) close();
+    downOnBackdrop = false;
+  });
+}
