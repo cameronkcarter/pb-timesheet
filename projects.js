@@ -242,7 +242,7 @@ function renderBudget() {
   budgetEmpty.style.display = "none";
   budgetHint.style.display = "block";
 
-  budgetTbody.innerHTML = projectTasks.map((t) => {
+  budgetTbody.innerHTML = projectTasks.map((t, i) => {
     const expanded = t.id === expandedTaskId;
     let cells;
     if (internal) {
@@ -260,7 +260,7 @@ function renderBudget() {
         <td><div class="progress-bar"><div class="fill ${spent > budget ? "over" : ""}" style="width:${pct}%"></div></div></td>
         <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>`;
     }
-    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td>${esc(t.name)}</td>${cells}</tr>`;
+    const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><span class="task-chevron" aria-hidden="true">&#9656;</span> ${esc(t.name)}</td>${cells}</tr>`;
     if (!expanded) return mainRow;
     return mainRow + `<tr><td colspan="5" class="accordion-cell">${taskPeopleHtml(t)}</td></tr>`;
   }).join("");

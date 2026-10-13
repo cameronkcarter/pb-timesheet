@@ -976,6 +976,11 @@ tr.task-row {
   cursor: pointer;
 }
 
+/* Spreadsheet-style shading on alternating task rows. */
+tr.task-row.stripe td {
+  background: #f6f3f9;
+}
+
 tr.task-row:hover td {
   background: #f8f5fa;
 }
@@ -1468,62 +1473,17 @@ body.login-page {
   display: none;
 }
 
-/* ---------- Admin: task blocks with assignments ---------- */
-.task-block {
-  padding: 16px 0 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.task-block:last-child {
-  border-bottom: none;
-}
-
-button.task-block-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--text);
-  border: none;
-  border-radius: 0;
-  text-align: left;
-  font-weight: 400;
-  cursor: pointer;
-}
-
-button.task-block-head:hover {
-  background: transparent;
-}
-
-button.task-block-head:hover .task-block-name {
-  color: var(--navy-light);
-}
-
+/* ---------- Admin: task assignments ---------- */
 .task-chevron {
   display: inline-block;
   width: 12px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted);
   transition: transform 0.15s;
 }
 
-.task-block.open .task-chevron {
+tr.task-row.expanded .task-chevron {
   transform: rotate(90deg);
-}
-
-.task-block-people {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-right: auto;
-}
-
-.task-block .budget-bar,
-.task-block .bb-keys,
-.task-block .assign-list {
-  margin-left: 22px;
 }
 
 .saved-tick {
@@ -1537,97 +1497,37 @@ button.task-block-head:hover .task-block-name {
   opacity: 1;
 }
 
-.task-block-name {
-  font-weight: 700;
-  font-size: 15px;
-}
-
-.task-block-budget {
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-/* Logged (dark) over assigned (light) over the full budget (track). */
-.budget-bar {
-  position: relative;
-  height: 10px;
-  margin-top: 8px;
-  border-radius: 5px;
-  background: #eceaef;
-  overflow: hidden;
-}
-
-.budget-bar .bb-assigned,
-.budget-bar .bb-logged {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  border-radius: 5px;
-}
-
-.budget-bar .bb-assigned {
-  background: #c9b3d4;
-}
-
-.budget-bar .bb-logged {
-  background: var(--navy);
-}
-
-.budget-bar.over .bb-logged {
-  background: var(--red);
-}
-
-.bb-keys {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin-top: 6px;
-  font-size: 13px;
-}
-
-.bb-key {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.bb-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  display: inline-block;
-}
-
-.bb-swatch.logged { background: var(--navy); }
-.bb-swatch.assigned { background: #c9b3d4; }
-.bb-swatch.open { background: #eceaef; border: 1px solid #d6d2db; }
-
 .hours-over-strong {
   color: var(--red);
   font-weight: 600;
 }
 
-.assign-list {
-  margin-top: 10px;
-}
-
 .assign-row {
   display: grid;
-  grid-template-columns: minmax(160px, 240px) 150px minmax(120px, 240px) 32px;
-  justify-content: start;
-  gap: 12px;
+  grid-template-columns: minmax(150px, 200px) 150px minmax(200px, 1fr) 32px;
+  gap: 16px;
   align-items: center;
-  padding: 5px 0;
+  padding: 8px 0;
   font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.assign-row:last-of-type {
+  border-bottom: none;
 }
 
 .assign-row.assign-add {
-  grid-template-columns: minmax(160px, 240px) 150px auto;
+  grid-template-columns: minmax(150px, 200px) 150px auto;
+  border-bottom: none;
+}
+
+.assign-name {
+  font-weight: 600;
 }
 
 .assign-name select {
   margin: 0;
+  font-weight: 400;
 }
 
 .assign-input {
@@ -1641,15 +1541,6 @@ button.task-block-head:hover .task-block-name {
   width: 80px;
   margin: 0;
   padding: 6px 8px;
-}
-
-.assign-logged {
-  color: var(--text-muted);
-}
-
-.assign-logged.hours-over {
-  color: #b5651d;
-  font-weight: 600;
 }
 
 button.icon-btn {
@@ -1684,16 +1575,13 @@ button.link-btn:hover {
 @media (max-width: 600px) {
   .assign-row {
     grid-template-columns: 1fr auto 32px;
-    grid-template-areas: "name input x" "logged logged logged";
-    row-gap: 2px;
+    grid-template-areas: "name input x" "bar bar bar";
+    row-gap: 6px;
   }
   .assign-row .assign-name { grid-area: name; }
   .assign-row .assign-input { grid-area: input; }
   .assign-row .icon-btn { grid-area: x; }
-  .assign-row .assign-logged {
-    grid-area: logged;
-    font-size: 12px;
-  }
+  .assign-row .assign-bar { grid-area: bar; }
   .assign-row.assign-add {
     grid-template-columns: 1fr auto;
     grid-template-areas: none;

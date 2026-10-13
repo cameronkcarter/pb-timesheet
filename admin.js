@@ -1,5 +1,5 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices } from "./db.js";
-import { formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick } from "./util.js";
+import { formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
 import { DEFAULT_BILL_RATE, billRateOf, assignmentRate, assignedHours, isInternal } from "./rates.js";
@@ -371,12 +371,13 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
 });
 
 // ---------- Tasks + Assignments ----------
-// One row per task: name, budget, and a single bar (logged / assigned /
-// budget) with one line of totals. Click a task to open its people. Hours are
-// typed (or stepped with the arrows) straight into each person's box: the bar
-// updates as you go and the change saves itself a moment later. Assignments
-// are usually added a bit at a time, so unassigned budget is normal; red only
-// means assigned or logged went past the budget.
+// Same compact table as the Projects page (Task / Budget / Spent / Progress /
+// Remaining, plus Unassigned for handing out hours). Click a task to open its
+// people: each has an hours box, the same assigned-vs-logged bar staff see,
+// and a remove button. Changing hours (typing or the arrows) updates the bar
+// and Unassigned immediately and saves itself a moment later. Assignments are
+// usually added a bit at a time, so unassigned budget is normal; red only
+// means a task's assignments went past its budget.
 const taskBlocks = document.getElementById("taskBlocks");
 const tasksEmpty = document.getElementById("tasksEmpty");
 const openTaskIds = new Set(); // tasks whose people are showing
@@ -408,81 +409,33 @@ function personById(id) {
   return people.find((p) => p.id === id);
 }
 
-function pct(part, whole) {
-  return whole > 0 ? Math.min(100, (part / whole) * 100) : 0;
-}
-
-// The bar and totals line for one task. Projects with one bill rate are
-// measured in hours; staff-rate projects (an hour costs a different amount
-// depending on who works it) in dollars; internal projects have no budget, so
-// assigned hours are the whole bar. hoursOverride ({ assignmentId: hours })
-// lets the bar follow unsaved edits.
-function taskBudgetHtml(task, project, hoursOverride = {}) {
-  const taskAssignments = assignments.filter((a) => a.taskId === task.id);
+// Budget not yet handed out. Hours on projects with one bill rate; dollars on
+// staff-rate projects, where an hour costs a different amount depending on
+// who works it. hoursOverride ({ assignmentId: hours }) follows unsaved edits.
+function unassignedHtml(task, project, hoursOverride = {}) {
   const hoursOf = (a) => (a.id in hoursOverride ? hoursOverride[a.id] : assignedHours(a, ctx()));
-  const assignedHrs = taskAssignments.reduce((s, a) => s + hoursOf(a), 0);
-  const loggedHrs = loggedHours(task.id);
-  const key = (cls, text) => `<span class="bb-key"><span class="bb-swatch ${cls}"></span>${text}</span>`;
-  const overText = (text) => `<span class="hours-over-strong">${text}</span>`;
-
-  let total, assigned, logged, keys;
+  const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   if (isInternal(project)) {
-    total = Math.max(assignedHrs, loggedHrs);
-    assigned = assignedHrs;
-    logged = loggedHrs;
-    keys = [key("logged", `${fmtHrs(loggedHrs)} logged`), key("assigned", `${fmtHrs(assignedHrs)} hrs assigned`)];
-  } else if (project.billRate) {
-    total = Number(task.budget || 0) / Number(project.billRate);
-    assigned = assignedHrs;
-    logged = loggedHrs;
-    const open = total - assigned;
-    keys = [
-      key("logged", `${fmtHrs(loggedHrs)} logged`),
-      key("assigned", `${fmtHrs(assignedHrs)} assigned`),
-      open < -0.005 ? overText(`${fmtHrs(-open)} hrs over budget`) : key("open", `${fmtHrs(open)} hrs unassigned`),
-    ];
-  } else {
-    total = Number(task.budget || 0);
-    assigned = taskAssignments.reduce((s, a) => s + hoursOf(a) * assignmentRate(project, personById(a.personId)), 0);
-    logged = spentOnTask(task.id);
-    const open = total - assigned;
-    keys = [
-      key("logged", `${formatCurrency(logged)} logged`),
-      key("assigned", `${formatCurrency(assigned)} assigned`),
-      open < -0.005 ? overText(`${formatCurrency(-open)} over budget`) : key("open", `${formatCurrency(open)} unassigned`),
-    ];
+    return `${fmtHrs(taskAssignments.reduce((s, a) => s + hoursOf(a), 0))} hrs`;
   }
-  const overBudget = !isInternal(project) && (assigned - total > 0.005 || logged - total > 0.005);
-  return `<div class="budget-bar ${overBudget ? "over" : ""}">
-      <div class="bb-assigned" style="width:${pct(assigned, total)}%"></div>
-      <div class="bb-logged" style="width:${pct(logged, total)}%"></div>
-    </div>
-    <div class="bb-keys">${keys.join("")}</div>`;
+  const budget = Number(task.budget || 0);
+  const assignedDollars = taskAssignments.reduce((s, a) =>
+    s + hoursOf(a) * assignmentRate(project, personById(a.personId)), 0);
+  const open = budget - assignedDollars;
+  const label = (dollars) => (project.billRate ? `${fmtHrs(dollars / Number(project.billRate))} hrs` : formatCurrency(dollars));
+  return open < -0.005
+    ? `<span class="hours-over-strong">Over by ${label(-open)}</span>`
+    : label(open);
 }
 
-function loggedCellHtml(hours, logged) {
-  const over = logged - hours > 0.005;
-  return `<span class="${over ? "hours-over" : ""}">${fmtHrs(logged)} logged${over ? ` &middot; ${fmtHrs(logged - hours)} over` : ""}</span>`;
-}
-
-// "2 people · 1 over" — hoursOverride follows unsaved edits like the bar does.
-function peopleLabelHtml(task, hoursOverride = {}) {
-  const taskAssignments = assignments.filter((a) => a.taskId === task.id);
-  if (taskAssignments.length === 0) return "No one assigned";
-  const hoursOf = (a) => (a.id in hoursOverride ? hoursOverride[a.id] : assignedHours(a, ctx()));
-  const overCount = taskAssignments.filter((a) => loggedHours(task.id, a.personId) - hoursOf(a) > 0.005).length;
-  return `${taskAssignments.length} ${taskAssignments.length === 1 ? "person" : "people"}`
-    + (overCount ? ` &middot; <span class="hours-over">${overCount} over</span>` : "");
-}
-
-function personRowHtml(a) {
+function personRowHtml(a, color) {
   const person = personById(a.personId);
   const hours = assignedHours(a, ctx());
   const logged = loggedHours(a.taskId, a.personId);
   return `<div class="assign-row" data-assignment-id="${a.id}" data-logged="${logged}">
-    <div class="assign-name">${person ? esc(person.name) : "—"} <span class="empty" style="padding:0;">${person ? formatCurrency(person.rate) : "$0"}/hr</span></div>
+    <div class="assign-name">${person ? esc(person.name) : "—"}<div class="empty" style="padding:0; font-size:12px;">${person ? formatCurrency(person.rate) : "$0"}/hr</div></div>
     <div class="assign-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" /> hrs <span class="saved-tick"></span></div>
-    <div class="assign-logged">${loggedCellHtml(hours, logged)}</div>
+    <div class="assign-bar">${hoursBarHtml(logged, hours, color)}</div>
     <button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button>
   </div>`;
 }
@@ -506,6 +459,17 @@ function addPersonHtml(task) {
   </div>`;
 }
 
+function taskDetailHtml(task, project) {
+  const color = projectColor(project.id);
+  const rows = assignments.filter((a) => a.taskId === task.id)
+    .sort((a, b) => (personById(a.personId)?.name || "").localeCompare(personById(b.personId)?.name || ""))
+    .map((a) => personRowHtml(a, color)).join("");
+  return `<div class="assign-list">
+    ${rows || '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
+    ${addPersonHtml(task)}
+  </div>`;
+}
+
 function renderTasks() {
   // Don't wipe an hours box someone is in the middle of editing.
   if (taskBlocks.contains(document.activeElement) && document.activeElement.matches(".assignHours")) {
@@ -523,25 +487,40 @@ function renderTasks() {
     return;
   }
   tasksEmpty.style.display = "none";
+  const internal = isInternal(project);
 
-  taskBlocks.innerHTML = projectTasks.map((t) => {
-    const taskAssignments = assignments.filter((a) => a.taskId === t.id)
-      .sort((a, b) => (personById(a.personId)?.name || "").localeCompare(personById(b.personId)?.name || ""));
+  const head = internal
+    ? `<tr><th>Task</th><th>Assigned</th><th>Logged</th><th style="width:160px;">Progress</th></tr>`
+    : `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th><th>Unassigned</th></tr>`;
+  const cols = internal ? 4 : 6;
+
+  const body = projectTasks.map((t, i) => {
     const open = openTaskIds.has(t.id);
-    return `<div class="task-block ${open ? "open" : ""}" data-task-id="${t.id}">
-      <button type="button" class="task-block-head" data-action="toggle-task" aria-expanded="${open}">
-        <span class="task-chevron" aria-hidden="true">&#9656;</span>
-        <span class="task-block-name">${esc(t.name)}</span>
-        <span class="task-block-people">${peopleLabelHtml(t)}</span>
-        <span class="task-block-budget">${isInternal(project) ? "" : formatCurrency(Number(t.budget || 0))}</span>
-      </button>
-      <div class="task-budget">${taskBudgetHtml(t, project)}</div>
-      ${open ? `<div class="assign-list">
-        ${taskAssignments.map(personRowHtml).join("") || '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
-        ${addPersonHtml(t)}
-      </div>` : ""}
-    </div>`;
+    let cells;
+    if (internal) {
+      const assigned = assignments.filter((a) => a.taskId === t.id).reduce((s, a) => s + assignedHours(a, ctx()), 0);
+      const logged = loggedHours(t.id);
+      const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 0;
+      cells = `<td class="unassignedCell">${fmtHrs(assigned)} hrs</td><td>${fmtHrs(logged)} hrs</td>
+        <td><div class="progress-bar"><div class="fill ${logged > assigned ? "over-soft" : ""}" style="width:${pct}%"></div></div></td>`;
+    } else {
+      const budget = Number(t.budget || 0);
+      const spent = spentOnTask(t.id);
+      const remaining = budget - spent;
+      const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+      cells = `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
+        <td><div class="progress-bar"><div class="fill ${spent > budget ? "over" : ""}" style="width:${pct}%"></div></div></td>
+        <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>
+        <td class="unassignedCell">${unassignedHtml(t, project)}</td>`;
+    }
+    const stripe = i % 2 === 1 ? "stripe" : "";
+    const mainRow = `<tr class="task-row ${stripe} ${open ? "expanded" : ""}" data-task-id="${t.id}">
+      <td><span class="task-chevron" aria-hidden="true">&#9656;</span> ${esc(t.name)}</td>${cells}</tr>`;
+    if (!open) return mainRow;
+    return mainRow + `<tr class="task-detail" data-task-id="${t.id}"><td colspan="${cols}" class="accordion-cell">${taskDetailHtml(t, project)}</td></tr>`;
   }).join("");
+
+  taskBlocks.innerHTML = `<table class="task-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
 
   if (addingTaskId) {
     const hoursInput = taskBlocks.querySelector(".newAssignHours");
@@ -549,20 +528,21 @@ function renderTasks() {
   }
 }
 
-// Redraw one task's bar and its people's "logged" notes from the hours boxes
-// as they're being edited (before the save lands).
-function liveUpdateTask(block) {
-  const task = tasks.find((t) => t.id === block.dataset.taskId);
+// Redraw a task's people bars and Unassigned cell from the hours boxes as
+// they're being edited (before the save lands).
+function liveUpdateTask(detailRow) {
+  const task = tasks.find((t) => t.id === detailRow.dataset.taskId);
   const project = projects.find((p) => p.id === task.projectId);
+  const color = projectColor(project.id);
   const override = {};
-  block.querySelectorAll(".assign-row[data-assignment-id]").forEach((row) => {
+  detailRow.querySelectorAll(".assign-row[data-assignment-id]").forEach((row) => {
     const value = Number(row.querySelector(".assignHours").value);
     const hours = isNaN(value) || value < 0 ? 0 : value;
     override[row.dataset.assignmentId] = hours;
-    row.querySelector(".assign-logged").innerHTML = loggedCellHtml(hours, Number(row.dataset.logged || 0));
+    row.querySelector(".assign-bar").innerHTML = hoursBarHtml(Number(row.dataset.logged || 0), hours, color);
   });
-  block.querySelector(".task-budget").innerHTML = taskBudgetHtml(task, project, override);
-  block.querySelector(".task-block-people").innerHTML = peopleLabelHtml(task, override);
+  const mainRow = taskBlocks.querySelector(`tr.task-row[data-task-id="${task.id}"] .unassignedCell`);
+  if (mainRow) mainRow.innerHTML = unassignedHtml(task, project, override);
 }
 
 function scheduleSave(input) {
@@ -593,7 +573,7 @@ async function saveHours(input) {
 
 taskBlocks.addEventListener("input", (e) => {
   if (!e.target.classList.contains("assignHours")) return;
-  liveUpdateTask(e.target.closest(".task-block"));
+  liveUpdateTask(e.target.closest("tr.task-detail"));
   scheduleSave(e.target);
 });
 
@@ -610,7 +590,7 @@ taskBlocks.addEventListener("focusout", (e) => {
     const value = Number(e.target.value);
     if (assignment && (e.target.value === "" || isNaN(value) || value < 0)) {
       e.target.value = Math.round(assignedHours(assignment, ctx()) * 100) / 100;
-      liveUpdateTask(e.target.closest(".task-block"));
+      liveUpdateTask(e.target.closest("tr.task-detail"));
     }
     if (saveTimers[e.target.dataset.id]) saveHours(e.target);
   }
@@ -629,16 +609,19 @@ function finishEditing() {
 
 taskBlocks.addEventListener("click", async (e) => {
   const btn = e.target.closest("button");
-  if (!btn) return;
-  const { action, id } = btn.dataset;
-  if (["toggle-task", "open-add", "cancel-add"].includes(action)) finishEditing();
-
-  if (action === "toggle-task") {
-    const taskId = btn.closest(".task-block").dataset.taskId;
+  if (!btn) {
+    const row = e.target.closest("tr.task-row");
+    if (!row) return;
+    finishEditing();
+    const taskId = row.dataset.taskId;
     if (openTaskIds.has(taskId)) openTaskIds.delete(taskId); else openTaskIds.add(taskId);
     if (addingTaskId === taskId) addingTaskId = null;
     renderTasks();
+    return;
   }
+  const { action, id } = btn.dataset;
+  if (["open-add", "cancel-add"].includes(action)) finishEditing();
+
   if (action === "open-add") {
     addingTaskId = btn.dataset.taskId;
     renderTasks();
