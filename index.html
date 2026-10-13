@@ -8,22 +8,15 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body class="login-page">
-  <div class="login-card">
+  <main class="login-card">
     <img src="Place%20Builder%20Logo.png" alt="Place Builders" class="login-logo" />
-    <p>Select your name to continue</p>
+    <h1 class="login-title">Welcome back</h1>
+    <p class="login-subtitle">Who's logging in?</p>
 
-    <div id="personCards" class="project-card-row login-cards"></div>
-    <div id="personCardsEmpty" class="empty" style="display:none;">No people set up yet — add your team in Admin.</div>
-
-    <div id="loginAction" style="display:none;">
-      <div id="loginPasswordField" style="display:none; margin-bottom:10px;">
-        <input type="password" id="loginPassword" placeholder="Password" />
-        <div id="loginError" class="empty" style="display:none; color:#c0392b;">Incorrect password.</div>
-      </div>
-      <button id="loginBtn" class="login-btn">Log In as <span id="loginName"></span></button>
-      <button id="testLoginBtn" class="login-btn test-btn">Test Mode</button>
-    </div>
-  </div>
+    <div id="personList" class="login-people" role="list"></div>
+    <div id="personListEmpty" class="empty" style="display:none; text-align:center;">No people set up yet — add your team in Admin.</div>
+    <div id="personListLoading" class="empty" style="text-align:center;">Loading…</div>
+  </main>
 
 <script type="module" src="login.js"></script>
 </body>

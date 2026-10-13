@@ -1025,79 +1025,182 @@ body.login-page {
   margin: 0;
   min-height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(160deg, #6a2f80, #3a1547);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(217, 137, 54, 0.25), transparent 45%),
+    linear-gradient(160deg, #6a2f80, #2f1139);
   padding: 20px;
 }
 
 .login-card {
+  margin: auto; /* centers, but still scrolls when taller than the screen */
   background: #fff;
-  border-radius: 16px;
-  padding: 44px 40px;
+  border-radius: 20px;
+  padding: 36px 28px 28px;
   width: 100%;
-  max-width: 520px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  text-align: center;
+  max-width: 420px;
+  box-shadow: 0 30px 70px rgba(20, 5, 30, 0.45);
 }
 
 .login-logo {
-  max-width: 220px;
-  width: 60%;
+  width: 150px;
   height: auto;
-  margin: 0 auto 12px;
+  margin: 0 auto 18px;
   display: block;
 }
 
-.login-card p {
-  color: var(--text-muted);
-  margin: 0 0 24px;
-  font-size: 14px;
-}
-
-.login-cards {
-  justify-content: center;
-}
-
-.login-cards .project-card {
-  min-width: 140px;
+h1.login-title {
   text-align: center;
-}
-
-.login-cards .project-card .name {
-  padding-right: 0;
-}
-
-#loginAction {
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 14px;
-}
-
-.login-btn {
-  background: var(--navy);
-  color: #fff;
-  border: none;
-  padding: 12px 28px;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
+  font-size: 22px;
   margin: 0;
 }
 
-.login-btn:hover {
-  background: var(--navy-light);
+p.login-subtitle {
+  text-align: center;
+  color: var(--text-muted);
+  margin: 4px 0 20px;
+  font-size: 14px;
 }
 
-.login-btn.test-btn {
-  background: var(--accent);
+.login-people {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.login-btn.test-btn:hover {
-  background: #c47a2c;
+.login-person {
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.login-person.selected {
+  background: #f7f2fa;
+  border-color: #e3d6ea;
+}
+
+button.login-person-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text);
+  border-radius: 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+button.login-person-btn:hover {
+  background: #f4f0f7;
+}
+
+.login-person.selected button.login-person-btn:hover {
+  background: transparent;
+}
+
+.login-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.login-person-name {
+  flex: 1;
+}
+
+.login-last {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--navy-light);
+  background: #efe5f4;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.login-chevron {
+  color: #b9b0bf;
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+
+.login-person.selected .login-chevron {
+  transform: rotate(90deg);
+}
+
+.login-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 14px 62px;
+}
+
+.login-panel input.login-password {
+  margin: 0;
+  padding: 11px 12px;
+  font-size: 15px;
+}
+
+.login-error {
+  color: var(--red);
+  font-size: 13px;
+  margin-top: -4px;
+}
+
+button.login-btn {
+  margin: 0;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+button.login-test-link {
+  margin: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  align-self: center;
+}
+
+button.login-test-link span {
+  font-weight: 400;
+}
+
+button.login-test-link:hover {
+  background: transparent;
+  color: var(--accent);
+}
+
+.login-panel.shake {
+  animation: login-shake 0.35s;
+}
+
+@keyframes login-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 28px 16px 20px;
+  }
+  .login-panel {
+    padding-left: 12px;
+  }
 }
 
 .history-head {
@@ -1272,10 +1375,11 @@ body.login-page {
   color: #fff;
 }
 
+/* Pending approval: a pale tint of the project color (approved is solid). */
 .cal-chip.pending {
-  background: #fff;
-  color: var(--c);
-  border-style: dashed;
+  background: color-mix(in srgb, var(--c) 22%, white);
+  border-color: color-mix(in srgb, var(--c) 22%, white);
+  color: color-mix(in srgb, var(--c) 80%, black);
 }
 
 .cal-week-total {
@@ -1860,7 +1964,7 @@ tr.stripe-row td {
   background: #f1c1bb;
 }
 
-/* Person hours bar: light band = assigned, solid = logged (project color). */
+/* Person hours bar: the track is the assignment; logged fills in (project color). */
 .progress-bar.hours-progress {
   position: relative;
 }
@@ -1869,11 +1973,6 @@ tr.stripe-row td {
   position: absolute;
   top: 0;
   left: 0;
-}
-
-.hours-progress .fill.assigned-band {
-  width: 100%;
-  background: color-mix(in srgb, var(--c) 28%, white);
 }
 
 .hours-progress .fill.logged {

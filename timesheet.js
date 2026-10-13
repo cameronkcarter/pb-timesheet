@@ -85,7 +85,7 @@ window.addEventListener("beforeunload", (e) => {
 
 // ---------- Calendar ----------
 // Each day shows one small chip per project (colored by project): solid once
-// approved (or later), dashed while still pending approval.
+// approved (or later), a pale tint while still pending approval.
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function statusPill(e) {
