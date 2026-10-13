@@ -1996,3 +1996,10 @@ tr.stripe-row td {
 .hours-total .hours-captions .hours-left {
   font-size: 16px;
 }
+
+button:disabled,
+button:disabled:hover {
+  background: #c9c3cd;
+  color: #fff;
+  cursor: not-allowed;
+}

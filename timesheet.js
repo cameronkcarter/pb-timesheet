@@ -288,9 +288,8 @@ function renderLogForm() {
   }
   noAssignmentsEmpty.style.display = "none";
   entryForm.style.display = "block";
-  if (!selectedTaskId || !options.some((c) => c.task.id === selectedTaskId)) {
-    selectedTaskId = options[0].task.id;
-  }
+  // No task is picked automatically; the person chooses one each time.
+  if (selectedTaskId && !options.some((c) => c.task.id === selectedTaskId)) selectedTaskId = null;
   renderTaskCards(options);
   renderExistingHint();
 }
@@ -323,6 +322,14 @@ function renderTaskCards(options) {
 // going past the hours assigned on this task (allowed — it's flagged for
 // admins so they can add hours).
 function renderExistingHint() {
+  if (!selectedTaskId) {
+    existingHint.style.display = "block";
+    existingHint.textContent = "Choose a task above to log hours.";
+    submitEntry.textContent = "Log Hours";
+    submitEntry.disabled = true;
+    cancelEdit.style.display = isDirty ? "inline-block" : "none";
+    return;
+  }
   const existing = existingEntry();
   const notes = [];
   if (existing && existing.invoiced) {
@@ -376,6 +383,7 @@ function clearForm() {
   entryHours.value = "";
   entryNote.value = "";
   isDirty = false;
+  selectedTaskId = null;
   renderLogForm();
 }
 
@@ -389,7 +397,7 @@ submitEntry.addEventListener("click", async () => {
   const hours = Number(entryHours.value);
   const note = entryNote.value.trim();
 
-  if (!projectId || !taskId) return showToast("Pick a project and task first.");
+  if (!projectId || !taskId) return showToast("Choose a task first.");
   if (!hours || hours <= 0) return showToast("Enter hours worked.");
   if (!note) return showToast("Add a note describing what you worked on.");
 
