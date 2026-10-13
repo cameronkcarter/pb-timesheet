@@ -2,7 +2,9 @@ import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices }
 import { formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
-import { DEFAULT_BILL_RATE, billRateOf, assignmentRate, assignedHours, isInternal } from "./rates.js";
+import {
+  DEFAULT_BILL_RATE, billRateOf, assignmentRate, assignedHours, isInternal, personPayRate, personBillRate,
+} from "./rates.js";
 
 const sessionPersonId = requireSession();
 
@@ -37,7 +39,7 @@ if (sessionPersonId) {
     renderPendingApproval();
     migrateLegacyAssignments();
   });
-  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); migrateLegacyAssignments(); });
+  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); migrateLegacyAssignments(); migrateProjectBilling(); });
   Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
   Assignments.listen((d) => { assignments = d; assignmentsLoaded = true; migrateLegacyAssignments(); renderTasks(); renderPendingApproval(); });
   TimeEntries.listen((d) => { timeEntries = d; renderTasks(); renderPendingApproval(); });
@@ -57,6 +59,7 @@ const personModal = document.getElementById("personModal");
 const personModalTitle = document.getElementById("personModalTitle");
 const modalPersonName = document.getElementById("modalPersonName");
 const modalPersonRate = document.getElementById("modalPersonRate");
+const modalPersonBillRate = document.getElementById("modalPersonBillRate");
 const modalPersonAdmin = document.getElementById("modalPersonAdmin");
 const modalPersonPassword = document.getElementById("modalPersonPassword");
 
@@ -67,14 +70,15 @@ function renderPeople() {
     return;
   }
   peopleEmpty.style.display = "none";
-  peopleTbody.innerHTML = people.map((p) => `
-    <tr>
-      <td>${p.name}${p.isAdmin ? ' <span class="pill orange">Admin</span>' : ""}</td>
-      <td>${formatCurrency(p.rate)}/hr</td>
-      <td class="row-actions">
+  peopleTbody.innerHTML = people.map((p, i) => `
+    <tr class="${i % 2 === 1 ? "stripe-row" : ""}">
+      <td>${esc(p.name)}${p.isAdmin ? ' <span class="pill orange">Admin</span>' : ""}</td>
+      <td>${formatCurrency(personPayRate(p))}/hr</td>
+      <td>${formatCurrency(personBillRate(p))}/hr${p.billRate == null ? ' <span class="empty" style="padding:0;">(not set — using pay rate)</span>' : ""}</td>
+      <td><div class="row-actions" style="justify-content:flex-end;">
         <button class="small secondary" data-action="edit-person" data-id="${p.id}">Edit</button>
         <button class="danger small" data-action="remove-person" data-id="${p.id}">Remove</button>
-      </td>
+      </div></td>
     </tr>`).join("");
 }
 
@@ -95,9 +99,11 @@ peopleTbody.addEventListener("click", async (e) => {
 
 function openPersonModal(person) {
   modalEditingPersonId = person ? person.id : null;
-  personModalTitle.textContent = person ? "Edit Person" : "Add Person";
+  personModalTitle.textContent = person ? "Edit person" : "New person";
   modalPersonName.value = person ? person.name : "";
   modalPersonRate.value = person ? person.rate : "";
+  // New people start at the firm's standard bill rate.
+  modalPersonBillRate.value = person ? (person.billRate ?? "") : DEFAULT_BILL_RATE;
   modalPersonAdmin.checked = person ? !!person.isAdmin : false;
   modalPersonPassword.value = person ? (person.password || "") : "";
   personModal.style.display = "flex";
@@ -110,20 +116,23 @@ function closePersonModal() {
 
 document.getElementById("openAddPerson").addEventListener("click", () => openPersonModal(null));
 document.getElementById("modalCancelPerson").addEventListener("click", closePersonModal);
+document.getElementById("modalClosePerson").addEventListener("click", closePersonModal);
 closeOnBackdropClick(personModal, closePersonModal);
 
 document.getElementById("modalSavePerson").addEventListener("click", async () => {
   const name = modalPersonName.value.trim();
   const rate = Number(modalPersonRate.value);
+  const billRate = modalPersonBillRate.value === "" ? null : Number(modalPersonBillRate.value);
   const isAdmin = modalPersonAdmin.checked;
   const password = modalPersonPassword.value.trim() || null;
-  if (!name || !rate) return showToast("Enter a name and rate.");
+  if (!name || !rate) return showToast("Enter a name and pay rate.");
+  if (billRate != null && !(billRate >= 0)) return showToast("Enter a valid bill rate.");
   try {
     if (modalEditingPersonId) {
-      await People.update(modalEditingPersonId, { name, rate, isAdmin, password });
+      await People.update(modalEditingPersonId, { name, rate, billRate, isAdmin, password });
       showToast("Person updated.");
     } else {
-      await People.add({ name, rate, isAdmin, password });
+      await People.add({ name, rate, billRate, isAdmin, password });
       showToast("Person added.");
     }
     closePersonModal();
@@ -147,17 +156,52 @@ const modalBillToCompany = document.getElementById("modalBillToCompany");
 const modalBillToAddress1 = document.getElementById("modalBillToAddress1");
 const modalBillToAddress2 = document.getElementById("modalBillToAddress2");
 const modalProjectNumber = document.getElementById("modalProjectNumber");
-const modalProjectBillRate = document.getElementById("modalProjectBillRate");
-const modalProjectInternal = document.getElementById("modalProjectInternal");
+const modalProjectType = document.getElementById("modalProjectType");
+const modalTypeHint = document.getElementById("modalTypeHint");
 const modalBillingFields = document.getElementById("modalBillingFields");
+const modalTaskRows = document.getElementById("modalTaskRows");
+const modalTaskHead = document.getElementById("modalTaskHead");
+const modalTaskTotal = document.getElementById("modalTaskTotal");
 
-// Internal projects have no client billing or budgets — hide those fields.
-function syncInternalFields() {
-  const internal = modalProjectInternal.checked;
+// How a project bills: each person's bill rate (default), each person's pay
+// rate (older no-overhead contracts like Cache County), or not at all.
+const PROJECT_TYPES = {
+  rates: "Hours are billed, and the budget spent, at each person's bill rate (set under People & Rates).",
+  pay: "Hours are billed at each person's pay rate, with no overhead — for older contracts like Cache County.",
+  internal: "Not billed to a client and staff aren't paid. Just tracks hours, e.g. Proposals & Pursuits.",
+};
+let modalType = "rates";
+
+function projectTypeOf(project) {
+  if (!project) return "rates";
+  if (project.internal) return "internal";
+  return project.billAtPayRate ? "pay" : "rates";
+}
+
+function setModalType(type) {
+  modalType = type;
+  modalProjectType.querySelectorAll("button").forEach((b) => {
+    const on = b.dataset.value === type;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", on);
+  });
+  modalTypeHint.textContent = PROJECT_TYPES[type];
+  const internal = type === "internal";
   modalBillingFields.style.display = internal ? "none" : "block";
   modalTaskRows.classList.toggle("internal", internal);
+  modalTaskHead.classList.toggle("internal", internal);
+  updateTaskTotal();
 }
-const modalTaskRows = document.getElementById("modalTaskRows");
+
+function updateTaskTotal() {
+  const rows = [...modalTaskRows.querySelectorAll(".modal-task-row")];
+  if (modalType === "internal") {
+    modalTaskTotal.textContent = rows.length ? `${rows.length} ${rows.length === 1 ? "task" : "tasks"}` : "";
+    return;
+  }
+  const total = rows.reduce((s, r) => s + (Number(r.querySelector(".modalTaskBudget").value) || 0), 0);
+  modalTaskTotal.textContent = `${formatCurrency(total)} total budget`;
+}
 
 function renderProjectCards() {
   if (projects.length === 0) {
@@ -176,7 +220,7 @@ function renderProjectCards() {
     <div class="project-card ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}">
       <div class="name">${p.name}</div>
       <div class="client">${p.client || "&nbsp;"}</div>
-      <div class="client">${p.internal ? "Internal &middot; not billed or paid" : p.billRate ? `Bills ${formatCurrency(p.billRate)}/hr` : "Bills at staff pay rates"}</div>
+      <div class="client">${p.internal ? "Internal &middot; not billed or paid" : p.billAtPayRate ? "Bills at staff pay rates" : "Bills at each person's rate"}</div>
       <div class="card-actions">
         <button class="small secondary" data-action="edit-project" data-id="${p.id}">Edit</button>
         <button class="danger small" data-action="remove-project" data-id="${p.id}">Remove</button>
@@ -257,25 +301,19 @@ function syncBudgetsToSheet() {
 }
 
 function modalTaskRowHtml(taskId, name, budget, startDate, endDate) {
-  return `<div class="modal-task-row" data-task-id="${taskId || ""}">
-    <div class="modal-task-row-main">
-      <input type="text" class="modalTaskName" placeholder="Task name" value="${esc(name || "")}" />
-      <input type="number" class="modalTaskBudget" placeholder="Budget ($)" min="0" step="0.01" value="${budget || ""}" />
-      <button type="button" class="danger small removeTaskRow">&times;</button>
-    </div>
-    <div class="modal-task-row-dates">
-      <span>Schedule (optional):</span>
-      <input type="date" class="modalTaskStart" value="${startDate || ""}" />
-      <span>to</span>
-      <input type="date" class="modalTaskEnd" value="${endDate || ""}" />
-    </div>
+  return `<div class="modal-task-row task-edit-grid" data-task-id="${taskId || ""}">
+    <input type="text" class="modalTaskName" placeholder="Task name" value="${esc(name || "")}" />
+    <div class="money-input col-budget"><span>$</span><input type="number" class="modalTaskBudget" placeholder="0" min="0" step="0.01" value="${budget || ""}" /></div>
+    <input type="date" class="modalTaskStart" value="${startDate || ""}" title="Start (optional)" />
+    <input type="date" class="modalTaskEnd" value="${endDate || ""}" title="End (optional)" />
+    <button type="button" class="icon-btn removeTaskRow" title="Remove task" aria-label="Remove task">&times;</button>
   </div>`;
 }
 
 function openProjectModal(project) {
   modalEditingProjectId = project ? project.id : null;
   pendingTaskDeletions = new Set();
-  projectModalTitle.textContent = project ? "Edit Project" : "Add Project";
+  projectModalTitle.textContent = project ? "Edit project" : "New project";
   modalProjectName.value = project ? project.name : "";
   modalProjectClient.value = project ? project.client || "" : "";
   modalBillToName.value = project ? project.billToName || "" : "";
@@ -283,16 +321,14 @@ function openProjectModal(project) {
   modalBillToAddress1.value = project ? project.billToAddress1 || "" : "";
   modalBillToAddress2.value = project ? project.billToAddress2 || "" : "";
   modalProjectNumber.value = project ? project.projectNumber || "" : "";
-  // New projects start at the firm's standard rate; existing ones show their
-  // own (blank = bill each person at their pay rate).
-  modalProjectBillRate.value = project ? (project.billRate || "") : DEFAULT_BILL_RATE;
-  modalProjectInternal.checked = !!(project && project.internal);
 
-  const projectTasks = project ? tasks.filter((t) => t.projectId === project.id) : [];
+  const projectTasks = project
+    ? tasks.filter((t) => t.projectId === project.id).sort((a, b) => a.name.localeCompare(b.name))
+    : [];
   modalTaskRows.innerHTML = projectTasks.length > 0
     ? projectTasks.map((t) => modalTaskRowHtml(t.id, t.name, t.budget, t.startDate, t.endDate)).join("")
     : modalTaskRowHtml();
-  syncInternalFields();
+  setModalType(projectTypeOf(project));
 
   projectModal.style.display = "flex";
   modalProjectName.focus();
@@ -303,9 +339,17 @@ function closeProjectModal() {
 }
 
 document.getElementById("openAddProject").addEventListener("click", () => openProjectModal(null));
-modalProjectInternal.addEventListener("change", syncInternalFields);
+modalProjectType.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-value]");
+  if (btn) setModalType(btn.dataset.value);
+});
 document.getElementById("modalAddTaskRow").addEventListener("click", () => {
   modalTaskRows.insertAdjacentHTML("beforeend", modalTaskRowHtml());
+  modalTaskRows.lastElementChild.querySelector(".modalTaskName").focus();
+  updateTaskTotal();
+});
+modalTaskRows.addEventListener("input", (e) => {
+  if (e.target.classList.contains("modalTaskBudget")) updateTaskTotal();
 });
 modalTaskRows.addEventListener("click", (e) => {
   const btn = e.target.closest(".removeTaskRow");
@@ -313,25 +357,32 @@ modalTaskRows.addEventListener("click", (e) => {
   const row = btn.closest(".modal-task-row");
   if (row.dataset.taskId) pendingTaskDeletions.add(row.dataset.taskId);
   row.remove();
+  updateTaskTotal();
 });
 document.getElementById("modalCancelProject").addEventListener("click", closeProjectModal);
+document.getElementById("modalCloseProject").addEventListener("click", closeProjectModal);
 closeOnBackdropClick(projectModal, closeProjectModal);
 
 document.getElementById("modalSaveProject").addEventListener("click", async () => {
   const name = modalProjectName.value.trim();
-  const client = modalProjectClient.value.trim();
-  const billToName = modalBillToName.value.trim();
-  const billToCompany = modalBillToCompany.value.trim();
-  const billToAddress1 = modalBillToAddress1.value.trim();
-  const billToAddress2 = modalBillToAddress2.value.trim();
-  const projectNumber = modalProjectNumber.value.trim();
-  const internal = modalProjectInternal.checked;
-  const billRate = internal || modalProjectBillRate.value === "" ? null : Number(modalProjectBillRate.value);
-  if (billRate != null && !(billRate > 0)) return showToast("Billing rate must be more than $0, or blank.");
-  if (!name) return showToast("Enter a project name.");
+  const internal = modalType === "internal";
+  if (!name) {
+    modalProjectName.focus();
+    return showToast("Give the project a name.");
+  }
+  const projectData = {
+    name,
+    client: modalProjectClient.value.trim(),
+    billToName: modalBillToName.value.trim(),
+    billToCompany: modalBillToCompany.value.trim(),
+    billToAddress1: modalBillToAddress1.value.trim(),
+    billToAddress2: modalBillToAddress2.value.trim(),
+    projectNumber: modalProjectNumber.value.trim(),
+    internal,
+    billAtPayRate: modalType === "pay",
+  };
   try {
     let projectId = modalEditingProjectId;
-    const projectData = { name, client, billToName, billToCompany, billToAddress1, billToAddress2, projectNumber, billRate, internal };
     if (projectId) {
       await Projects.update(projectId, projectData);
     } else {
@@ -339,8 +390,7 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
       projectId = ref.id;
     }
 
-    const rows = [...modalTaskRows.querySelectorAll(".modal-task-row")];
-    for (const row of rows) {
+    for (const row of modalTaskRows.querySelectorAll(".modal-task-row")) {
       const taskId = row.dataset.taskId;
       const taskName = row.querySelector(".modalTaskName").value.trim();
       const taskBudget = internal ? 0 : Number(row.querySelector(".modalTaskBudget").value) || 0;
@@ -369,6 +419,18 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
     showToast("Error: " + err.message);
   }
 });
+
+// Projects used to have an optional project-wide bill rate; blank meant
+// "bill at staff pay rates" (Cache County). Bill rates are now per person, so
+// record each existing project's billing choice explicitly, once.
+let projectsMigrated = false;
+async function migrateProjectBilling() {
+  if (projectsMigrated || !projects.length) return;
+  projectsMigrated = true;
+  for (const p of projects.filter((pr) => !pr.internal && pr.billAtPayRate == null)) {
+    try { await Projects.update(p.id, { billAtPayRate: !p.billRate }); } catch (err) { console.warn("Project billing migration failed:", err); }
+  }
+}
 
 // ---------- Tasks + Assignments ----------
 // Same compact table as the Projects page (Task / Budget / Spent / Progress /
@@ -409,9 +471,8 @@ function personById(id) {
   return people.find((p) => p.id === id);
 }
 
-// Budget not yet handed out. Hours on projects with one bill rate; dollars on
-// staff-rate projects, where an hour costs a different amount depending on
-// who works it. hoursOverride ({ assignmentId: hours }) follows unsaved edits.
+// Budget not yet handed out, in dollars (each person's hours cost a different
+// amount). hoursOverride ({ assignmentId: hours }) follows unsaved edits.
 function unassignedHtml(task, project, hoursOverride = {}) {
   const hoursOf = (a) => (a.id in hoursOverride ? hoursOverride[a.id] : assignedHours(a, ctx()));
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
@@ -422,18 +483,23 @@ function unassignedHtml(task, project, hoursOverride = {}) {
   const assignedDollars = taskAssignments.reduce((s, a) =>
     s + hoursOf(a) * assignmentRate(project, personById(a.personId)), 0);
   const open = budget - assignedDollars;
-  const label = (dollars) => (project.billRate ? `${fmtHrs(dollars / Number(project.billRate))} hrs` : formatCurrency(dollars));
   return open < -0.005
-    ? `<span class="hours-over-strong">Over by ${label(-open)}</span>`
-    : label(open);
+    ? `<span class="hours-over-strong">Over by ${formatCurrency(-open)}</span>`
+    : formatCurrency(open);
+}
+
+function ratesLabel(person, project) {
+  if (!person) return "";
+  return `Pay ${formatCurrency(personPayRate(person))} &middot; Bill ${formatCurrency(assignmentRate(project, person))}/hr`;
 }
 
 function personRowHtml(a, color) {
   const person = personById(a.personId);
+  const project = projects.find((p) => p.id === a.projectId);
   const hours = assignedHours(a, ctx());
   const logged = loggedHours(a.taskId, a.personId);
   return `<div class="assign-row" data-assignment-id="${a.id}" data-logged="${logged}">
-    <div class="assign-name">${person ? esc(person.name) : "—"}<div class="empty" style="padding:0; font-size:12px;">${person ? formatCurrency(person.rate) : "$0"}/hr</div></div>
+    <div class="assign-name">${person ? esc(person.name) : "—"}<div class="empty" style="padding:0; font-size:12px; font-weight:400;">${ratesLabel(person, project)}</div></div>
     <div class="assign-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" /> hrs <span class="saved-tick"></span></div>
     <div class="assign-bar">${hoursBarHtml(logged, hours, color)}</div>
     <button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button>
@@ -449,7 +515,7 @@ function addPersonHtml(task) {
   }
   return `<div class="assign-row assign-add">
     <div class="assign-name"><select class="newAssignPerson">
-      ${available.map((p) => `<option value="${p.id}">${esc(p.name)} (${formatCurrency(p.rate)}/hr)</option>`).join("")}
+      ${available.map((p) => `<option value="${p.id}">${esc(p.name)} (pay ${formatCurrency(personPayRate(p))}, bill ${formatCurrency(assignmentRate(projects.find((pr) => pr.id === task.projectId), p))})</option>`).join("")}
     </select></div>
     <div class="assign-input"><input type="number" class="newAssignHours" min="0" step="0.5" placeholder="20" /> hrs</div>
     <div class="row-actions">

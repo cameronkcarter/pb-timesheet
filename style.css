@@ -474,39 +474,6 @@ th {
   margin-top: 0;
 }
 
-.modal-task-row {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 10px;
-  margin-bottom: 10px;
-}
-
-.modal-task-row-main {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.modal-task-row-main .modalTaskName {
-  flex: 2;
-}
-
-.modal-task-row-main .modalTaskBudget {
-  flex: 1;
-}
-
-.modal-task-row-dates {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.modal-task-row-dates input {
-  flex: 1;
-}
-
 .modal-duedate-row {
   border-bottom: 1px solid var(--border);
   padding-bottom: 12px;
@@ -527,8 +494,7 @@ th {
   flex: 1;
 }
 
-.modal-duedate-row-main .removeDueDateRow,
-.modal-task-row-main .removeTaskRow {
+.modal-duedate-row-main .removeDueDateRow {
   align-self: stretch;
   padding: 0 12px;
   flex-shrink: 0;
@@ -1134,13 +1100,32 @@ body.login-page {
   background: #c47a2c;
 }
 
-.sheet-sync-bar {
+.history-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 10px 16px;
   flex-wrap: wrap;
-  font-size: 14px;
+}
+
+.sheet-sync-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.sheet-sync-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sheet-sync-inline button.small {
+  margin: 0;
 }
 
 .button-link {
@@ -1589,4 +1574,269 @@ button.link-btn:hover {
   .assign-row.assign-add .assign-name,
   .assign-row.assign-add .assign-input { grid-area: auto; }
   .assign-row.assign-add .row-actions { grid-column: 1 / -1; }
+}
+
+/* ---------- App-style sheet modals (Admin: project, person) ---------- */
+.modal.sheet-modal {
+  max-width: 760px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.modal.sheet-modal.sheet-small {
+  max-width: 460px;
+}
+
+.sheet-head {
+  position: relative;
+  padding: 22px 56px 14px 26px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sheet-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+input[type="text"].title-input {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 2px 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
+}
+
+input[type="text"].title-input:focus {
+  outline: none;
+  border-bottom-color: var(--navy-light);
+}
+
+button.icon-btn.sheet-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 24px;
+  padding: 4px 10px;
+}
+
+.sheet-body {
+  padding: 18px 26px 22px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.sheet-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 26px;
+  border-top: 1px solid var(--border);
+  background: #faf9fb;
+}
+
+.sheet-foot button {
+  margin: 0;
+}
+
+.sheet-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.section-meta {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+.field {
+  margin-top: 14px;
+}
+
+.field-grid .field {
+  margin-top: 0;
+}
+
+.field label,
+.sheet-body label {
+  margin: 0 0 5px;
+  font-size: 12px;
+}
+
+.field-optional {
+  font-weight: 400;
+  color: #a39aa8;
+  margin-left: 4px;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.sheet-body .checkbox-label {
+  font-size: 14px;
+  margin-top: 16px;
+}
+
+/* Segmented control (one choice of a few). */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  background: #f1eef4;
+  border-radius: 9px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.segmented button {
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.segmented button:hover {
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text);
+}
+
+.segmented button.on {
+  background: #fff;
+  color: var(--navy);
+  box-shadow: 0 1px 3px rgba(40, 20, 50, 0.15);
+}
+
+/* Inputs with a $ prefix and/or /hr suffix. */
+.money-input {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 0 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.money-input:focus-within {
+  border-color: var(--navy-light);
+}
+
+.money-input input[type="number"] {
+  border: none;
+  padding: 9px 6px;
+  min-width: 0;
+}
+
+.money-input input[type="number"]:focus {
+  outline: none;
+}
+
+/* Task editor rows: name | budget | start | end | remove */
+.task-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.2fr) 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-edit-grid.internal,
+#modalTaskRows.internal .task-edit-grid {
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) 34px;
+}
+
+.task-edit-grid.internal .col-budget,
+#modalTaskRows.internal .col-budget {
+  display: none;
+}
+
+.task-edit-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 2px 6px;
+}
+
+.modal-task-row {
+  padding: 4px 0;
+}
+
+.modal-task-row input {
+  margin: 0;
+}
+
+.modal-task-row input[type="date"] {
+  padding: 8px 6px;
+  font-size: 13px;
+}
+
+/* People table shading, to match the task tables. */
+tr.stripe-row td {
+  background: #f6f3f9;
+}
+
+@media (max-width: 640px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+  .task-edit-head {
+    display: none;
+  }
+  .modal-task-row.task-edit-grid {
+    grid-template-columns: 1fr 1fr 1fr 34px;
+    grid-template-areas: "name name name x" "budget start end end";
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  #modalTaskRows.internal .modal-task-row.task-edit-grid {
+    grid-template-columns: 1fr 1fr 34px;
+    grid-template-areas: "name name x" "start end end";
+  }
+  .modal-task-row .modalTaskName { grid-area: name; }
+  .modal-task-row .col-budget { grid-area: budget; }
+  .modal-task-row .modalTaskStart { grid-area: start; }
+  .modal-task-row .modalTaskEnd { grid-area: end; }
+  .modal-task-row .removeTaskRow { grid-area: x; }
+  .modal.sheet-modal {
+    max-height: 92vh;
+    margin: 0 8px;
+  }
 }

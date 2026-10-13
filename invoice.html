@@ -22,17 +22,6 @@
 <main>
   <h1>Invoices</h1>
 
-  <div class="card sheet-sync-bar" id="sheetSyncBar" style="display:none;">
-    <div>
-      <div class="summary-label">Google Sheet Log</div>
-      <div id="sheetSyncStatus" style="margin-top:2px;"></div>
-    </div>
-    <div class="row-actions">
-      <a id="sheetOpenLink" class="button-link" target="_blank" rel="noopener" style="display:none;">Open Sheet</a>
-      <button id="sheetSyncBtn" class="small">Sync Now</button>
-    </div>
-  </div>
-
   <div class="card">
     <h2>Project</h2>
     <div id="projectCards" class="project-card-row"></div>
@@ -44,8 +33,16 @@
   <div id="monthsEmpty" class="card empty" style="display:none;">No uninvoiced hours for this project — everything logged so far has already been invoiced.</div>
 
   <div class="card" id="historyCard" style="display:none;">
-    <h2>Previous Invoices</h2>
-    <table id="historyTable">
+    <div class="history-head">
+      <h2 style="margin:0;">Previous Invoices</h2>
+      <div class="sheet-sync-inline" id="sheetSyncBar" style="display:none;">
+        <span class="sheet-sync-label">Google Sheet</span>
+        <span id="sheetSyncStatus"></span>
+        <a id="sheetOpenLink" class="button-link" target="_blank" rel="noopener" style="display:none;">Open</a>
+        <button id="sheetSyncBtn" class="small secondary">Sync Now</button>
+      </div>
+    </div>
+    <table id="historyTable" style="margin-top:14px;">
       <thead><tr><th>Period</th><th>Invoice #</th><th>Date</th><th>Total</th><th>Status</th><th style="width:160px;"></th></tr></thead>
       <tbody></tbody>
     </table>

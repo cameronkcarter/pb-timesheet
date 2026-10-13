@@ -769,7 +769,7 @@ function renderSheetSync() {
     sheetOpenLink.style.display = "";
   }
   if (isTestMode()) {
-    sheetSyncStatus.innerHTML = '<span class="empty" style="padding:0;">Sheet syncing is off in Test Mode.</span>';
+    sheetSyncStatus.innerHTML = '<span class="empty" style="padding:0;">Off in Test Mode</span>';
     sheetSyncBtn.style.display = "none";
     return;
   }
@@ -777,13 +777,13 @@ function renderSheetSync() {
   sheetSyncBtn.textContent = sheetSyncing ? "Syncing…" : "Sync Now";
   const unsynced = invoices.filter((i) => !i.sheetSynced).length;
   if (sheetSyncing) {
-    sheetSyncStatus.textContent = "Sending invoices to the sheet…";
+    sheetSyncStatus.textContent = "Syncing…";
   } else if (sheetSyncError) {
-    sheetSyncStatus.innerHTML = `<span style="color:var(--red);">Last sync failed: ${esc(sheetSyncError)}</span>`;
+    sheetSyncStatus.innerHTML = `<span style="color:var(--red);" title="${esc(sheetSyncError)}">Last sync failed</span>`;
   } else if (unsynced > 0) {
-    sheetSyncStatus.innerHTML = `<span class="pill orange">${unsynced} ${unsynced === 1 ? "invoice" : "invoices"} not yet in the sheet</span>`;
+    sheetSyncStatus.innerHTML = `<span class="pill orange">${unsynced} not yet logged</span>`;
   } else {
-    sheetSyncStatus.innerHTML = `<span class="pill green">All ${invoices.length} invoices logged</span>`;
+    sheetSyncStatus.innerHTML = `<span class="pill green">All ${invoices.length} logged</span>`;
   }
 }
 
