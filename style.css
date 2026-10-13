@@ -152,6 +152,7 @@ select:disabled {
 }
 
 button {
+  font-family: inherit;
   background: var(--navy);
   color: #fff;
   border: none;
@@ -1477,11 +1478,63 @@ body.login-page {
   border-bottom: none;
 }
 
-.task-block-head {
+button.task-block-head {
   display: flex;
-  justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+button.task-block-head:hover {
+  background: transparent;
+}
+
+button.task-block-head:hover .task-block-name {
+  color: var(--navy-light);
+}
+
+.task-chevron {
+  display: inline-block;
+  width: 12px;
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.task-block.open .task-chevron {
+  transform: rotate(90deg);
+}
+
+.task-block-people {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+
+.task-block .budget-bar,
+.task-block .bb-keys,
+.task-block .assign-list {
+  margin-left: 22px;
+}
+
+.saved-tick {
+  font-size: 12px;
+  color: var(--green);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.saved-tick.show {
+  opacity: 1;
 }
 
 .task-block-name {
@@ -1561,7 +1614,7 @@ body.login-page {
 
 .assign-row {
   display: grid;
-  grid-template-columns: minmax(160px, 240px) 120px minmax(120px, 240px) 32px;
+  grid-template-columns: minmax(160px, 240px) 150px minmax(120px, 240px) 32px;
   justify-content: start;
   gap: 12px;
   align-items: center;
@@ -1570,7 +1623,7 @@ body.login-page {
 }
 
 .assign-row.assign-add {
-  grid-template-columns: minmax(160px, 240px) 120px auto;
+  grid-template-columns: minmax(160px, 240px) 150px auto;
 }
 
 .assign-name select {
