@@ -134,7 +134,7 @@ function render() {
       </div>
       ${taskRows ? `
         <div class="hours-total">
-          <div class="summary-label">All tasks</div>
+          <div class="summary-label">Your hours &middot; all tasks</div>
           ${hoursBarHtml(totalUsed, totalAssigned, color, true)}
         </div>
         <div class="hours-rows">${taskRows}</div>` : '<div class="empty">No hours assigned to you on this project yet.</div>'}

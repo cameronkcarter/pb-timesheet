@@ -120,18 +120,25 @@ export function showToast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
 }
 
-// Hours bar for someone's assignment: leads with how many hours they're
-// assigned, then how many they've logged. Logging past the assignment is
-// allowed (more hours are often added later), so it's flagged in amber rather
-// than treated as an error.
+// Hours bar for someone's assignment. Leads with hours LEFT (the number
+// people act on), with logged and assigned alongside. The bar is the
+// assignment: a light band of the project color for assigned hours, filled
+// solid as hours are logged. Logging past the assignment is allowed (more
+// hours are often added later), so it shows in amber, not as an error.
 export function hoursBarHtml(logged, assigned, color, large = false) {
   const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : (logged > 0 ? 100 : 0);
   const over = logged - assigned > 0.005;
+  const headline = assigned <= 0 && logged <= 0
+    ? "No hours assigned"
+    : over ? `${fmtHrs(logged - assigned)} hrs over` : `${fmtHrs(assigned - logged)} hrs left`;
   return `<div class="hours-bar-wrap">
-    <div class="progress-bar ${large ? "large" : "task-bar"}"><div class="fill ${over ? "over-soft" : ""}" style="width:${pct}%; ${over ? "" : `background:${color};`}"></div></div>
+    <div class="progress-bar hours-progress ${large ? "large" : "task-bar"} ${over ? "over" : ""}" style="--c:${color};">
+      ${assigned > 0 ? `<div class="fill assigned-band"></div>` : ""}
+      <div class="fill logged" style="width:${pct}%"></div>
+    </div>
     <div class="hours-captions">
-      <span>Assigned <strong>${fmtHrs(assigned)} hrs</strong></span>
-      <span class="${over ? "hours-over" : ""}">${fmtHrs(logged)} logged${over ? ` · ${fmtHrs(logged - assigned)} over assigned` : ` · ${fmtHrs(assigned - logged)} left`}</span>
+      <span class="hours-left ${over ? "hours-over" : ""}">${headline}</span>
+      <span>${fmtHrs(logged)} logged of ${fmtHrs(assigned)} assigned</span>
     </div>
   </div>`;
 }

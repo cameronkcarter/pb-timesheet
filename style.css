@@ -1859,3 +1859,41 @@ tr.stripe-row td {
 .budget-progress .fill.assigned.over {
   background: #f1c1bb;
 }
+
+/* Person hours bar: light band = assigned, solid = logged (project color). */
+.progress-bar.hours-progress {
+  position: relative;
+}
+
+.hours-progress .fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.hours-progress .fill.assigned-band {
+  width: 100%;
+  background: color-mix(in srgb, var(--c) 28%, white);
+}
+
+.hours-progress .fill.logged {
+  background: var(--c);
+}
+
+.hours-progress.over .fill.logged {
+  background: var(--accent);
+}
+
+.hours-captions .hours-left {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.hours-captions .hours-left.hours-over {
+  color: #b5651d;
+}
+
+.hours-total .hours-captions .hours-left {
+  font-size: 16px;
+}
