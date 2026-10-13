@@ -2020,3 +2020,24 @@ button:disabled:hover {
 .logged-row:last-child {
   border-bottom: none;
 }
+
+/* Timesheet: Log Hours button row, with notes beside the button. */
+.entry-actions {
+  display: flex;
+  align-items: flex-start; /* button stays put even if a note wraps */
+  gap: 14px;
+  margin-top: 14px;
+  min-height: 42px;
+}
+
+.entry-status {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.35;
+  padding-top: 11px;
+}
+
+.entry-status.warn {
+  color: #9a5a16;
+}

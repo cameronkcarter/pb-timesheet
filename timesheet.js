@@ -345,21 +345,21 @@ function renderTaskCards(options) {
 // admins so they can add hours).
 function renderExistingHint() {
   if (!selectedTaskId) {
-    existingHint.style.display = "block";
+    existingHint.className = "entry-status";
     existingHint.textContent = "Choose a task above to log hours.";
     submitEntry.textContent = "Log Hours";
     submitEntry.disabled = true;
-    cancelEdit.style.display = isDirty ? "inline-block" : "none";
+    cancelEdit.style.visibility = isDirty ? "visible" : "hidden";
     return;
   }
   const existing = existingEntry();
   const notes = [];
   if (existing && existing.invoiced) {
-    notes.push("Hours on this task for this day have already been invoiced and can't be changed.");
+    notes.push("Already invoiced for this day — can't be changed");
     submitEntry.textContent = "Log Hours";
     submitEntry.disabled = true;
   } else {
-    if (existing) notes.push(`You already logged ${existing.hours} hrs on this task this day — saving will replace it.`);
+    if (existing) notes.push(`Replaces the ${existing.hours} hrs already logged here`);
     submitEntry.textContent = existing ? "Update Entry" : "Log Hours";
     submitEntry.disabled = false;
 
@@ -369,13 +369,13 @@ function renderExistingHint() {
       const assigned = assignedHours(option.assignment, { projects, people });
       const after = loggedOnTask(selectedTaskId, existing ? existing.id : null) + hours;
       if (after - assigned > 0.005) {
-        notes.push(`This puts you at ${fmtHours(after)} of your ${fmtHours(assigned)} assigned hrs on this task. That's OK — it'll be flagged so your PM can add hours.`);
+        notes.push(`${fmtHours(after - assigned)} hrs over your ${fmtHours(assigned)} assigned — OK, your PM will see it.`);
       }
     }
   }
-  existingHint.style.display = notes.length ? "block" : "none";
-  existingHint.innerHTML = notes.map(esc).join("<br>");
-  cancelEdit.style.display = isDirty ? "inline-block" : "none";
+  existingHint.className = notes.length ? "entry-status warn" : "entry-status";
+  existingHint.innerHTML = notes.map(esc).join(" &middot; ");
+  cancelEdit.style.visibility = isDirty ? "visible" : "hidden";
 }
 
 projectCardsEl.addEventListener("click", (e) => {

@@ -61,10 +61,10 @@
           <label for="entryNote">Note — what did you work on?</label>
           <textarea id="entryNote" rows="3" placeholder="Briefly describe what you worked on..."></textarea>
 
-          <div id="existingHint" class="draft-notice" style="display:none;"></div>
-          <div class="row-actions" style="margin-top:14px;">
+          <div class="entry-actions">
             <button id="submitEntry" style="margin:0;">Log Hours</button>
-            <button id="cancelEdit" class="secondary" style="margin:0; display:none;">Cancel</button>
+            <span id="existingHint" class="entry-status" aria-live="polite"></span>
+            <button id="cancelEdit" class="secondary" style="margin:0; visibility:hidden;">Cancel</button>
           </div>
         </div>
       </div>
