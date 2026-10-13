@@ -151,3 +151,17 @@ export function closeOnBackdropClick(overlay, close) {
     downOnBackdrop = false;
   });
 }
+
+// Task budget bar: spent (solid) over committed — spent plus assigned hours
+// not yet logged — (lighter), both as a share of the budget. The light part
+// turns red if assignments push the task past its budget.
+export function budgetBarHtml(spent, committed, budget) {
+  const pct = (v) => (budget > 0 ? Math.min(100, (v / budget) * 100) : (v > 0 ? 100 : 0));
+  const spentOver = spent - budget > 0.005;
+  const committedOver = committed - budget > 0.005;
+  const title = `Spent ${formatCurrency(spent)} · Spent + assigned ${formatCurrency(committed)} · Budget ${formatCurrency(budget)}`;
+  return `<div class="progress-bar budget-progress" title="${title}">
+    <div class="fill assigned ${committedOver ? "over" : ""}" style="width:${pct(committed)}%"></div>
+    <div class="fill spent ${spentOver ? "over" : ""}" style="width:${pct(spent)}%"></div>
+  </div>`;
+}

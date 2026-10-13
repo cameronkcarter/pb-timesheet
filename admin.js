@@ -1,9 +1,12 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices } from "./db.js";
-import { formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor } from "./util.js";
+import {
+  formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor, budgetBarHtml,
+} from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
 import {
   DEFAULT_BILL_RATE, billRateOf, assignmentRate, assignedHours, isInternal, personPayRate, personBillRate,
+  taskBudgetUse,
 } from "./rates.js";
 
 const sessionPersonId = requireSession();
@@ -17,6 +20,8 @@ let dueDates = [];
 let invoices = [];
 let adminCheckDone = false;
 let assignmentsLoaded = false;
+let entriesLoaded = false;
+let invoicesLoaded = false;
 
 let modalEditingPersonId = null;
 let selectedProjectId = null;
@@ -38,13 +43,14 @@ if (sessionPersonId) {
     renderTasks();
     renderPendingApproval();
     migrateLegacyAssignments();
+    migrateEntryRates();
   });
   Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); migrateLegacyAssignments(); migrateProjectBilling(); });
   Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
   Assignments.listen((d) => { assignments = d; assignmentsLoaded = true; migrateLegacyAssignments(); renderTasks(); renderPendingApproval(); });
-  TimeEntries.listen((d) => { timeEntries = d; renderTasks(); renderPendingApproval(); });
+  TimeEntries.listen((d) => { timeEntries = d; entriesLoaded = true; migrateEntryRates(); renderTasks(); renderPendingApproval(); });
   DueDates.listen((d) => { dueDates = d; });
-  Invoices.listen((d) => { invoices = d; });
+  Invoices.listen((d) => { invoices = d; invoicesLoaded = true; migrateEntryRates(); });
 }
 
 function esc(str) {
@@ -70,7 +76,8 @@ function renderPeople() {
     return;
   }
   peopleEmpty.style.display = "none";
-  peopleTbody.innerHTML = people.map((p, i) => `
+  const byPay = [...people].sort((a, b) => personPayRate(b) - personPayRate(a) || a.name.localeCompare(b.name));
+  peopleTbody.innerHTML = byPay.map((p, i) => `
     <tr class="${i % 2 === 1 ? "stripe-row" : ""}">
       <td>${esc(p.name)}${p.isAdmin ? ' <span class="pill orange">Admin</span>' : ""}</td>
       <td>${formatCurrency(personPayRate(p))}/hr</td>
@@ -471,18 +478,15 @@ function personById(id) {
   return people.find((p) => p.id === id);
 }
 
-// Budget not yet handed out, in dollars (each person's hours cost a different
-// amount). hoursOverride ({ assignmentId: hours }) follows unsaved edits.
+// Budget not yet spent or handed out, in dollars (see taskBudgetUse).
+// hoursOverride ({ assignmentId: hours }) follows unsaved edits.
 function unassignedHtml(task, project, hoursOverride = {}) {
   const hoursOf = (a) => (a.id in hoursOverride ? hoursOverride[a.id] : assignedHours(a, ctx()));
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   if (isInternal(project)) {
     return `${fmtHrs(taskAssignments.reduce((s, a) => s + hoursOf(a), 0))} hrs`;
   }
-  const budget = Number(task.budget || 0);
-  const assignedDollars = taskAssignments.reduce((s, a) =>
-    s + hoursOf(a) * assignmentRate(project, personById(a.personId)), 0);
-  const open = budget - assignedDollars;
+  const open = taskBudgetUse(task, { projects, people, assignments, timeEntries }, hoursOverride).unassigned;
   return open < -0.005
     ? `<span class="hours-over-strong">Over by ${formatCurrency(-open)}</span>`
     : formatCurrency(open);
@@ -573,9 +577,9 @@ function renderTasks() {
       const budget = Number(t.budget || 0);
       const spent = spentOnTask(t.id);
       const remaining = budget - spent;
-      const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+      const use = taskBudgetUse(t, { projects, people, assignments, timeEntries });
       cells = `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
-        <td><div class="progress-bar"><div class="fill ${spent > budget ? "over" : ""}" style="width:${pct}%"></div></div></td>
+        <td class="progressCell">${budgetBarHtml(use.spent, use.committed, budget)}</td>
         <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>
         <td class="unassignedCell">${unassignedHtml(t, project)}</td>`;
     }
@@ -607,8 +611,14 @@ function liveUpdateTask(detailRow) {
     override[row.dataset.assignmentId] = hours;
     row.querySelector(".assign-bar").innerHTML = hoursBarHtml(Number(row.dataset.logged || 0), hours, color);
   });
-  const mainRow = taskBlocks.querySelector(`tr.task-row[data-task-id="${task.id}"] .unassignedCell`);
-  if (mainRow) mainRow.innerHTML = unassignedHtml(task, project, override);
+  const mainRow = taskBlocks.querySelector(`tr.task-row[data-task-id="${task.id}"]`);
+  if (!mainRow) return;
+  mainRow.querySelector(".unassignedCell").innerHTML = unassignedHtml(task, project, override);
+  const progressCell = mainRow.querySelector(".progressCell");
+  if (progressCell) {
+    const use = taskBudgetUse(task, { projects, people, assignments, timeEntries }, override);
+    progressCell.innerHTML = budgetBarHtml(use.spent, use.committed, use.budget);
+  }
 }
 
 function scheduleSave(input) {
@@ -730,6 +740,34 @@ async function migrateLegacyAssignments() {
   for (const a of legacy) {
     const hours = Math.round(assignedHours(a, ctx()) * 100) / 100;
     try { await Assignments.update(a.id, { hours }); } catch (err) { console.warn("Assignment migration failed:", err); }
+  }
+}
+
+// Hours logged before rates were saved onto each entry were priced at the
+// person's *current* rate — so changing someone's rate quietly rewrote past
+// spending and even invoiced amounts. Lock rates onto those entries once:
+// invoiced hours get the rate they were actually invoiced at (from the
+// invoice's labor lines); anything else gets today's pay rate.
+let entryRatesMigrated = false;
+async function migrateEntryRates() {
+  if (entryRatesMigrated || !entriesLoaded || !invoicesLoaded || !people.length) return;
+  entryRatesMigrated = true;
+  for (const e of timeEntries) {
+    const person = personById(e.personId);
+    const update = {};
+    if (e.invoiced && e.billRate == null) {
+      const invoice = invoices.find((i) => i.id === e.invoiceId);
+      const laborRow = invoice && person ? (invoice.laborRows || []).find((r) => r.name === person.name) : null;
+      const rate = laborRow && laborRow.rate != null
+        ? Number(laborRow.rate)
+        : (e.rate != null ? Number(e.rate) : personPayRate(person));
+      update.billRate = rate;
+      if (e.rate == null) update.rate = rate;
+    } else if (e.rate == null && person) {
+      update.rate = personPayRate(person);
+    }
+    if (Object.keys(update).length === 0) continue;
+    try { await TimeEntries.update(e.id, update); } catch (err) { console.warn("Rate lock failed:", err); }
   }
 }
 

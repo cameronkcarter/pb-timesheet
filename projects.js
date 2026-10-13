@@ -1,10 +1,10 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
-import { billRateOf, assignedHours, isInternal } from "./rates.js";
+import { billRateOf, assignedHours, isInternal, taskBudgetUse } from "./rates.js";
 
 const sessionPersonId = requireSession();
 
@@ -255,9 +255,9 @@ function renderBudget() {
       const budget = Number(t.budget || 0);
       const spent = spentOnTask(t.id);
       const remaining = budget - spent;
-      const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+      const use = taskBudgetUse(t, { projects, people, assignments, timeEntries });
       cells = `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
-        <td><div class="progress-bar"><div class="fill ${spent > budget ? "over" : ""}" style="width:${pct}%"></div></div></td>
+        <td>${budgetBarHtml(use.spent, use.committed, budget)}</td>
         <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>`;
     }
     const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><span class="task-chevron" aria-hidden="true">&#9656;</span> ${esc(t.name)}</td>${cells}</tr>`;

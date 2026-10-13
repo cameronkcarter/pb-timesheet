@@ -82,3 +82,25 @@ export function billedAmount(entries, ctx) {
 export function paidAmount(entries, ctx) {
   return entries.reduce((s, e) => s + Number(e.hours || 0) * payRateOf(e, ctx), 0);
 }
+
+// How much of a task's budget is used up and spoken for:
+//   spent      — hours logged so far, at their bill rates
+//   committed  — spent, plus each person's assigned hours not yet logged (at
+//                their rate). Logging past an assignment just adds to spent,
+//                so a task can never look over budget and have budget left.
+//   unassigned — budget not yet spent or handed out (negative = over)
+// hoursOverride ({ assignmentId: hours }) lets callers preview unsaved edits.
+export function taskBudgetUse(task, { projects, people, assignments, timeEntries }, hoursOverride = {}) {
+  const project = findProject(task.projectId, projects);
+  const ctx = { projects, people };
+  const entries = timeEntries.filter((e) => e.taskId === task.id);
+  const spent = billedAmount(entries, ctx);
+  let outstanding = 0;
+  assignments.filter((a) => a.taskId === task.id).forEach((a) => {
+    const hours = a.id in hoursOverride ? hoursOverride[a.id] : assignedHours(a, ctx);
+    const logged = entries.filter((e) => e.personId === a.personId).reduce((s, e) => s + Number(e.hours || 0), 0);
+    outstanding += Math.max(0, hours - logged) * assignmentRate(project, findPerson(a.personId, people));
+  });
+  const budget = Number(task.budget || 0);
+  return { budget, spent, committed: spent + outstanding, unassigned: budget - spent - outstanding };
+}

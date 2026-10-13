@@ -1840,3 +1840,22 @@ tr.stripe-row td {
     margin: 0 8px;
   }
 }
+
+/* Task budget bar: spent (solid) on top of spent + assigned (light). */
+.progress-bar.budget-progress {
+  position: relative;
+}
+
+.budget-progress .fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.budget-progress .fill.assigned {
+  background: #eec293;
+}
+
+.budget-progress .fill.assigned.over {
+  background: #f1c1bb;
+}
