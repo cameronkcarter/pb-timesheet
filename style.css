@@ -2030,14 +2030,48 @@ button:disabled:hover {
   min-height: 42px;
 }
 
+/* Notes next to the button show as small alert chips (info / warning). */
 .entry-status {
   flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.entry-status.info,
+.entry-status.warn {
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
   font-size: 13px;
-  color: var(--text-muted);
+  font-weight: 600;
   line-height: 1.35;
-  padding-top: 11px;
+}
+
+.entry-status.info {
+  background: #efe5f4;
+  color: var(--navy);
+  border: 1px solid #ddc8e7;
 }
 
 .entry-status.warn {
-  color: #9a5a16;
+  background: #fdf0de;
+  color: #8a4f10;
+  border: 1px solid #f3d3a6;
+}
+
+.entry-status-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Keep Cancel at the far right even when the chip is short. */
+.entry-actions #cancelEdit {
+  margin-left: auto !important;
+}
+
+.entry-actions #submitEntry {
+  white-space: nowrap;
+  flex-shrink: 0;
 }

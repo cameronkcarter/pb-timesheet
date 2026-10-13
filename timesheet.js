@@ -345,8 +345,8 @@ function renderTaskCards(options) {
 // admins so they can add hours).
 function renderExistingHint() {
   if (!selectedTaskId) {
-    existingHint.className = "entry-status";
-    existingHint.textContent = "Choose a task above to log hours.";
+    existingHint.className = "entry-status info";
+    existingHint.innerHTML = '<span class="entry-status-icon" aria-hidden="true">&uarr;</span>Choose a task above to log hours';
     submitEntry.textContent = "Log Hours";
     submitEntry.disabled = true;
     cancelEdit.style.visibility = isDirty ? "visible" : "hidden";
@@ -374,7 +374,9 @@ function renderExistingHint() {
     }
   }
   existingHint.className = notes.length ? "entry-status warn" : "entry-status";
-  existingHint.innerHTML = notes.map(esc).join(" &middot; ");
+  existingHint.innerHTML = notes.length
+    ? `<span class="entry-status-icon" aria-hidden="true">&#9888;</span>${notes.map(esc).join(" &middot; ")}`
+    : "";
   cancelEdit.style.visibility = isDirty ? "visible" : "hidden";
 }
 
