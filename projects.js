@@ -32,7 +32,7 @@ const projectCardsEmpty = document.getElementById("projectCardsEmpty");
 const projectDetail = document.getElementById("projectDetail");
 
 const budgetSummary = document.getElementById("budgetSummary");
-const budgetOverallFill = document.getElementById("budgetOverallFill");
+const budgetOverallBar = document.getElementById("budgetOverallBar");
 const budgetTbody = document.querySelector("#budgetTable tbody");
 const budgetEmpty = document.getElementById("budgetEmpty");
 const budgetHint = document.getElementById("budgetHint");
@@ -217,8 +217,8 @@ function renderBudget() {
       <span class="pill blue">Internal &middot; not billed</span>
       <span><span class="summary-label">Assigned</span> ${fmtHrs(assigned)} hrs</span>
       <span><span class="summary-label">Logged</span> ${fmtHrs(logged)} hrs</span>`;
-    budgetOverallFill.style.width = `${assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 0}%`;
-    budgetOverallFill.classList.remove("over");
+    // No budget on internal projects: the bar is hours logged vs. assigned.
+    budgetOverallBar.innerHTML = budgetBarHtml(logged, Math.max(assigned, logged), Math.max(assigned, logged), true);
     thead.innerHTML = `<tr><th>Task</th><th>Assigned</th><th>Logged</th><th style="width:160px;">Progress</th><th></th></tr>`;
   } else {
     const totalBudget = projectTasks.reduce((s, t) => s + Number(t.budget || 0), 0);
@@ -228,8 +228,8 @@ function renderBudget() {
       <span><span class="summary-label">Budget</span> ${formatCurrency(totalBudget)}</span>
       <span><span class="summary-label">Spent</span> ${formatCurrency(totalSpent)}</span>
       <span><span class="summary-label">Remaining</span> <span ${totalRemaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(totalRemaining)}</span></span>`;
-    budgetOverallFill.style.width = `${totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0}%`;
-    budgetOverallFill.classList.toggle("over", totalSpent > totalBudget);
+    const totalCommitted = projectTasks.reduce((s, t) => s + taskBudgetUse(t, { projects, people, assignments, timeEntries }).committed, 0);
+    budgetOverallBar.innerHTML = budgetBarHtml(totalSpent, totalCommitted, totalBudget, true);
     thead.innerHTML = `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th></tr>`;
   }
 
