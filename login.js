@@ -2,7 +2,7 @@ import { People } from "./db.js";
 import { setSessionPersonId, startTestSession } from "./session.js";
 
 // Login: pick your name (last person to log in on this device is listed
-// first), then either type your password or just continue. Test Mode is a
+// first), then type your password (if they have one) and log in. Test Mode is a
 // small link under the selected person.
 
 const LAST_PERSON_KEY = "pb_last_person_id"; // survives logging out, unlike the session
@@ -78,11 +78,10 @@ function render() {
 }
 
 function loginPanelHtml(person) {
-  const firstName = esc(person.name.split(" ")[0]);
   return `<div class="login-panel">
     ${person.password ? `<input type="password" class="login-password" placeholder="Password" autocomplete="current-password" />
       <div class="login-error" style="display:none;">That password isn't right — try again.</div>` : ""}
-    <button type="button" class="login-btn" data-action="login">${person.password ? "Log in" : `Continue as ${firstName}`}</button>
+    <button type="button" class="login-btn" data-action="login">Log in</button>
     <button type="button" class="login-test-link" data-action="test">Try Test Mode instead <span>(nothing is saved)</span></button>
   </div>`;
 }
