@@ -1010,6 +1010,24 @@ tr.notes-row td {
   transform: translateY(0);
 }
 
+.toast.has-action.show {
+  pointer-events: auto;
+}
+
+.toast .toast-action {
+  margin: 0 0 0 14px;
+  padding: 3px 10px;
+  background: #fff;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 6px;
+}
+
+.toast .toast-action:hover {
+  background: #efe5f4;
+}
+
 .checkbox-cell {
   width: 30px;
 }
@@ -1382,9 +1400,9 @@ button.login-test-link:hover {
 }
 
 .day-detail {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 3px solid #e3d6ea; /* clear break between the calendar and the day below */
 }
 
 .day-detail h3 {
@@ -2088,36 +2106,42 @@ button:disabled:hover {
   margin-top: 2px;
 }
 
-button.due-check {
-  width: 18px;
-  height: 18px;
+.due-mark {
+  width: 16px;
   flex-shrink: 0;
-  margin: 0;
-  padding: 0;
+  text-align: center;
+  color: var(--green);
+  font-weight: 700;
+}
+
+.due-item:not(.done) .due-mark::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  border: 2px solid #b9adc2;
-  background: #fff;
-  color: #fff;
-  font-size: 11px;
-  line-height: 1;
+  background: #c9bdd1;
+  vertical-align: 2px;
 }
 
-button.due-check:hover:not(:disabled) {
-  border-color: var(--green);
+.due-item.soon:not(.done) .due-mark::before { background: #e0a050; }
+.due-item.overdue:not(.done) .due-mark::before { background: var(--red); }
+
+button.small.due-btn {
+  margin: 0;
+  padding: 3px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+button.due-btn.due-complete {
+  background: #fff;
+  color: var(--green);
+  border: 1px solid #b9dcbc;
+}
+
+button.due-btn.due-complete:hover {
   background: #e8f3e9;
-}
-
-button.due-check:disabled,
-button.due-check:disabled:hover {
-  background: #fff;
-  border-color: #d9d2de;
-  cursor: default;
-}
-
-.due-item.done button.due-check,
-.due-item.done button.due-check:disabled {
-  background: var(--green);
-  border-color: var(--green);
 }
 
 .due-title {

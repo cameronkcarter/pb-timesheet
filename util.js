@@ -111,13 +111,43 @@ export function formatShortMDY(date) {
 }
 
 let toastTimer;
-export function showToast(message) {
+// showToast("Saved.") — or with an action button, e.g.
+// showToast("Marked complete.", { actionLabel: "Undo", onAction: () => ... })
+export function showToast(message, { actionLabel = null, onAction = null, duration = null } = {}) {
   const el = document.getElementById("toast");
   if (!el) return;
   el.textContent = message;
+  el.classList.toggle("has-action", !!actionLabel);
+  if (actionLabel && onAction) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "toast-action";
+    btn.textContent = actionLabel;
+    btn.addEventListener("click", () => {
+      el.classList.remove("show");
+      onAction();
+    });
+    el.appendChild(btn);
+  }
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
+  toastTimer = setTimeout(() => el.classList.remove("show"), duration || (actionLabel ? 6000 : 2500));
+}
+
+// Project order everywhere: client projects newest first (most recently
+// added at the top), then internal projects (e.g. Proposals & Pursuits).
+function createdMillis(p) {
+  const c = p && p.createdAt;
+  if (!c) return 0;
+  if (typeof c.toMillis === "function") return c.toMillis();
+  if (typeof c.seconds === "number") return c.seconds * 1000;
+  const t = Date.parse(c);
+  return isNaN(t) ? 0 : t;
+}
+
+export function sortProjects(list) {
+  return [...list].sort((a, b) =>
+    (!!a.internal - !!b.internal) || (createdMillis(b) - createdMillis(a)) || String(a.name).localeCompare(String(b.name)));
 }
 
 // Hours bar for someone's assignment. Leads with hours REMAINING (the number
@@ -171,19 +201,26 @@ export function budgetBarHtml(spent, committed, budget, large = false) {
   </div>`;
 }
 
-// One assignment (a dated to-do for a person, e.g. "Draft memo — due Oct 20"),
-// shown under the task it belongs to. The round check marks it complete.
+// One assignment / subtask (a dated to-do for a person, e.g. "Draft memo —
+// due Oct 20"), shown under the task it belongs to. Open items get a
+// "Mark complete" button; completed ones show a check and "Reopen".
 export function dueItemHtml(d, { canComplete = false, canEdit = false, who = "" } = {}) {
-  const text = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const text = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const today = todayISO();
   const overdue = !d.completed && d.dueDate < today;
   const soon = !d.completed && !overdue && daysBetween(today, d.dueDate) <= 3;
-  const when = d.completed ? "Completed" : `${formatDate(d.dueDate)} &middot; ${dueLabel(d.dueDate)}`;
+  const when = d.completed
+    ? `Completed${d.completedDate ? " " + formatDate(String(d.completedDate).slice(0, 10)) : ""}`
+    : `${formatDate(d.dueDate)} &middot; ${dueLabel(d.dueDate)}`;
+  const action = !canComplete ? ""
+    : d.completed
+      ? `<button type="button" class="small secondary due-btn" data-action="reopen-duedate" data-id="${d.id}">Reopen</button>`
+      : `<button type="button" class="small due-btn due-complete" data-action="complete-duedate" data-id="${d.id}">Mark complete</button>`;
   return `<div class="due-item ${d.completed ? "done" : ""} ${overdue ? "overdue" : ""} ${soon ? "soon" : ""}">
-    <button type="button" class="due-check" data-action="complete-duedate" data-id="${d.id}"
-      ${canComplete && !d.completed ? "" : "disabled"} title="${d.completed ? "Completed" : "Mark complete"}" aria-label="Mark complete">${d.completed ? "&#10003;" : ""}</button>
+    <span class="due-mark" aria-hidden="true">${d.completed ? "&#10003;" : ""}</span>
     <span class="due-title">${text(d.title)}${who ? ` <span class="due-who">${text(who)}</span>` : ""}</span>
     <span class="due-when">${when}</span>
-    ${canEdit ? `<button type="button" class="link-btn due-edit" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : ""}
+    ${canEdit && !d.completed ? `<button type="button" class="link-btn due-edit" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : ""}
+    ${action}
   </div>`;
 }

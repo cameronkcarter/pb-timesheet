@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
   todayISO, toISODate, getWeekStart, monthKey, showToast,
-  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor,
+  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, sortProjects,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { assignedHours, isInternal } from "./rates.js";
@@ -233,7 +233,7 @@ dayEntries.addEventListener("click", async (e) => {
 // project (e.g. Proposals & Pursuits), which is open to everyone.
 function myProjects() {
   const ids = new Set(assignments.filter((a) => a.personId === selectedPersonId).map((a) => a.projectId));
-  return projects.filter((p) => ids.has(p.id) || isInternal(p));
+  return sortProjects(projects.filter((p) => ids.has(p.id) || isInternal(p)));
 }
 
 function selectedProjectIsInternal() {

@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices } from "./db.js";
 import {
-  formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor, budgetBarHtml,
+  formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor, budgetBarHtml, sortProjects,
 } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
@@ -219,11 +219,12 @@ function renderProjectCards() {
   }
   projectCardsEmpty.style.display = "none";
 
+  const ordered = sortProjects(projects);
   if (!selectedProjectId || !projects.some((p) => p.id === selectedProjectId)) {
-    selectedProjectId = projects[0].id;
+    selectedProjectId = ordered[0].id;
   }
 
-  projectCardsEl.innerHTML = projects.map((p) => `
+  projectCardsEl.innerHTML = ordered.map((p) => `
     <div class="project-card ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}">
       <div class="name">${p.name}</div>
       <div class="client">${p.client || "&nbsp;"}</div>

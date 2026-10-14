@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml, sortProjects,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { billRateOf, assignedHours, isInternal, taskBudgetUse } from "./rates.js";
@@ -140,11 +140,11 @@ if (sessionPersonId) {
 // Admins see every project; everyone else sees the projects they're
 // assigned to a task on.
 function visibleProjects() {
-  if (isAdmin()) return projects;
+  if (isAdmin()) return sortProjects(projects);
   const assignedProjectIds = new Set(
     assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId)
   );
-  return projects.filter((p) => assignedProjectIds.has(p.id) || isInternal(p));
+  return sortProjects(projects.filter((p) => assignedProjectIds.has(p.id) || isInternal(p)));
 }
 
 function renderAll() {
@@ -246,7 +246,7 @@ function renderBudget() {
   budgetHint.textContent = internal ? "Click a task to see who has logged time on it." : "Click a task to see who's assigned to it.";
   const general = projectItems({ taskId: null });
   generalItemsEl.innerHTML = general.length
-    ? `<div class="summary-label" style="margin:16px 0 4px;">Project-wide assignments</div>${itemsListHtml(general, true)}`
+    ? `<div class="summary-label" style="margin:16px 0 4px;">Project-wide subtasks</div>${itemsListHtml(general, true)}`
     : "";
 
   budgetTbody.innerHTML = projectTasks.map((t, i) => {
@@ -298,7 +298,7 @@ function taskPeopleHtml(task) {
   ])];
   if (personIds.length === 0) {
     return `<div class="empty">No one is assigned to this task yet.</div>
-      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Add an assignment</button>`;
+      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Assign subtask</button>`;
   }
 
   const rows = personIds.map((pid) => {
@@ -318,7 +318,7 @@ function taskPeopleHtml(task) {
   return `<div class="hours-rows" style="margin-top:0;">${rows.map((r) => `<div class="hours-row hours-row-with-items">
       <div class="hours-row-name">
         ${esc(r.name)}
-        <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Assign</button>
+        <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Assign subtask</button>
       </div>
       <div>
         ${r.isAssigned || r.logged ? hoursBarHtml(r.logged, r.assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
@@ -528,12 +528,23 @@ async function handleItemAction(btn) {
     openDueDateModal(null, "assignment", btn.dataset.personId || null, btn.dataset.taskId || null);
     return;
   }
-  if (action === "complete-duedate") {
-    if (btn.disabled) return;
-    try { await DueDates.update(id, { completed: true, completedDate: new Date().toISOString() }); } catch (err) { showToast("Error: " + err.message); }
-    return;
-  }
+  if (action === "complete-duedate") return setItemCompleted(id, true);
+  if (action === "reopen-duedate") return setItemCompleted(id, false);
   await handleDueDateAction(action, id);
+}
+
+// Mark an assignment complete (with Undo) or reopen it.
+async function setItemCompleted(id, completed) {
+  try {
+    await DueDates.update(id, { completed, completedDate: completed ? new Date().toISOString() : null });
+    if (completed) {
+      showToast("Marked complete.", { actionLabel: "Undo", onAction: () => setItemCompleted(id, false) });
+    } else {
+      showToast("Reopened.");
+    }
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
 }
 
 async function handleDueDateAction(action, id) {

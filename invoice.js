@@ -2,7 +2,7 @@ import { People, Projects, Tasks, TimeEntries, Invoices } from "./db.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
   formatCurrency, formatDate, daysAgo, showToast,
-  lastDayOfMonth, formatShortMDY, toISODate,
+  lastDayOfMonth, formatShortMDY, toISODate, sortProjects,
 } from "./util.js";
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
 import { isTestMode } from "./session.js";
@@ -74,7 +74,7 @@ function entryRate(e) {
 // ---------- Project cards ----------
 // Internal projects (e.g. Proposals & Pursuits) are never invoiced.
 function billableProjects() {
-  return projects.filter((p) => !p.internal);
+  return sortProjects(projects.filter((p) => !p.internal));
 }
 
 function renderProjectCards() {

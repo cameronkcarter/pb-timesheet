@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, daysAgo, showToast,
-  todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor, hoursBarHtml, dueItemHtml,
+  todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor, hoursBarHtml, dueItemHtml, sortProjects,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -70,12 +70,19 @@ function render() {
 
   // Internal projects (e.g. Proposals & Pursuits) are just for logging time
   // on the Timesheet, so they are left off the Dashboard.
-  const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId) && !d.completed);
+  // Your open assignments, plus ones completed in the last week (shown
+  // greyed with Reopen, so a mis-click is easy to undo), then they drop off.
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId)
+    && (!d.completed || (d.completedDate && d.completedDate >= weekAgo)));
   const myProjectIds = [...new Set([
     ...assignments.filter((a) => a.personId === personId).map((a) => a.projectId),
     ...myEntries.map((e) => e.projectId),
     ...myOpenItems.map((d) => d.projectId),
   ])].filter((id) => !isInternal(projects.find((p) => p.id === id)));
+  // Same order as everywhere else: newest projects first.
+  const order = sortProjects(projects).map((p) => p.id);
+  myProjectIds.sort((a, b) => order.indexOf(a) - order.indexOf(b));
 
   if (myProjectIds.length === 0) {
     projectSummaryCards.innerHTML = '<div class="card empty">No projects yet. Ask your PM to assign you to a task.</div>';
@@ -88,7 +95,7 @@ function render() {
   // individual assignments grow as work goes on. Each task also lists the
   // person's assignments (dated to-dos) for it, so the work and the hours
   // for it sit together.
-  const byDue = (a, b) => (a.dueDate < b.dueDate ? -1 : 1);
+  const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
   const itemsHtml = (items) => items.length
     ? `<div class="due-list">${items.sort(byDue).map((d) => dueItemHtml(d, { canComplete: true })).join("")}</div>`
     : "";
@@ -159,15 +166,25 @@ function render() {
   }).join("");
 }
 
-// Ticking an assignment's circle marks it done.
-projectSummaryCards.addEventListener("click", async (e) => {
-  const btn = e.target.closest('[data-action="complete-duedate"]');
-  if (!btn || btn.disabled) return;
+projectSummaryCards.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  if (btn.dataset.action === "complete-duedate") setItemCompleted(btn.dataset.id, true);
+  if (btn.dataset.action === "reopen-duedate") setItemCompleted(btn.dataset.id, false);
+});
+
+// Mark an assignment complete (with Undo) or reopen it.
+async function setItemCompleted(id, completed) {
   try {
-    await DueDates.update(btn.dataset.id, { completed: true, completedDate: new Date().toISOString() });
-    showToast("Marked complete.");
+    await DueDates.update(id, { completed, completedDate: completed ? new Date().toISOString() : null });
+    if (completed) {
+      showToast("Marked complete.", { actionLabel: "Undo", onAction: () => setItemCompleted(id, false) });
+    } else {
+      showToast("Reopened.");
+    }
   } catch (err) {
     showToast("Error: " + err.message);
   }
-});
+}
+
 
