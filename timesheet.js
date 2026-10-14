@@ -130,7 +130,6 @@ function renderCalendar() {
   let cursor = getWeekStart(toISODate(calMonth));
   const cells = WEEKDAYS.map((d) => `<div class="cal-weekday">${d}</div>`).concat('<div class="cal-weekday cal-week-col">Week</div>');
   const monthProjectIds = new Set();
-  let monthTotal = 0;
   do {
     let weekTotal = 0;
     for (let i = 0; i < 7; i++) {
@@ -140,7 +139,6 @@ function renderCalendar() {
       weekTotal += dayTotal;
       const inMonth = iso.startsWith(monthPrefix);
       if (inMonth) {
-        monthTotal += dayTotal;
         entries.forEach((e) => monthProjectIds.add(e.projectId));
       }
       const classes = ["cal-day", inMonth ? "" : "out", iso === today ? "today" : "", iso === selectedDay ? "selected" : ""].join(" ");
@@ -156,7 +154,6 @@ function renderCalendar() {
 
   const legendProjects = projects.filter((p) => monthProjectIds.has(p.id));
   calLegend.innerHTML = `
-    <span class="cal-legend-total">${fmtHours(monthTotal)} hrs this month</span>
     ${legendProjects.map((p) => `<span><span class="cal-swatch" style="--c:${projectColor(p.id)};"></span>${esc(p.name)}</span>`).join("")}
     <span class="cal-legend-key"><span class="cal-chip" style="--c:#746b7a;">2</span> Approved</span>
     <span class="cal-legend-key"><span class="cal-chip pending" style="--c:#746b7a;">2</span> Pending approval</span>`;

@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
-  formatCurrency, formatDate, daysAgo, dueLabel,
-  todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor, hoursBarHtml,
+  formatCurrency, formatDate, daysAgo, showToast,
+  todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor, hoursBarHtml, dueItemHtml,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -17,8 +17,6 @@ let dueDates = [];
 let navChecked = false;
 
 const projectSummaryCards = document.getElementById("projectSummaryCards");
-const dueDatesTbody = document.querySelector("#dueDatesTable tbody");
-const dueDatesEmpty = document.getElementById("dueDatesEmpty");
 
 wireLogout("logoutLink", "navBrandLink");
 
@@ -70,13 +68,13 @@ function render() {
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedTotal);
   document.getElementById("statPaid").textContent = formatCurrency(paidTotal);
 
-  renderDueDates(personId);
-
   // Internal projects (e.g. Proposals & Pursuits) are just for logging time
   // on the Timesheet, so they are left off the Dashboard.
+  const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId) && !d.completed);
   const myProjectIds = [...new Set([
     ...assignments.filter((a) => a.personId === personId).map((a) => a.projectId),
     ...myEntries.map((e) => e.projectId),
+    ...myOpenItems.map((d) => d.projectId),
   ])].filter((id) => !isInternal(projects.find((p) => p.id === id)));
 
   if (myProjectIds.length === 0) {
@@ -87,18 +85,28 @@ function render() {
   // Progress is shown in hours only (assigned vs. logged), so staff never see
   // billing dollars, just their hours and their own pay above. The project's
   // overall budget is shown as a percentage — that's the real limit, since
-  // individual assignments grow as work goes on.
+  // individual assignments grow as work goes on. Each task also lists the
+  // person's assignments (dated to-dos) for it, so the work and the hours
+  // for it sit together.
+  const byDue = (a, b) => (a.dueDate < b.dueDate ? -1 : 1);
+  const itemsHtml = (items) => items.length
+    ? `<div class="due-list">${items.sort(byDue).map((d) => dueItemHtml(d, { canComplete: true })).join("")}</div>`
+    : "";
+
   projectSummaryCards.innerHTML = myProjectIds.map((projectId) => {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return "";
     const projectEntries = myEntries.filter((e) => e.projectId === projectId);
-    const projectAssignments = assignments
-      .filter((a) => a.personId === personId && a.projectId === projectId)
-      .sort((a, b) => {
-        const taskA = tasks.find((t) => t.id === a.taskId);
-        const taskB = tasks.find((t) => t.id === b.taskId);
-        return (taskA?.name || "").localeCompare(taskB?.name || "");
-      });
+    const projectItems = myOpenItems.filter((d) => d.projectId === projectId);
+    const myAssignments = assignments.filter((a) => a.personId === personId && a.projectId === projectId);
+    // Tasks you have hours on, or something due on.
+    const taskIds = [...new Set([
+      ...myAssignments.map((a) => a.taskId),
+      ...projectItems.filter((d) => d.taskId).map((d) => d.taskId),
+    ])];
+    const projectTasks = taskIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     const projectOwed = paidAmount(projectEntries.filter((e) => !e.invoiced), { projects, people });
     const lastInvoiced = projectEntries
       .filter((e) => e.invoiced && e.invoicedDate)
@@ -113,53 +121,53 @@ function render() {
 
     let totalAssigned = 0;
     let totalUsed = 0;
-    const taskRows = projectAssignments.map((a) => {
-      const task = tasks.find((t) => t.id === a.taskId);
+    const taskRows = projectTasks.map((task) => {
+      const assignment = myAssignments.find((a) => a.taskId === task.id);
       const used = projectEntries
-        .filter((e) => e.taskId === a.taskId)
+        .filter((e) => e.taskId === task.id)
         .reduce((s, e) => s + Number(e.hours || 0), 0);
-      const assigned = assignedHours(a, { projects, people });
+      const assigned = assignment ? assignedHours(assignment, { projects, people }) : 0;
       totalAssigned += assigned;
       totalUsed += used;
-      return `<div class="hours-row">
-        <div class="hours-row-name" title="${task ? task.name : ""}">${task ? task.name : "—"}</div>
-        ${hoursBarHtml(used, assigned, color)}
+      return `<div class="hours-row hours-row-with-items">
+        <div class="hours-row-name" title="${task.name}">${task.name}</div>
+        <div>
+          ${assigned > 0 || used > 0 ? hoursBarHtml(used, assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
+          ${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}
+        </div>
       </div>`;
     }).join("");
+    const generalItems = projectItems.filter((d) => !d.taskId);
 
     return `<div class="card">
       <div class="hours-card-header">
         <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${project.name}${project.client ? ` <span class="empty" style="font-weight:400;">(${project.client})</span>` : ""}</h2>
         <div class="empty" style="padding:0;">${budgetPct != null ? `Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong> &middot; ` : ""}Your pay not yet invoiced: <strong>${formatCurrency(projectOwed)}</strong> &middot; Last invoiced: ${lastInvoicedLabel}</div>
       </div>
-      ${taskRows ? `
+      ${totalAssigned > 0 ? `
         <div class="hours-total">
           <div class="summary-label">Your hours &middot; all tasks</div>
           ${hoursBarHtml(totalUsed, totalAssigned, color, true)}
-        </div>
-        <div class="hours-rows">${taskRows}</div>` : '<div class="empty">No hours assigned to you on this project yet.</div>'}
+        </div>` : ""}
+      ${taskRows ? `<div class="hours-rows">${taskRows}</div>` : ""}
+      ${generalItems.length ? `<div class="hours-row hours-row-with-items">
+        <div class="hours-row-name">Other assignments</div>
+        <div>${itemsHtml(generalItems)}</div>
+      </div>` : ""}
+      ${!taskRows && !generalItems.length ? '<div class="empty">No hours assigned to you on this project yet.</div>' : ""}
     </div>`;
   }).join("");
 }
 
-function renderDueDates(personId) {
-  const mine = dueDates
-    .filter((d) => (d.personIds || []).includes(personId) && !d.completed)
-    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
-
-  if (mine.length === 0) {
-    dueDatesTbody.innerHTML = "";
-    dueDatesEmpty.style.display = "block";
-    return;
+// Ticking an assignment's circle marks it done.
+projectSummaryCards.addEventListener("click", async (e) => {
+  const btn = e.target.closest('[data-action="complete-duedate"]');
+  if (!btn || btn.disabled) return;
+  try {
+    await DueDates.update(btn.dataset.id, { completed: true, completedDate: new Date().toISOString() });
+    showToast("Marked complete.");
+  } catch (err) {
+    showToast("Error: " + err.message);
   }
-  dueDatesEmpty.style.display = "none";
+});
 
-  dueDatesTbody.innerHTML = mine.map((d) => {
-    const project = projects.find((p) => p.id === d.projectId);
-    return `<tr>
-      <td>${d.title}</td>
-      <td>${project ? project.name : "—"}</td>
-      <td>${formatDate(d.dueDate)} <span class="empty">(${dueLabel(d.dueDate)})</span></td>
-    </tr>`;
-  }).join("");
-}

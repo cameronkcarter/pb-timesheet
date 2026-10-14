@@ -1274,11 +1274,6 @@ button.login-test-link:hover {
   margin: 14px 0 10px;
 }
 
-.cal-legend-total {
-  font-weight: 600;
-  color: var(--text);
-}
-
 .cal-swatch {
   display: inline-block;
   width: 10px;
@@ -1332,11 +1327,13 @@ button.login-test-link:hover {
   color: #b9b3bd;
 }
 
+/* Today: a navy ring, so it can't be mistaken for logged hours. */
 .cal-day.today .cal-date {
-  background: var(--accent);
-  color: #fff;
+  color: var(--navy);
+  border: 2px solid var(--navy);
   border-radius: 10px;
-  padding: 0 6px;
+  padding: 0 5px;
+  line-height: 16px;
 }
 
 .cal-day.selected {
@@ -2067,4 +2064,150 @@ button:disabled:hover {
 .entry-actions #submitEntry {
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* ---------- Assignments shown under their task ---------- */
+.due-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.due-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #faf8fb;
+}
+
+.due-item + .due-item {
+  margin-top: 2px;
+}
+
+button.due-check {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #b9adc2;
+  background: #fff;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+}
+
+button.due-check:hover:not(:disabled) {
+  border-color: var(--green);
+  background: #e8f3e9;
+}
+
+button.due-check:disabled,
+button.due-check:disabled:hover {
+  background: #fff;
+  border-color: #d9d2de;
+  cursor: default;
+}
+
+.due-item.done button.due-check,
+.due-item.done button.due-check:disabled {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.due-title {
+  flex: 1;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.due-who {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.due-when {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.due-item.soon .due-when {
+  color: #9a5a16;
+  font-weight: 600;
+}
+
+.due-item.overdue .due-when {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.due-item.done .due-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  font-weight: 400;
+}
+
+button.link-btn.due-edit {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 12px;
+}
+
+/* Small "2 due" marker on task rows. */
+.due-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #efe5f4;
+  color: var(--navy);
+  vertical-align: 1px;
+}
+
+.due-chip.overdue {
+  background: #fbe3e0;
+  color: var(--red);
+}
+
+@media (max-width: 600px) {
+  .due-item {
+    flex-wrap: wrap;
+  }
+  .due-when {
+    width: 100%;
+    padding-left: 28px;
+  }
+}
+
+/* Dashboard/Projects: a task's hours bar with its assignments underneath. */
+.hours-row.hours-row-with-items {
+  align-items: start;
+}
+
+.hours-row.hours-row-with-items .hours-row-name {
+  padding-top: 2px;
+}
+
+.budget-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+button.link-btn.assign-link {
+  display: block;
+  margin: 2px 0 0;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
 }

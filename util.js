@@ -170,3 +170,20 @@ export function budgetBarHtml(spent, committed, budget, large = false) {
     <div class="fill spent ${spentOver ? "over" : ""}" style="width:${pct(spent)}%"></div>
   </div>`;
 }
+
+// One assignment (a dated to-do for a person, e.g. "Draft memo — due Oct 20"),
+// shown under the task it belongs to. The round check marks it complete.
+export function dueItemHtml(d, { canComplete = false, canEdit = false, who = "" } = {}) {
+  const text = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const today = todayISO();
+  const overdue = !d.completed && d.dueDate < today;
+  const soon = !d.completed && !overdue && daysBetween(today, d.dueDate) <= 3;
+  const when = d.completed ? "Completed" : `${formatDate(d.dueDate)} &middot; ${dueLabel(d.dueDate)}`;
+  return `<div class="due-item ${d.completed ? "done" : ""} ${overdue ? "overdue" : ""} ${soon ? "soon" : ""}">
+    <button type="button" class="due-check" data-action="complete-duedate" data-id="${d.id}"
+      ${canComplete && !d.completed ? "" : "disabled"} title="${d.completed ? "Completed" : "Mark complete"}" aria-label="Mark complete">${d.completed ? "&#10003;" : ""}</button>
+    <span class="due-title">${text(d.title)}${who ? ` <span class="due-who">${text(who)}</span>` : ""}</span>
+    <span class="due-when">${when}</span>
+    ${canEdit ? `<button type="button" class="link-btn due-edit" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : ""}
+  </div>`;
+}

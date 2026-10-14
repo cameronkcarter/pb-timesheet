@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { billRateOf, assignedHours, isInternal, taskBudgetUse } from "./rates.js";
@@ -46,7 +46,7 @@ ganttScroll.addEventListener("scroll", () => {
   if (isProgrammaticGanttScroll) return;
   userHasScrolledGantt = true;
 });
-const assignmentsList = document.getElementById("assignmentsList");
+const generalItemsEl = document.getElementById("generalItems");
 
 const dueDateModal = document.getElementById("dueDateModal");
 const dueDateModalTitle = document.getElementById("dueDateModalTitle");
@@ -92,21 +92,32 @@ function canManage(dueDateRecord) {
   return me.isAdmin || dueDateRecord.createdByPersonId === sessionPersonId;
 }
 
+// Assignees can tick off their own items; creators and admins can too, and edit.
+function canComplete(d) {
+  return canManage(d) || (d.personIds || []).includes(sessionPersonId);
+}
+
+// Assignments (dated to-dos with people) on this project, optionally for one
+// task / one person, respecting "Show completed".
+function projectItems({ taskId, personId } = {}) {
+  return dueDates
+    .filter((d) => d.projectId === selectedProjectId && isAssignment(d) && (showCompleted || !d.completed))
+    .filter((d) => taskId === undefined || (d.taskId || null) === taskId)
+    .filter((d) => !personId || (d.personIds || []).includes(personId))
+    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
+}
+
+function itemsListHtml(items, withWho = false) {
+  if (!items.length) return "";
+  return `<div class="due-list">${items.map((d) => dueItemHtml(d, {
+    canComplete: canComplete(d),
+    canEdit: canManage(d),
+    who: withWho ? (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean).join(", ") : "",
+  })).join("")}</div>`;
+}
+
 function isAssignment(d) {
   return !!(d.personIds && d.personIds.length > 0);
-}
-
-function colorForPerson(personId) {
-  if (!personId) return "#9aa0a6";
-  let hash = 0;
-  for (let i = 0; i < personId.length; i++) hash = personId.charCodeAt(i) + ((hash << 5) - hash);
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 50%, 42%)`;
-}
-
-function initialsFor(person) {
-  if (!person) return "?";
-  return person.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
 if (sessionPersonId) {
@@ -123,7 +134,7 @@ if (sessionPersonId) {
   Tasks.listen((data) => { tasks = data; renderAll(); });
   Assignments.listen((data) => { assignments = data; renderAll(); });
   TimeEntries.listen((data) => { timeEntries = data; renderBudget(); renderGantt(); });
-  DueDates.listen((data) => { dueDates = data; renderGantt(); renderAssignments(); });
+  DueDates.listen((data) => { dueDates = data; renderBudget(); renderGantt(); });
 }
 
 // Admins see every project; everyone else sees the projects they're
@@ -140,7 +151,6 @@ function renderAll() {
   renderProjectCards();
   renderBudget();
   renderGantt();
-  renderAssignments();
 }
 
 // ---------- Project picker ----------
@@ -234,6 +244,10 @@ function renderBudget() {
   budgetEmpty.style.display = "none";
   budgetHint.style.display = "block";
   budgetHint.textContent = internal ? "Click a task to see who has logged time on it." : "Click a task to see who's assigned to it.";
+  const general = projectItems({ taskId: null });
+  generalItemsEl.innerHTML = general.length
+    ? `<div class="summary-label" style="margin:16px 0 4px;">Project-wide assignments</div>${itemsListHtml(general, true)}`
+    : "";
 
   budgetTbody.innerHTML = projectTasks.map((t, i) => {
     const expanded = t.id === expandedTaskId;
@@ -250,7 +264,10 @@ function renderBudget() {
         <td>${budgetBarHtml(use.spent, use.committed, budget)}</td>
         <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>`;
     }
-    const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><span class="task-chevron" aria-hidden="true">&#9656;</span> ${esc(t.name)}</td>${cells}</tr>`;
+    const open = dueDates.filter((d) => d.taskId === t.id && isAssignment(d) && !d.completed);
+    const overdue = open.some((d) => d.dueDate < todayISO());
+    const dueChip = open.length ? `<span class="due-chip ${overdue ? "overdue" : ""}" title="Open assignments on this task">${open.length} due</span>` : "";
+    const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><span class="task-chevron" aria-hidden="true">&#9656;</span> ${esc(t.name)}${dueChip}</td>${cells}</tr>`;
     if (!expanded) return mainRow;
     return mainRow + `<tr><td colspan="5" class="accordion-cell">${taskPeopleHtml(t)}</td></tr>`;
   }).join("");
@@ -273,28 +290,49 @@ function taskPeopleHtml(task) {
   }
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
-  const personIds = [...new Set([...taskAssignments.map((a) => a.personId), ...taskEntries.map((e) => e.personId)])];
-  if (personIds.length === 0) return `<div class="empty">No one is assigned to this task yet.</div>`;
+  const taskItems = projectItems({ taskId: task.id });
+  const personIds = [...new Set([
+    ...taskAssignments.map((a) => a.personId),
+    ...taskEntries.map((e) => e.personId),
+    ...taskItems.flatMap((d) => d.personIds || []),
+  ])];
+  if (personIds.length === 0) {
+    return `<div class="empty">No one is assigned to this task yet.</div>
+      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Add an assignment</button>`;
+  }
 
   const rows = personIds.map((pid) => {
     const person = people.find((p) => p.id === pid);
     const assignment = taskAssignments.find((a) => a.personId === pid);
     return {
+      personId: pid,
       name: person ? person.name : "—",
       assigned: assignment ? assignedHours(assignment, { projects, people }) : 0,
       logged: loggedHours(taskEntries.filter((e) => e.personId === pid)),
       isAssigned: !!assignment,
+      items: taskItems.filter((d) => (d.personIds || []).includes(pid)),
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   const color = projectColor(task.projectId);
-  return `<div class="hours-rows" style="margin-top:0;">${rows.map((r) => `<div class="hours-row">
-      <div class="hours-row-name">${esc(r.name)}${r.isAssigned ? "" : ' <span class="empty" style="padding:0; font-weight:400;">(not assigned)</span>'}</div>
-      ${hoursBarHtml(r.logged, r.assigned, color)}
+  return `<div class="hours-rows" style="margin-top:0;">${rows.map((r) => `<div class="hours-row hours-row-with-items">
+      <div class="hours-row-name">
+        ${esc(r.name)}
+        <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Assign</button>
+      </div>
+      <div>
+        ${r.isAssigned || r.logged ? hoursBarHtml(r.logged, r.assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
+        ${itemsListHtml(r.items)}
+      </div>
     </div>`).join("")}</div>`;
 }
 
-budgetTbody.addEventListener("click", (e) => {
+budgetTbody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (btn) {
+    await handleItemAction(btn);
+    return;
+  }
   const row = e.target.closest("tr.task-row");
   if (!row) return;
   const taskId = row.dataset.taskRow;
@@ -479,87 +517,24 @@ document.body.addEventListener("click", async (e) => {
   await handleDueDateAction(action, id);
 });
 
-// ---------- Assignments for the selected project ----------
-// (due dates with at least one assigned person)
-function assignmentGroups() {
-  const items = dueDates.filter((d) =>
-    d.projectId === selectedProjectId && isAssignment(d) && (showCompleted || !d.completed));
-  const byPerson = {};
-  items.forEach((d) => {
-    (d.personIds || []).forEach((pid) => {
-      (byPerson[pid] = byPerson[pid] || []).push(d);
-    });
-  });
-  // Everyone on the project's tasks gets a group (so "+ Assign" is handy),
-  // plus anyone else who has items here.
-  const projectPersonIds = new Set([
-    ...assignments.filter((a) => a.projectId === selectedProjectId).map((a) => a.personId),
-    ...Object.keys(byPerson),
-  ]);
-  return people
-    .filter((p) => projectPersonIds.has(p.id))
-    .map((p) => ({
-      personId: p.id, name: p.name,
-      items: (byPerson[p.id] || []).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)),
-    }));
-}
+generalItemsEl.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (btn) await handleItemAction(btn);
+});
 
-function renderAssignments() {
-  if (!selectedProjectId) return;
-  const groups = assignmentGroups();
-  if (groups.length === 0) {
-    assignmentsList.innerHTML = `<div class="empty">No one is assigned to this project yet.</div>`;
-    return;
-  }
-
-  assignmentsList.innerHTML = groups.map((g) => {
-    const itemsHtml = g.items.length === 0
-      ? `<div class="empty">No items assigned.</div>`
-      : g.items.map((d) => {
-          const task = tasks.find((t) => t.id === d.taskId);
-          const creator = people.find((p) => p.id === d.createdByPersonId);
-          const manageable = canManage(d);
-          return `<div class="assignment-item ${d.completed ? "assignment-item-completed" : ""}">
-            <div class="assignment-item-main">
-              <span class="creator-tag" style="background:${colorForPerson(d.createdByPersonId)};" title="Added by ${creator ? esc(creator.name) : "someone no longer on the team"}">${initialsFor(creator)}</span>
-              <div>
-                <div class="assignment-item-title">${esc(d.title)}</div>
-                <div class="empty" style="padding:0;">${task ? `${esc(task.name)} &middot; ` : ""}${formatDate(d.dueDate)} (${dueLabel(d.dueDate)})</div>
-              </div>
-            </div>
-            ${d.completed
-              ? `<span class="pill green">Completed</span>`
-              : manageable ? `<div class="row-actions">
-                  <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
-                  <button class="small complete-btn" data-action="complete-duedate" data-id="${d.id}">Complete</button>
-                </div>` : ""}
-          </div>`;
-        }).join("");
-
-    return `<div class="assignment-group">
-      <div class="assignment-group-header">
-        ${esc(g.name)} <span class="empty" style="padding:0;">(${g.items.length} ${g.items.length === 1 ? "item" : "items"})</span>
-        <button class="small secondary" data-action="quick-assign" data-id="${g.personId}">+ Assign</button>
-      </div>
-      ${itemsHtml}
-    </div>`;
-  }).join("");
-}
-
-assignmentsList.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
+async function handleItemAction(btn) {
   const { action, id } = btn.dataset;
   if (action === "quick-assign") {
-    openDueDateModal(null, "assignment", id || null);
+    openDueDateModal(null, "assignment", btn.dataset.personId || null, btn.dataset.taskId || null);
     return;
   }
   if (action === "complete-duedate") {
+    if (btn.disabled) return;
     try { await DueDates.update(id, { completed: true, completedDate: new Date().toISOString() }); } catch (err) { showToast("Error: " + err.message); }
     return;
   }
   await handleDueDateAction(action, id);
-});
+}
 
 async function handleDueDateAction(action, id) {
   const d = dueDates.find((dd) => dd.id === id);
@@ -582,7 +557,7 @@ function renderPeoplePills(selectedIds) {
   </label>`).join("");
 }
 
-function openDueDateModal(dueDateRecord, mode, presetPersonId) {
+function openDueDateModal(dueDateRecord, mode, presetPersonId, presetTaskId = null) {
   modalMode = mode;
   editingDueDateId = dueDateRecord ? dueDateRecord.id : null;
   const isEditing = !!dueDateRecord;
@@ -599,7 +574,7 @@ function openDueDateModal(dueDateRecord, mode, presetPersonId) {
   ddProject.innerHTML = visibleProjects().map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
   const projectId = dueDateRecord ? dueDateRecord.projectId : selectedProjectId;
   ddProject.value = projectId || "";
-  populateTaskOptions(projectId, dueDateRecord ? dueDateRecord.taskId : "");
+  populateTaskOptions(projectId, dueDateRecord ? dueDateRecord.taskId : (presetTaskId || ""));
 
   ddTitle.value = dueDateRecord ? dueDateRecord.title : "";
   ddDate.value = dueDateRecord ? dueDateRecord.dueDate : "";
@@ -625,8 +600,8 @@ document.getElementById("openAddAssignment").addEventListener("click", () => ope
 const toggleCompletedBtn = document.getElementById("toggleCompletedBtn");
 toggleCompletedBtn.addEventListener("click", () => {
   showCompleted = !showCompleted;
-  toggleCompletedBtn.textContent = showCompleted ? "Hide Completed" : "Show Completed";
-  renderAssignments();
+  toggleCompletedBtn.textContent = showCompleted ? "Hide completed" : "Show completed";
+  renderBudget();
 });
 document.getElementById("modalCancelDueDate").addEventListener("click", closeDueDateModal);
 closeOnBackdropClick(dueDateModal, closeDueDateModal);

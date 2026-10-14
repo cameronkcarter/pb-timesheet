@@ -39,7 +39,14 @@
         <tbody></tbody>
       </table>
       <div id="budgetEmpty" class="empty" style="display:none;">No tasks set up for this project yet.</div>
-      <div id="budgetHint" class="empty" style="padding-top:10px;">Click a task to see who's assigned to it.</div>
+      <div id="generalItems"></div>
+      <div class="budget-foot">
+        <div id="budgetHint" class="empty" style="padding:0;">Click a task to see who's assigned to it.</div>
+        <div class="row-actions">
+          <button id="toggleCompletedBtn" class="secondary small">Show completed</button>
+          <button id="openAddAssignment" class="secondary small">+ Add Assignment</button>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -57,16 +64,6 @@
       </div>
     </div>
 
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="margin:0;">Assignments</h2>
-        <div class="row-actions">
-          <button id="toggleCompletedBtn" class="secondary small">Show Completed</button>
-          <button id="openAddAssignment" class="secondary small">+ Add Assignment</button>
-        </div>
-      </div>
-      <div id="assignmentsList" style="margin-top:16px;"></div>
-    </div>
   </div>
 </main>
 
