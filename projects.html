@@ -43,7 +43,7 @@
       <div class="budget-foot">
         <div id="budgetHint" class="empty" style="padding:0;">Click a task to see who's assigned to it.</div>
         <div class="row-actions">
-          <button id="toggleCompletedBtn" class="secondary small">Show completed</button>
+          <button id="toggleCompletedBtn" class="secondary small">Hide completed</button>
           <button id="openAddAssignment" class="secondary small">+ Assign subtask</button>
         </div>
       </div>
@@ -66,45 +66,6 @@
 
   </div>
 </main>
-
-<div id="dueDateModal" class="modal-overlay" style="display:none;">
-  <div class="modal" style="max-width:520px;">
-    <h2 id="dueDateModalTitle">Add Event</h2>
-
-    <label for="ddProject">Project</label>
-    <select id="ddProject"></select>
-
-    <div id="ddTaskRow">
-      <label for="ddTask" id="ddTaskLabel">Task</label>
-      <select id="ddTask">
-        <option value="">No specific task</option>
-      </select>
-    </div>
-
-    <label for="ddTitle">Name</label>
-    <input type="text" id="ddTitle" placeholder="Community Workshop" />
-
-    <label for="ddDate">Date</label>
-    <input type="date" id="ddDate" />
-    <div id="ddHoursField" style="display:none;">
-      <label for="ddHours">Estimated hours (optional)</label>
-      <input type="number" id="ddHours" min="0" step="0.25" placeholder="6" />
-    </div>
-
-    <div id="ddPeopleField">
-      <label>Assigned to</label>
-      <div id="ddPeoplePills" class="dd-people-pills"></div>
-    </div>
-
-    <div class="row-actions" style="margin-top:20px; justify-content:space-between;">
-      <button id="modalDeleteDueDate" class="danger" style="display:none;">Delete</button>
-      <div class="row-actions" style="margin-left:auto;">
-        <button id="modalCancelDueDate" class="secondary">Cancel</button>
-        <button id="modalSaveDueDate">Save</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <div id="timelineModal" class="modal-overlay" style="display:none;">
   <div class="modal" style="max-width:480px;">

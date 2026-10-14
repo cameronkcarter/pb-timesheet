@@ -1,9 +1,10 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml, sortProjects,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml, sortProjects, esc,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
+import { createItemEditor, isSubtask, setItemCompleted, deleteItem } from "./subtasks.js";
 import { billRateOf, assignedHours, isInternal, taskBudgetUse } from "./rates.js";
 
 const sessionPersonId = requireSession();
@@ -17,11 +18,8 @@ let dueDates = [];
 let navChecked = false;
 let selectedProjectId = loadSelectedProject();
 let expandedTaskId = null;
-let editingDueDateId = null;
-let modalMode = "event"; // "event" | "assignment"
 let openDotId = null;
-let editingTimelineProjectId = null;
-let showCompleted = false;
+let showCompleted = true; // completed subtasks show by default; can be hidden
 
 const PX_PER_DAY = 4;
 const LABEL_COL_WIDTH = 200;
@@ -48,26 +46,11 @@ ganttScroll.addEventListener("scroll", () => {
 });
 const generalItemsEl = document.getElementById("generalItems");
 
-const dueDateModal = document.getElementById("dueDateModal");
-const dueDateModalTitle = document.getElementById("dueDateModalTitle");
-const ddProject = document.getElementById("ddProject");
-const ddTaskRow = document.getElementById("ddTaskRow");
-const ddTask = document.getElementById("ddTask");
-const ddTitle = document.getElementById("ddTitle");
-const ddDate = document.getElementById("ddDate");
-const ddPeopleField = document.getElementById("ddPeopleField");
-const ddPeoplePills = document.getElementById("ddPeoplePills");
-const modalDeleteDueDate = document.getElementById("modalDeleteDueDate");
-
 const timelineModal = document.getElementById("timelineModal");
 const timelineModalTitle = document.getElementById("timelineModalTitle");
 const timelineModalRows = document.getElementById("timelineModalRows");
 
 wireLogout("logoutLink", "navBrandLink");
-
-function esc(str) {
-  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 function loadSelectedProject() {
   try { return localStorage.getItem(SELECTED_PROJECT_KEY); } catch { return null; }
@@ -92,16 +75,16 @@ function canManage(dueDateRecord) {
   return me.isAdmin || dueDateRecord.createdByPersonId === sessionPersonId;
 }
 
-// Assignees can tick off their own items; creators and admins can too, and edit.
+// Assignees can complete their own subtasks; creators and admins can too, and edit.
 function canComplete(d) {
   return canManage(d) || (d.personIds || []).includes(sessionPersonId);
 }
 
-// Assignments (dated to-dos with people) on this project, optionally for one
+// Subtasks (dated to-dos with people) on this project, optionally for one
 // task / one person, respecting "Show completed".
 function projectItems({ taskId, personId } = {}) {
   return dueDates
-    .filter((d) => d.projectId === selectedProjectId && isAssignment(d) && (showCompleted || !d.completed))
+    .filter((d) => d.projectId === selectedProjectId && isSubtask(d) && (showCompleted || !d.completed))
     .filter((d) => taskId === undefined || (d.taskId || null) === taskId)
     .filter((d) => !personId || (d.personIds || []).includes(personId))
     .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
@@ -112,12 +95,9 @@ function itemsListHtml(items, withWho = false) {
   return `<div class="due-list">${items.map((d) => dueItemHtml(d, {
     canComplete: canComplete(d),
     canEdit: canManage(d),
+    canDelete: canManage(d),
     who: withWho ? (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean).join(", ") : "",
   })).join("")}</div>`;
-}
-
-function isAssignment(d) {
-  return !!(d.personIds && d.personIds.length > 0);
 }
 
 if (sessionPersonId) {
@@ -189,7 +169,7 @@ projectCardsEl.addEventListener("click", (e) => {
 });
 
 // ---------- Budget (read-only) ----------
-// Budgets are spent at the project's bill rate (see rates.js).
+// Budgets are spent at each person's bill rate (see rates.js).
 function spentOnTask(taskId) {
   return timeEntries
     .filter((e) => e.taskId === taskId)
@@ -206,7 +186,7 @@ function loggedHours(entries) {
 }
 
 // Billed projects show dollars (budget / spent / remaining). Internal projects
-// have no budget, so they show hours (assigned / logged) instead.
+// have no budget, so they show hours logged instead.
 function renderBudget() {
   if (!selectedProjectId) return;
   const project = projects.find((p) => p.id === selectedProjectId);
@@ -235,6 +215,11 @@ function renderBudget() {
     thead.innerHTML = `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th></tr>`;
   }
 
+  const general = projectItems({ taskId: null });
+  generalItemsEl.innerHTML = general.length
+    ? `<div class="summary-label" style="margin:16px 0 4px;">Project-wide subtasks</div>${itemsListHtml(general, true)}`
+    : "";
+
   if (projectTasks.length === 0) {
     budgetTbody.innerHTML = "";
     budgetEmpty.style.display = "block";
@@ -244,10 +229,6 @@ function renderBudget() {
   budgetEmpty.style.display = "none";
   budgetHint.style.display = "block";
   budgetHint.textContent = internal ? "Click a task to see who has logged time on it." : "Click a task to see who's assigned to it.";
-  const general = projectItems({ taskId: null });
-  generalItemsEl.innerHTML = general.length
-    ? `<div class="summary-label" style="margin:16px 0 4px;">Project-wide subtasks</div>${itemsListHtml(general, true)}`
-    : "";
 
   budgetTbody.innerHTML = projectTasks.map((t, i) => {
     const expanded = t.id === expandedTaskId;
@@ -264,16 +245,16 @@ function renderBudget() {
         <td>${budgetBarHtml(use.spent, use.committed, budget)}</td>
         <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>`;
     }
-    const open = dueDates.filter((d) => d.taskId === t.id && isAssignment(d) && !d.completed);
+    const open = dueDates.filter((d) => d.taskId === t.id && isSubtask(d) && !d.completed);
     const overdue = open.some((d) => d.dueDate < todayISO());
-    const dueChip = open.length ? `<span class="due-chip ${overdue ? "overdue" : ""}" title="Open assignments on this task">${open.length} due</span>` : "";
+    const dueChip = open.length ? `<span class="due-chip ${overdue ? "overdue" : ""}" title="Open subtasks on this task">${open.length} due</span>` : "";
     const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><span class="task-chevron" aria-hidden="true">&#9656;</span> ${esc(t.name)}${dueChip}</td>${cells}</tr>`;
     if (!expanded) return mainRow;
     return mainRow + `<tr><td colspan="5" class="accordion-cell">${taskPeopleHtml(t)}</td></tr>`;
   }).join("");
 }
 
-// Who's on a task: each person's assigned hours vs. hours logged.
+// Who's on a task: each person's hours bar and their subtasks for it.
 function taskPeopleHtml(task) {
   if (isInternal(projects.find((p) => p.id === task.projectId))) {
     // Internal: who has logged how much, most first.
@@ -402,7 +383,7 @@ function renderGantt() {
 
   function dotHtml(d) {
     const dx = xFor(d.dueDate);
-    const assignment = isAssignment(d);
+    const assignment = isSubtask(d);
     const kind = assignment ? "gantt-dot-assignment" : "gantt-dot-event";
     const hollow = assignment ? d.completed : d.dueDate < today;
     return `<div class="gantt-dot ${kind} ${hollow ? "gantt-dot-hollow" : ""}" style="left:${dx}px;" data-dot-id="${d.id}" title="${esc(d.title)} — ${formatDate(d.dueDate)}"></div>`;
@@ -525,7 +506,7 @@ generalItemsEl.addEventListener("click", async (e) => {
 async function handleItemAction(btn) {
   const { action, id } = btn.dataset;
   if (action === "quick-assign") {
-    openDueDateModal(null, "assignment", btn.dataset.personId || null, btn.dataset.taskId || null);
+    itemEditor.open(null, { mode: "subtask", projectId: selectedProjectId, personId: btn.dataset.personId || null, taskId: btn.dataset.taskId || null });
     return;
   }
   if (action === "complete-duedate") return setItemCompleted(id, true);
@@ -533,80 +514,25 @@ async function handleItemAction(btn) {
   await handleDueDateAction(action, id);
 }
 
-// Mark an assignment complete (with Undo) or reopen it.
-async function setItemCompleted(id, completed) {
-  try {
-    await DueDates.update(id, { completed, completedDate: completed ? new Date().toISOString() : null });
-    if (completed) {
-      showToast("Marked complete.", { actionLabel: "Undo", onAction: () => setItemCompleted(id, false) });
-    } else {
-      showToast("Reopened.");
-    }
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-}
-
 async function handleDueDateAction(action, id) {
   const d = dueDates.find((dd) => dd.id === id);
   if (!d || !canManage(d)) return;
-  if (action === "edit-duedate") openDueDateModal(d, isAssignment(d) ? "assignment" : "event");
+  if (action === "edit-duedate") itemEditor.open(d);
+  if (action === "delete-duedate") await deleteItem(d);
 }
 
-// ---------- Event / assignment modal ----------
-function populateTaskOptions(projectId, selectedTaskId) {
-  const projectTasks = tasks.filter((t) => t.projectId === projectId);
-  ddTask.innerHTML = `<option value="">No specific task</option>` +
-    projectTasks.map((t) => `<option value="${t.id}" ${t.id === selectedTaskId ? "selected" : ""}>${esc(t.name)}</option>`).join("");
-}
+// ---------- Subtask / event editor (shared with the Dashboard) ----------
+const itemEditor = createItemEditor({
+  getData: () => ({ people, tasks, projects }),
+  sessionPersonId,
+  projectChoices: visibleProjects,
+  canManage,
+});
 
-function renderPeoplePills(selectedIds) {
-  const checked = selectedIds || [];
-  ddPeoplePills.innerHTML = people.map((p) => `<label>
-    <input type="checkbox" class="ddPerson" value="${p.id}" ${checked.includes(p.id) ? "checked" : ""} />
-    ${esc(p.name)}
-  </label>`).join("");
-}
-
-function openDueDateModal(dueDateRecord, mode, presetPersonId, presetTaskId = null) {
-  modalMode = mode;
-  editingDueDateId = dueDateRecord ? dueDateRecord.id : null;
-  const isEditing = !!dueDateRecord;
-  dueDateModalTitle.textContent = isEditing
-    ? (mode === "event" ? "Edit Event" : "Edit Assignment")
-    : (mode === "event" ? "Add Event" : "Add Assignment");
-
-  // Task is always available (for placing an event on a task's timeline
-  // row). Events never show the people picker, add or edit — events are
-  // universal, never assigned to anyone.
-  ddTaskRow.style.display = "block";
-  ddPeopleField.style.display = mode === "assignment" ? "block" : "none";
-
-  ddProject.innerHTML = visibleProjects().map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
-  const projectId = dueDateRecord ? dueDateRecord.projectId : selectedProjectId;
-  ddProject.value = projectId || "";
-  populateTaskOptions(projectId, dueDateRecord ? dueDateRecord.taskId : (presetTaskId || ""));
-
-  ddTitle.value = dueDateRecord ? dueDateRecord.title : "";
-  ddDate.value = dueDateRecord ? dueDateRecord.dueDate : "";
-
-  const defaultPeople = dueDateRecord
-    ? dueDateRecord.personIds
-    : (presetPersonId ? [presetPersonId] : (mode === "event" ? [] : [sessionPersonId]));
-  renderPeoplePills(defaultPeople);
-
-  modalDeleteDueDate.style.display = (isEditing && canManage(dueDateRecord)) ? "inline-block" : "none";
-
-  dueDateModal.style.display = "flex";
-  ddTitle.focus();
-}
-
-function closeDueDateModal() {
-  dueDateModal.style.display = "none";
-}
-
-document.getElementById("openAddEvent").addEventListener("click", () => openDueDateModal(null, "event"));
-document.getElementById("openAddAssignment").addEventListener("click", () => openDueDateModal(null, "assignment"));
+document.getElementById("openAddEvent").addEventListener("click", () =>
+  itemEditor.open(null, { mode: "event", projectId: selectedProjectId }));
+document.getElementById("openAddAssignment").addEventListener("click", () =>
+  itemEditor.open(null, { mode: "subtask", projectId: selectedProjectId }));
 
 const toggleCompletedBtn = document.getElementById("toggleCompletedBtn");
 toggleCompletedBtn.addEventListener("click", () => {
@@ -614,55 +540,9 @@ toggleCompletedBtn.addEventListener("click", () => {
   toggleCompletedBtn.textContent = showCompleted ? "Hide completed" : "Show completed";
   renderBudget();
 });
-document.getElementById("modalCancelDueDate").addEventListener("click", closeDueDateModal);
-closeOnBackdropClick(dueDateModal, closeDueDateModal);
-ddProject.addEventListener("change", () => populateTaskOptions(ddProject.value, ""));
-
-modalDeleteDueDate.addEventListener("click", async () => {
-  if (!editingDueDateId) return;
-  if (!confirm("Delete this item?")) return;
-  try {
-    await DueDates.remove(editingDueDateId);
-    closeDueDateModal();
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-});
-
-document.getElementById("modalSaveDueDate").addEventListener("click", async () => {
-  const projectId = ddProject.value;
-  const taskId = ddTaskRow.style.display !== "none" ? (ddTask.value || null) : null;
-  const title = ddTitle.value.trim();
-  const dueDate = ddDate.value;
-  const personIds = ddPeopleField.style.display !== "none"
-    ? [...ddPeoplePills.querySelectorAll(".ddPerson:checked")].map((cb) => cb.value)
-    : [];
-
-  if (!projectId) return showToast("Select a project.");
-  if (!title || !dueDate) return showToast("Enter a name and date.");
-  if (modalMode === "assignment" && !editingDueDateId && !taskId) return showToast("Select a task for this assignment.");
-  if (modalMode === "assignment" && !editingDueDateId && personIds.length === 0) return showToast("Assign this to at least one person.");
-
-  try {
-    if (editingDueDateId) {
-      await DueDates.update(editingDueDateId, { projectId, taskId, title, dueDate, personIds });
-      showToast("Updated.");
-    } else {
-      await DueDates.add({
-        projectId, taskId, title, dueDate, personIds,
-        createdByPersonId: sessionPersonId,
-      });
-      showToast("Added.");
-    }
-    closeDueDateModal();
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-});
 
 // ---------- Timeline (task dates) edit modal ----------
 function openTimelineModal(projectId) {
-  editingTimelineProjectId = projectId;
   const project = projects.find((p) => p.id === projectId);
   const projectTasks = tasks.filter((t) => t.projectId === projectId).sort((a, b) => a.name.localeCompare(b.name));
 

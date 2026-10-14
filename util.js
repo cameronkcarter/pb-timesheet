@@ -1,3 +1,8 @@
+// Escape text for safe use inside HTML (names, notes, etc.).
+export function esc(str) {
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 export function formatCurrency(n) {
   return (n || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
@@ -60,14 +65,6 @@ export function daysBetween(startStr, endStr) {
   return Math.round((end - start) / 86400000);
 }
 
-export function formatShortDate(date) {
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-export function formatWeekday(date) {
-  return date.toLocaleDateString("en-US", { weekday: "short" });
-}
-
 // Human-readable countdown/overdue label for a due date.
 export function dueLabel(dateStr) {
   if (!dateStr) return "";
@@ -101,37 +98,19 @@ export function formatMonthLabel(date) {
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-export function formatMonthShort(date) {
-  return date.toLocaleDateString("en-US", { month: "long" });
-}
-
 // Compact M/D/YY format matching the invoice template (e.g. "8/1/26").
 export function formatShortMDY(date) {
   return `${date.getMonth() + 1}/${date.getDate()}/${String(date.getFullYear()).slice(2)}`;
 }
 
 let toastTimer;
-// showToast("Saved.") — or with an action button, e.g.
-// showToast("Marked complete.", { actionLabel: "Undo", onAction: () => ... })
-export function showToast(message, { actionLabel = null, onAction = null, duration = null } = {}) {
+export function showToast(message) {
   const el = document.getElementById("toast");
   if (!el) return;
   el.textContent = message;
-  el.classList.toggle("has-action", !!actionLabel);
-  if (actionLabel && onAction) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "toast-action";
-    btn.textContent = actionLabel;
-    btn.addEventListener("click", () => {
-      el.classList.remove("show");
-      onAction();
-    });
-    el.appendChild(btn);
-  }
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), duration || (actionLabel ? 6000 : 2500));
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
 }
 
 // Project order everywhere: client projects newest first (most recently
@@ -152,8 +131,9 @@ export function sortProjects(list) {
 
 // Hours bar for someone's assignment. Leads with hours REMAINING (the number
 // people act on), with logged and assigned alongside. The whole bar is the
-// assignment, filled in the project color as hours are logged. Logging past the assignment is allowed (more
-// hours are often added later), so it shows in amber, not as an error.
+// assignment, filled in the project color as hours are logged. Logging past
+// the assignment is allowed (more hours are often added later), so it shows
+// in amber, not as an error.
 export function hoursBarHtml(logged, assigned, color, large = false) {
   const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : (logged > 0 ? 100 : 0);
   const over = logged - assigned > 0.005;
@@ -204,8 +184,7 @@ export function budgetBarHtml(spent, committed, budget, large = false) {
 // One assignment / subtask (a dated to-do for a person, e.g. "Draft memo —
 // due Oct 20"), shown under the task it belongs to. Open items get a
 // "Mark complete" button; completed ones show a check and "Reopen".
-export function dueItemHtml(d, { canComplete = false, canEdit = false, who = "" } = {}) {
-  const text = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export function dueItemHtml(d, { canComplete = false, canEdit = false, canDelete = false, who = "" } = {}) {
   const today = todayISO();
   const overdue = !d.completed && d.dueDate < today;
   const soon = !d.completed && !overdue && daysBetween(today, d.dueDate) <= 3;
@@ -218,9 +197,10 @@ export function dueItemHtml(d, { canComplete = false, canEdit = false, who = "" 
       : `<button type="button" class="small due-btn due-complete" data-action="complete-duedate" data-id="${d.id}">Mark complete</button>`;
   return `<div class="due-item ${d.completed ? "done" : ""} ${overdue ? "overdue" : ""} ${soon ? "soon" : ""}">
     <span class="due-mark" aria-hidden="true">${d.completed ? "&#10003;" : ""}</span>
-    <span class="due-title">${text(d.title)}${who ? ` <span class="due-who">${text(who)}</span>` : ""}</span>
+    <span class="due-title">${esc(d.title)}${who ? ` <span class="due-who">${esc(who)}</span>` : ""}</span>
     <span class="due-when">${when}</span>
     ${canEdit && !d.completed ? `<button type="button" class="link-btn due-edit" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : ""}
     ${action}
+    ${canDelete ? `<button type="button" class="icon-btn due-delete" data-action="delete-duedate" data-id="${d.id}" title="Delete" aria-label="Delete">&times;</button>` : ""}
   </div>`;
 }

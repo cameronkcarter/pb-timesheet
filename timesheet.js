@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
   todayISO, toISODate, getWeekStart, monthKey, showToast,
-  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, sortProjects,
+  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, sortProjects, esc,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { assignedHours, isInternal } from "./rates.js";
@@ -20,6 +20,7 @@ let selectedProjectId = null;
 let selectedTaskId = null;
 let navChecked = false;
 let isDirty = false;
+let editingEntryId = null; // entry loaded into the form by its Edit button
 let calMonth = firstOfMonth(new Date()); // month shown in the calendar
 let selectedDay = todayISO();
 
@@ -40,10 +41,6 @@ const entryNote = document.getElementById("entryNote");
 const existingHint = document.getElementById("existingHint");
 const submitEntry = document.getElementById("submitEntry");
 const cancelEdit = document.getElementById("cancelEdit");
-
-function esc(str) {
-  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 function fmtHours(n) {
   return String(Math.round(n * 100) / 100);
@@ -190,6 +187,7 @@ function renderDayEntries(entries) {
 }
 
 function selectDay(iso) {
+  if (editingEntryId && iso !== selectedDay) resetForm();
   selectedDay = iso;
   calMonth = firstOfMonth(new Date(iso + "T00:00:00"));
   renderAll();
@@ -209,6 +207,7 @@ dayEntries.addEventListener("click", async (e) => {
   if (editBtn) {
     const entry = timeEntries.find((x) => x.id === editBtn.dataset.editEntry);
     if (!entry) return;
+    editingEntryId = entry.id;
     selectedProjectId = entry.projectId;
     selectedTaskId = entry.taskId;
     entryHours.value = entry.hours;
@@ -260,6 +259,20 @@ function myTaskOptions() {
 function existingEntry() {
   return timeEntries.find((e) =>
     e.personId === selectedPersonId && e.taskId === selectedTaskId && e.date === selectedDay);
+}
+
+// When editing an entry and switching it to a task that already has its own
+// entry that day, the two would collide.
+function editConflict() {
+  const existing = existingEntry();
+  return !!(editingEntryId && existing && existing.id !== editingEntryId);
+}
+
+// Hours already logged on the selected day, not counting the entry a save replaces.
+function otherHoursThatDay(replacingId) {
+  return timeEntries
+    .filter((e) => e.personId === selectedPersonId && e.date === selectedDay && e.id !== replacingId)
+    .reduce((s, e) => s + Number(e.hours || 0), 0);
 }
 
 function renderLogForm() {
@@ -350,21 +363,29 @@ function renderExistingHint() {
     return;
   }
   const existing = existingEntry();
+  const replacingId = editingEntryId || (existing ? existing.id : null);
   const notes = [];
-  if (existing && existing.invoiced) {
+  if (editConflict()) {
+    notes.push("You already have hours on that task this day — edit that entry instead");
+    submitEntry.textContent = "Save Changes";
+    submitEntry.disabled = true;
+  } else if (existing && existing.invoiced) {
     notes.push("Already invoiced for this day — can't be changed");
     submitEntry.textContent = "Log Hours";
     submitEntry.disabled = true;
   } else {
-    if (existing) notes.push(`Replaces the ${existing.hours} hrs already logged here`);
-    submitEntry.textContent = existing ? "Update Entry" : "Log Hours";
+    if (existing && !editingEntryId) notes.push(`Replaces the ${existing.hours} hrs already logged here`);
+    submitEntry.textContent = editingEntryId ? "Save Changes" : existing ? "Update Entry" : "Log Hours";
     submitEntry.disabled = false;
 
     const option = myTaskOptions().find((c) => c.task.id === selectedTaskId);
     const hours = Number(entryHours.value) || 0;
+    if (hours > 0 && otherHoursThatDay(replacingId) + hours > 24) {
+      notes.push("That's more than 24 hours for this day");
+    }
     if (option && option.assignment && hours > 0) {
       const assigned = assignedHours(option.assignment, { projects, people });
-      const after = loggedOnTask(selectedTaskId, existing ? existing.id : null) + hours;
+      const after = loggedOnTask(selectedTaskId, replacingId) + hours;
       if (after - assigned > 0.005) {
         notes.push(`${fmtHours(after - assigned)} hrs over your ${fmtHours(assigned)} assigned — OK, your PM will see it.`);
       }
@@ -400,11 +421,16 @@ taskCardsEl.addEventListener("click", (e) => {
   });
 });
 
-function clearForm() {
+function resetForm() {
   entryHours.value = "";
   entryNote.value = "";
   isDirty = false;
+  editingEntryId = null;
   selectedTaskId = null;
+}
+
+function clearForm() {
+  resetForm();
   renderLogForm();
 }
 
@@ -421,10 +447,14 @@ submitEntry.addEventListener("click", async () => {
   if (!projectId || !taskId) return showToast("Choose a task first.");
   if (!hours || hours <= 0) return showToast("Enter hours worked.");
   if (!note) return showToast("Add a note describing what you worked on.");
+  if (editConflict()) return showToast("You already have hours on that task this day — edit that entry instead.");
 
   const existing = existingEntry();
   if (existing && existing.invoiced) {
     return showToast("This day/task has already been invoiced and can't be changed here.");
+  }
+  if (otherHoursThatDay(editingEntryId || (existing ? existing.id : null)) + hours > 24) {
+    return showToast("That's more than 24 hours for this day — check the hours.");
   }
 
   const autoApprove = selectedProjectIsInternal();
@@ -432,7 +462,11 @@ submitEntry.addEventListener("click", async () => {
     ? { approved: true, approvedDate: new Date().toISOString() }
     : { approved: false, approvedDate: null };
   try {
-    if (existing) {
+    if (editingEntryId) {
+      // Editing can move an entry to another task on the same day.
+      await TimeEntries.update(editingEntryId, { projectId, taskId, hours, note, ...approval });
+      showToast("Entry updated.");
+    } else if (existing) {
       await TimeEntries.update(existing.id, { hours, note, ...approval });
       showToast("Entry updated.");
     } else {

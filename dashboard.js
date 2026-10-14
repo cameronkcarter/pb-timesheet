@@ -1,10 +1,11 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
 import {
-  formatCurrency, formatDate, daysAgo, showToast,
+  formatCurrency, formatDate, daysAgo, esc,
   todayISO, toISODate, getWeekStart, addDays, monthKey, projectColor, hoursBarHtml, dueItemHtml, sortProjects,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
+import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
 
 const selectedPersonId = requireSession();
 
@@ -15,8 +16,10 @@ let assignments = [];
 let timeEntries = [];
 let dueDates = [];
 let navChecked = false;
+let showCompleted = true; // completed subtasks show by default; can be hidden
 
 const projectSummaryCards = document.getElementById("projectSummaryCards");
+const toggleCompletedBtn = document.getElementById("toggleCompletedBtn");
 
 wireLogout("logoutLink", "navBrandLink");
 
@@ -68,13 +71,11 @@ function render() {
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedTotal);
   document.getElementById("statPaid").textContent = formatCurrency(paidTotal);
 
+  // Your subtasks; completed ones too unless hidden.
+  const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId)
+    && (showCompleted || !d.completed));
   // Internal projects (e.g. Proposals & Pursuits) are just for logging time
   // on the Timesheet, so they are left off the Dashboard.
-  // Your open assignments, plus ones completed in the last week (shown
-  // greyed with Reopen, so a mis-click is easy to undo), then they drop off.
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-  const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId)
-    && (!d.completed || (d.completedDate && d.completedDate >= weekAgo)));
   const myProjectIds = [...new Set([
     ...assignments.filter((a) => a.personId === personId).map((a) => a.projectId),
     ...myEntries.map((e) => e.projectId),
@@ -97,7 +98,7 @@ function render() {
   // for it sit together.
   const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
   const itemsHtml = (items) => items.length
-    ? `<div class="due-list">${items.sort(byDue).map((d) => dueItemHtml(d, { canComplete: true })).join("")}</div>`
+    ? `<div class="due-list">${items.sort(byDue).map((d) => dueItemHtml(d, { canComplete: true, canEdit: canManage(d), canDelete: canManage(d) })).join("")}</div>`
     : "";
 
   projectSummaryCards.innerHTML = myProjectIds.map((projectId) => {
@@ -137,7 +138,10 @@ function render() {
       totalAssigned += assigned;
       totalUsed += used;
       return `<div class="hours-row hours-row-with-items">
-        <div class="hours-row-name" title="${task.name}">${task.name}</div>
+        <div class="hours-row-name" title="${esc(task.name)}">
+          ${esc(task.name)}
+          <button class="link-btn assign-link" data-action="add-subtask" data-project-id="${projectId}" data-task-id="${task.id}">+ Add subtask</button>
+        </div>
         <div>
           ${assigned > 0 || used > 0 ? hoursBarHtml(used, assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
           ${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}
@@ -148,7 +152,7 @@ function render() {
 
     return `<div class="card">
       <div class="hours-card-header">
-        <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${project.name}${project.client ? ` <span class="empty" style="font-weight:400;">(${project.client})</span>` : ""}</h2>
+        <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${esc(project.name)}${project.client ? ` <span class="empty" style="font-weight:400;">(${esc(project.client)})</span>` : ""}</h2>
         <div class="empty" style="padding:0;">${budgetPct != null ? `Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong> &middot; ` : ""}Your pay not yet invoiced: <strong>${formatCurrency(projectOwed)}</strong> &middot; Last invoiced: ${lastInvoicedLabel}</div>
       </div>
       ${totalAssigned > 0 ? `
@@ -158,7 +162,7 @@ function render() {
         </div>` : ""}
       ${taskRows ? `<div class="hours-rows">${taskRows}</div>` : ""}
       ${generalItems.length ? `<div class="hours-row hours-row-with-items">
-        <div class="hours-row-name">Other assignments</div>
+        <div class="hours-row-name">Other subtasks</div>
         <div>${itemsHtml(generalItems)}</div>
       </div>` : ""}
       ${!taskRows && !generalItems.length ? '<div class="empty">No hours assigned to you on this project yet.</div>' : ""}
@@ -166,25 +170,40 @@ function render() {
   }).join("");
 }
 
+// The person who created a subtask, or an admin, can edit or delete it.
+function canManage(d) {
+  const me = people.find((p) => p.id === selectedPersonId);
+  return !!me && (me.isAdmin || d.createdByPersonId === selectedPersonId);
+}
+
+const itemEditor = createItemEditor({
+  getData: () => ({ people, tasks, projects }),
+  sessionPersonId: selectedPersonId,
+  // Projects you're on (not internal ones), newest first.
+  projectChoices: () => sortProjects(projects.filter((p) => !isInternal(p) && (
+    assignments.some((a) => a.projectId === p.id && a.personId === selectedPersonId)
+    || dueDates.some((d) => d.projectId === p.id && (d.personIds || []).includes(selectedPersonId))))),
+  canManage,
+});
+
 projectSummaryCards.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
-  if (btn.dataset.action === "complete-duedate") setItemCompleted(btn.dataset.id, true);
-  if (btn.dataset.action === "reopen-duedate") setItemCompleted(btn.dataset.id, false);
+  const { action, id } = btn.dataset;
+  const d = dueDates.find((x) => x.id === id);
+  if (action === "complete-duedate") setItemCompleted(id, true);
+  if (action === "reopen-duedate") setItemCompleted(id, false);
+  if (action === "edit-duedate" && d && canManage(d)) itemEditor.open(d);
+  if (action === "delete-duedate" && d && canManage(d)) deleteItem(d);
+  if (action === "add-subtask") {
+    itemEditor.open(null, { mode: "subtask", projectId: btn.dataset.projectId, taskId: btn.dataset.taskId, personId: selectedPersonId });
+  }
 });
 
-// Mark an assignment complete (with Undo) or reopen it.
-async function setItemCompleted(id, completed) {
-  try {
-    await DueDates.update(id, { completed, completedDate: completed ? new Date().toISOString() : null });
-    if (completed) {
-      showToast("Marked complete.", { actionLabel: "Undo", onAction: () => setItemCompleted(id, false) });
-    } else {
-      showToast("Reopened.");
-    }
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-}
+toggleCompletedBtn.addEventListener("click", () => {
+  showCompleted = !showCompleted;
+  toggleCompletedBtn.textContent = showCompleted ? "Hide completed" : "Show completed";
+  render();
+});
 
 

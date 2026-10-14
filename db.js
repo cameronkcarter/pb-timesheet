@@ -92,6 +92,10 @@ async function approve(ids) {
   await batch.commit();
 }
 
+// People documents look like:
+// { name, rate (pay $/hr), billRate ($/hr charged to clients), isAdmin,
+//   password (optional, plain text), inactive (deactivated: hidden from login
+//   and pickers, kept on past records) }
 export const People = {
   listen: (cb) => listenCollection("people", cb, "name"),
   add: (data) => add("people", data),
@@ -99,6 +103,10 @@ export const People = {
   remove: (id) => remove("people", id),
 };
 
+// Project documents look like:
+// { name, client, projectNumber, billToName, billToCompany, billToAddress1,
+//   billToAddress2, billAtPayRate (bill at staff pay rates instead of bill
+//   rates), internal (not billed or paid, e.g. Proposals & Pursuits) }
 export const Projects = {
   listen: (cb) => listenCollection("projects", cb, "name"),
   add: (data) => add("projects", data),
@@ -106,7 +114,7 @@ export const Projects = {
   remove: (id) => remove("projects", id),
 };
 
-// Tasks documents look like: { projectId, name, budget }
+// Task documents look like: { projectId, name, budget ($), startDate, endDate }
 export const Tasks = {
   listen: (cb) => listenCollection("tasks", cb, "name"),
   add: (data) => add("tasks", data),
@@ -114,7 +122,7 @@ export const Tasks = {
   remove: (id) => remove("tasks", id),
 };
 
-// Assignment documents look like: { personId, taskId, projectId, maxHours }
+// Assignment documents look like: { personId, taskId, projectId, hours }
 export const Assignments = {
   listen: (cb) => listenCollection("assignments", cb),
   add: (data) => add("assignments", data),
@@ -140,20 +148,21 @@ export const TimeEntries = {
   approve,
 };
 
-// DueDate documents look like:
-// { projectId, taskId, personIds: [], title, dueDate, estimatedHours,
-//   createdByPersonId, completed, completedDate }
+// DueDate documents are subtasks (personIds non-empty) or timeline events:
+// { projectId, taskId, personIds: [], title, dueDate, createdByPersonId,
+//   completed, completedDate }
 export const DueDates = {
   listen: (cb) => listenCollection("dueDates", cb, "dueDate"),
-  add: (data) => add("dueDates", { taskId: null, estimatedHours: null, completed: false, completedDate: null, ...data }),
+  add: (data) => add("dueDates", { taskId: null, completed: false, completedDate: null, ...data }),
   update: (id, data) => update("dueDates", id, data),
   remove: (id) => remove("dueDates", id),
 };
 
 // Invoice documents look like:
 // { projectId, projectName, invoiceNumber, date, dueDate, periodLabel,
-//   taskRows, laborRows, feeTotal, billedTotal, currentTotal, remainingTotal,
-//   pctTotal, total, paid, paidDate }
+//   periodStart, periodEnd, taskRows, laborRows, feeTotal, billedTotal,
+//   currentTotal, remainingTotal, pctTotal, total, paid, paidDate,
+//   sheetSynced (logged in the Google Sheet) }
 export const Invoices = {
   listen: (cb) => listenCollection("invoices", cb, "date"),
   add: (data) => add("invoices", { paid: false, paidDate: null, ...data }),

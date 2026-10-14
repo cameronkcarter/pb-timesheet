@@ -2,15 +2,11 @@ import { People, Projects, Tasks, TimeEntries, Invoices } from "./db.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
   formatCurrency, formatDate, daysAgo, showToast,
-  lastDayOfMonth, formatShortMDY, toISODate, sortProjects,
+  lastDayOfMonth, formatShortMDY, toISODate, sortProjects, esc, projectColor,
 } from "./util.js";
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
 import { isTestMode } from "./session.js";
 import { billRateOf, paidAmount } from "./rates.js";
-
-function esc(str) {
-  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 const sessionPersonId = requireSession();
 
@@ -64,11 +60,22 @@ if (sessionPersonId) {
   Invoices.listen((d) => { invoices = d; renderHistory(); renderSheetSync(); });
 }
 
-// Invoices charge the project's bill rate, or each person's pay rate on
-// projects without one; hours already invoiced keep the rate they were billed
-// at (see rates.js).
+// Invoices charge each person's bill rate (or pay rate on projects billed at
+// staff pay rates); hours already invoiced keep the rate they were billed at
+// (see rates.js).
 function entryRate(e) {
   return billRateOf(e, { projects, people });
+}
+
+// Default invoice number: today's date (e.g. 2026-10-14), made unique across
+// all invoices by adding -2, -3… when the date is already taken.
+function nextInvoiceNumber() {
+  const base = toISODate(new Date());
+  const used = new Set(invoices.map((i) => i.invoiceNumber));
+  if (!used.has(base)) return base;
+  let n = 2;
+  while (used.has(`${base}-${n}`)) n += 1;
+  return `${base}-${n}`;
 }
 
 // ---------- Project cards ----------
@@ -95,9 +102,9 @@ function renderProjectCards() {
   }
 
   projectCardsEl.innerHTML = billable.map((p) => `
-    <div class="project-card ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}">
-      <div class="name">${p.name}</div>
-      <div class="client">${p.client || "&nbsp;"}</div>
+    <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
+      <div class="name">${esc(p.name)}</div>
+      <div class="client">${p.client ? esc(p.client) : "&nbsp;"}</div>
     </div>
   `).join("");
 
@@ -196,7 +203,7 @@ function renderDraft() {
 
   const dates = approved.map((e) => e.date).sort();
   if (!draft || draft.projectId !== selectedProjectId) {
-    draft = { projectId: selectedProjectId, rangeTouched: false, labelTouched: false };
+    draft = { projectId: selectedProjectId, rangeTouched: false, labelTouched: false, number: nextInvoiceNumber() };
   }
   if (!draft.rangeTouched) {
     draft.from = dates[0];
@@ -219,6 +226,10 @@ function renderDraft() {
           <label for="draftLabel">Billing period (shown on the invoice)</label>
           <input type="text" id="draftLabel" />
         </div>
+        <div style="flex:0 0 150px;">
+          <label for="draftNumber">Invoice #</label>
+          <input type="text" id="draftNumber" />
+        </div>
       </div>
       <div id="draftBody"></div>
       <div class="row-actions" style="margin-top:16px;">
@@ -234,6 +245,7 @@ function renderDraft() {
   setIfIdle("draftFrom", draft.from);
   setIfIdle("draftTo", draft.to);
   setIfIdle("draftLabel", draft.label);
+  setIfIdle("draftNumber", draft.number);
   renderDraftBody(approved, pending);
 }
 
@@ -305,6 +317,7 @@ monthsContainer.addEventListener("input", (e) => {
     }
     renderDraft();
   }
+  if (e.target.id === "draftNumber") draft.number = e.target.value;
   if (e.target.id === "draftLabel") {
     draft.label = e.target.value;
     draft.labelTouched = e.target.value.trim() !== "";
@@ -620,7 +633,12 @@ async function generate(isPreview) {
     const computed = computeInvoiceData(project, entries);
     const invoiceDate = new Date();
     const dueDate = lastDayOfMonth(invoiceDate);
-    const invoiceNumber = toISODate(invoiceDate);
+    const invoiceNumber = (draft.number || "").trim() || nextInvoiceNumber();
+    if (invoices.some((i) => i.invoiceNumber === invoiceNumber) && !isPreview &&
+      !confirm(`Invoice # ${invoiceNumber} has already been used. Use it again anyway?`)) {
+      buttons.forEach((b) => { b.disabled = false; });
+      return;
+    }
 
     await buildPdf({
       project, invoiceNumber, invoiceDate, dueDate,

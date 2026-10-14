@@ -1,5 +1,6 @@
 import { People } from "./db.js";
 import { setSessionPersonId, startTestSession } from "./session.js";
+import { esc } from "./util.js";
 
 // Login: pick your name (last person to log in on this device is listed
 // first), then type your password (if they have one) and log in. Test Mode is a
@@ -13,10 +14,6 @@ let selectedPersonId = null;
 const personList = document.getElementById("personList");
 const personListEmpty = document.getElementById("personListEmpty");
 const personListLoading = document.getElementById("personListLoading");
-
-function esc(str) {
-  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 function lastPersonId() {
   try { return localStorage.getItem(LAST_PERSON_KEY); } catch { return null; }
@@ -37,7 +34,7 @@ function avatarColor(id) {
 }
 
 People.listen((data) => {
-  people = data;
+  people = data.filter((p) => !p.inactive); // deactivated people can't log in
   if (!selectedPersonId) {
     const last = lastPersonId();
     if (last && people.some((p) => p.id === last)) selectedPersonId = last;

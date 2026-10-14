@@ -15,8 +15,7 @@
 //   project.internal         — not billed or paid at all (e.g. Proposals &
 //                              Pursuits); only hours are tracked
 //
-// Assignments are hours (assignment.hours). Older assignments stored a dollar
-// amount (capValue) instead; assignedHours() converts those on read.
+// Assignments are hours per person per task (assignment.hours).
 
 // Firm's standard bill rate, pre-filled when adding a person in Admin.
 export const DEFAULT_BILL_RATE = 150;
@@ -64,15 +63,9 @@ export function assignmentRate(project, person) {
   return personBillRate(person);
 }
 
-export function assignedHours(assignment, { projects, people }) {
-  if (assignment.hours != null) return Number(assignment.hours);
-  // Legacy dollar assignment: convert at the rate it was entered against
-  // (a project-wide rate, if the project had one then, else the pay rate).
-  const project = findProject(assignment.projectId, projects);
-  const rate = project && project.billRate
-    ? Number(project.billRate)
-    : personPayRate(findPerson(assignment.personId, people));
-  return rate > 0 ? Number(assignment.capValue || 0) / rate : 0;
+// (ctx is unused now but kept so callers don't need to change.)
+export function assignedHours(assignment, _ctx) {
+  return Number(assignment.hours || 0);
 }
 
 export function billedAmount(entries, ctx) {

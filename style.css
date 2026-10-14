@@ -79,12 +79,6 @@ h2 {
   margin: 0 0 12px;
 }
 
-.subtitle {
-  color: var(--text-muted);
-  margin: 0 0 24px;
-  font-size: 14px;
-}
-
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -92,19 +86,6 @@ h2 {
   padding: 20px;
   margin-bottom: 20px;
 }
-
-.grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-@media (max-width: 700px) {
-  .grid-2 {
-    grid-template-columns: 1fr;
-  }
-}
-
 
 label {
   display: block;
@@ -206,18 +187,6 @@ td {
   border-bottom: 1px solid var(--border);
 }
 
-tr.entry-row.shade {
-  background: #f7f5f9;
-}
-
-tr.entry-row.new-day td {
-  border-top: 1px solid var(--border);
-}
-
-tr.entry-row.new-day:first-child td {
-  border-top: none;
-}
-
 th {
   color: var(--text-muted);
   font-weight: 600;
@@ -304,48 +273,8 @@ th {
   margin-top: 2px;
 }
 
-.task-progress-row {
-  margin-bottom: 12px;
-}
-
-.task-progress-row:last-child {
-  margin-bottom: 0;
-}
-
-.task-progress-header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.task-progress-name {
-  font-size: 15px;
-  font-weight: 600;
-  flex-shrink: 0;
-  width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-progress-bar-wrap {
-  flex: 1;
-}
-
 .progress-bar.task-bar {
   height: 6px;
-}
-
-.fill.task-fill {
-  background: var(--navy-light);
-}
-
-.progress-captions {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 4px;
 }
 
 .pill {
@@ -472,32 +401,6 @@ th {
 
 .modal h2 {
   margin-top: 0;
-}
-
-.modal-duedate-row {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-}
-
-.modal-duedate-row-main {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.modal-duedate-row-main .ddTitle {
-  flex: 2;
-}
-
-.modal-duedate-row-main .ddDate {
-  flex: 1;
-}
-
-.modal-duedate-row-main .removeDueDateRow {
-  align-self: stretch;
-  padding: 0 12px;
-  flex-shrink: 0;
 }
 
 .dd-people-pills {
@@ -765,41 +668,6 @@ th {
   margin-top: 8px;
 }
 
-.creator-tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 700;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-
-.assignment-group {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.assignment-group:last-child {
-  border-bottom: none;
-}
-
-.assignment-group-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: 14px;
-}
-
-.assignment-group-header button {
-  margin-left: auto;
-}
-
 .timeline-task-row {
   margin-bottom: 16px;
   padding-bottom: 16px;
@@ -829,113 +697,6 @@ th {
 
 .timeline-task-dates label {
   margin-top: 0;
-}
-
-.assignment-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0 0 0;
-}
-
-.assignment-item-completed {
-  opacity: 0.55;
-}
-
-.assignment-item-completed .assignment-item-title {
-  text-decoration: line-through;
-}
-
-.assignment-item-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.assignment-item-title {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.complete-btn {
-  background: transparent;
-  color: var(--green);
-  border: 1px solid var(--green);
-}
-
-.complete-btn:hover {
-  background: #e5f3e6;
-}
-
-#weekGridTable {
-  min-width: 100%;
-}
-
-#weekGridTable th,
-#weekGridTable td {
-  text-align: center;
-  white-space: nowrap;
-}
-
-#weekGridTable th:first-child,
-#weekGridTable td:first-child {
-  text-align: left;
-  white-space: nowrap;
-}
-
-#weekGridTable .task-header-name {
-  text-transform: none;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 2px;
-}
-
-#weekGridTable .task-header-meta {
-  text-transform: none;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-muted);
-  letter-spacing: 0;
-}
-
-#weekGridTable input.hourCell {
-  width: 64px;
-  text-align: center;
-}
-
-#weekGridTable tr.today-row td {
-  background: #f5eef8;
-}
-
-#weekGridTable td.day-total,
-#weekGridTable td.task-total,
-#weekGridTable td.grand-total {
-  font-weight: 700;
-}
-
-#weekGridTable tfoot td {
-  border-top: 2px solid var(--border);
-  border-bottom: none;
-  padding-top: 10px;
-}
-
-.save-week-bar {
-  position: sticky;
-  bottom: 0;
-  background: var(--card);
-  margin: 20px -20px -20px;
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
-  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.04);
-}
-
-.save-week-btn {
-  width: 100%;
-  padding: 14px;
-  font-size: 16px;
-  margin: 0;
 }
 
 tr.task-row {
@@ -1008,28 +769,6 @@ tr.notes-row td {
 .toast.show {
   opacity: 1;
   transform: translateY(0);
-}
-
-.toast.has-action.show {
-  pointer-events: auto;
-}
-
-.toast .toast-action {
-  margin: 0 0 0 14px;
-  padding: 3px 10px;
-  background: #fff;
-  color: var(--navy);
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 6px;
-}
-
-.toast .toast-action:hover {
-  background: #efe5f4;
-}
-
-.checkbox-cell {
-  width: 30px;
 }
 
 hr.divider {
@@ -1525,7 +1264,7 @@ button.login-test-link:hover {
 }
 
 .hours-over {
-  color: var(--red);
+  color: #b5651d; /* amber: over assigned hours is allowed, just flagged */
   font-weight: 600;
 }
 
@@ -1550,20 +1289,8 @@ button.login-test-link:hover {
   margin-bottom: 10px;
 }
 
-.table-scroll {
-  overflow-x: auto;
-}
-
 .table-scroll table {
   min-width: 560px;
-}
-
-.fill.over-soft {
-  background: var(--accent);
-}
-
-.hours-over {
-  color: #b5651d;
 }
 
 #modalTaskRows.internal .modalTaskBudget {
@@ -2234,4 +1961,21 @@ button.link-btn.assign-link {
   padding: 0;
   font-size: 12px;
   font-weight: 600;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 12px;
+}
+
+.section-head button.small {
+  margin: 0;
+}
+
+/* Deactivated people (Admin > People & Rates). */
+tr.inactive-row td {
+  color: var(--text-muted);
 }

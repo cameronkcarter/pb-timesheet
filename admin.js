@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices } from "./db.js";
 import {
-  formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor, budgetBarHtml, sortProjects,
+  formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor, budgetBarHtml, sortProjects, esc,
 } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
@@ -19,9 +19,6 @@ let timeEntries = [];
 let dueDates = [];
 let invoices = [];
 let adminCheckDone = false;
-let assignmentsLoaded = false;
-let entriesLoaded = false;
-let invoicesLoaded = false;
 
 let modalEditingPersonId = null;
 let selectedProjectId = null;
@@ -42,19 +39,13 @@ if (sessionPersonId) {
     renderPeople();
     renderTasks();
     renderPendingApproval();
-    migrateLegacyAssignments();
-    migrateEntryRates();
   });
-  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); migrateLegacyAssignments(); migrateProjectBilling(); migrateEntryRates(); });
+  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); });
   Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
-  Assignments.listen((d) => { assignments = d; assignmentsLoaded = true; migrateLegacyAssignments(); renderTasks(); renderPendingApproval(); });
-  TimeEntries.listen((d) => { timeEntries = d; entriesLoaded = true; migrateEntryRates(); renderTasks(); renderPendingApproval(); });
+  Assignments.listen((d) => { assignments = d; renderTasks(); renderPendingApproval(); });
+  TimeEntries.listen((d) => { timeEntries = d; renderTasks(); renderPendingApproval(); });
   DueDates.listen((d) => { dueDates = d; });
-  Invoices.listen((d) => { invoices = d; invoicesLoaded = true; migrateEntryRates(); });
-}
-
-function esc(str) {
-  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  Invoices.listen((d) => { invoices = d; });
 }
 
 // ---------- People (table + modal) ----------
@@ -76,15 +67,19 @@ function renderPeople() {
     return;
   }
   peopleEmpty.style.display = "none";
-  const byPay = [...people].sort((a, b) => personPayRate(b) - personPayRate(a) || a.name.localeCompare(b.name));
+  // Active people by pay rate (highest first), then deactivated people.
+  const byPay = [...people].sort((a, b) =>
+    (!!a.inactive - !!b.inactive) || personPayRate(b) - personPayRate(a) || a.name.localeCompare(b.name));
   peopleTbody.innerHTML = byPay.map((p, i) => `
-    <tr class="${i % 2 === 1 ? "stripe-row" : ""}">
-      <td>${esc(p.name)}${p.isAdmin ? ' <span class="pill orange">Admin</span>' : ""}</td>
+    <tr class="${i % 2 === 1 ? "stripe-row" : ""} ${p.inactive ? "inactive-row" : ""}">
+      <td>${esc(p.name)}${p.isAdmin ? ' <span class="pill orange">Admin</span>' : ""}${p.inactive ? ' <span class="pill">Inactive</span>' : ""}</td>
       <td>${formatCurrency(personPayRate(p))}/hr</td>
       <td>${formatCurrency(personBillRate(p))}/hr${p.billRate == null ? ' <span class="empty" style="padding:0;">(not set — using pay rate)</span>' : ""}</td>
       <td><div class="row-actions" style="justify-content:flex-end;">
         <button class="small secondary" data-action="edit-person" data-id="${p.id}">Edit</button>
-        <button class="danger small" data-action="remove-person" data-id="${p.id}">Remove</button>
+        ${p.inactive
+          ? `<button class="small secondary" data-action="reactivate-person" data-id="${p.id}">Reactivate</button>`
+          : `<button class="danger small" data-action="remove-person" data-id="${p.id}">Remove</button>`}
       </div></td>
     </tr>`).join("");
 }
@@ -98,11 +93,34 @@ peopleTbody.addEventListener("click", async (e) => {
     const p = people.find((pr) => pr.id === id);
     openPersonModal(p);
   }
-  if (action === "remove-person") {
-    if (!confirm("Remove this person?")) return;
-    try { await People.remove(id); } catch (err) { showToast("Error: " + err.message); }
+  if (action === "remove-person") await removePerson(id);
+  if (action === "reactivate-person") {
+    try { await People.update(id, { inactive: false }); showToast("Reactivated."); } catch (err) { showToast("Error: " + err.message); }
   }
 });
+
+// People with logged hours or task assignments can't be deleted without
+// breaking history (timesheets, invoices), so they're deactivated instead:
+// hidden from login and from pickers, but kept on past records.
+async function removePerson(id) {
+  const person = personById(id);
+  if (!person) return;
+  if (id === sessionPersonId) return showToast("You can't remove yourself.");
+  const hasHistory = timeEntries.some((e) => e.personId === id) || assignments.some((a) => a.personId === id);
+  try {
+    if (hasHistory) {
+      if (!confirm(`${person.name} has logged hours or task assignments, so they can't be deleted without losing history.\n\nDeactivate them instead? They won't be able to log in or be assigned work, but their past hours stay on record. You can reactivate them later.`)) return;
+      await People.update(id, { inactive: true });
+      showToast(`${person.name} deactivated.`);
+    } else {
+      if (!confirm(`Permanently remove ${person.name}?`)) return;
+      await People.remove(id);
+      showToast(`${person.name} removed.`);
+    }
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
 
 function openPersonModal(person) {
   modalEditingPersonId = person ? person.id : null;
@@ -225,9 +243,9 @@ function renderProjectCards() {
   }
 
   projectCardsEl.innerHTML = ordered.map((p) => `
-    <div class="project-card ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}">
-      <div class="name">${p.name}</div>
-      <div class="client">${p.client || "&nbsp;"}</div>
+    <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
+      <div class="name">${esc(p.name)}</div>
+      <div class="client">${p.client ? esc(p.client) : "&nbsp;"}</div>
       <div class="client">${p.internal ? "Internal &middot; not billed or paid" : p.billAtPayRate ? "Bills at staff pay rates" : "Bills at staff bill rates"}</div>
       <div class="card-actions">
         <button class="small secondary" data-action="edit-project" data-id="${p.id}">Edit</button>
@@ -265,7 +283,7 @@ projectCardsEl.addEventListener("click", async (e) => {
 });
 
 // Removes a project and everything that belongs to it (tasks, assignments,
-// schedule items, logged hours). Refuses if anything was ever invoiced, since
+// subtasks and events, logged hours). Refuses if anything was ever invoiced, since
 // that history is part of the invoice paper trail.
 async function removeProject(projectId) {
   const project = projects.find((p) => p.id === projectId);
@@ -282,7 +300,7 @@ async function removeProject(projectId) {
 
   const counts = [
     [projectTasks.length, "task"], [projectAssignments.length, "assignment"],
-    [projectDueDates.length, "schedule item"], [projectEntries.length, "logged time entry"],
+    [projectDueDates.length, "subtask/event"], [projectEntries.length, "logged time entry"],
   ].filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}${n === 1 ? "" : "s"}`);
   const detail = counts.length ? `\n\nThis also permanently deletes its ${counts.join(", ")}.` : "";
   if (!confirm(`Permanently remove "${project.name}"?${detail}\n\nThis can't be undone.`)) return;
@@ -363,7 +381,17 @@ modalTaskRows.addEventListener("click", (e) => {
   const btn = e.target.closest(".removeTaskRow");
   if (!btn) return;
   const row = btn.closest(".modal-task-row");
-  if (row.dataset.taskId) pendingTaskDeletions.add(row.dataset.taskId);
+  const taskId = row.dataset.taskId;
+  if (taskId) {
+    // Hours logged on a task are part of the timesheet/invoice history.
+    if (timeEntries.some((e) => e.taskId === taskId)) {
+      alert("This task already has hours logged, so it can't be removed — that would break the timesheet and invoice history.");
+      return;
+    }
+    const linked = assignments.filter((a) => a.taskId === taskId).length + dueDates.filter((d) => d.taskId === taskId).length;
+    if (linked && !confirm(`Remove this task? Its ${linked} assignment${linked === 1 ? "" : "s"} and subtask${linked === 1 ? "" : "s"} will be removed too when you save.`)) return;
+    pendingTaskDeletions.add(taskId);
+  }
   row.remove();
   updateTaskTotal();
 });
@@ -413,9 +441,9 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
     }
 
     for (const taskId of pendingTaskDeletions) {
+      for (const a of assignments.filter((x) => x.taskId === taskId)) await Assignments.remove(a.id);
+      for (const d of dueDates.filter((x) => x.taskId === taskId)) await DueDates.remove(d.id);
       await Tasks.remove(taskId);
-      const related = assignments.filter((a) => a.taskId === taskId);
-      for (const a of related) await Assignments.remove(a.id);
     }
 
     selectedProjectId = projectId;
@@ -427,18 +455,6 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
     showToast("Error: " + err.message);
   }
 });
-
-// Projects used to have an optional project-wide bill rate; blank meant
-// "bill at staff pay rates" (Cache County). Bill rates are now per person, so
-// record each existing project's billing choice explicitly, once.
-let projectsMigrated = false;
-async function migrateProjectBilling() {
-  if (projectsMigrated || !projects.length) return;
-  projectsMigrated = true;
-  for (const p of projects.filter((pr) => !pr.internal && pr.billAtPayRate == null)) {
-    try { await Projects.update(p.id, { billAtPayRate: !p.billRate }); } catch (err) { console.warn("Project billing migration failed:", err); }
-  }
-}
 
 // ---------- Tasks + Assignments ----------
 // Same compact table as the Projects page (Task / Budget / Spent / Progress /
@@ -458,7 +474,7 @@ const SAVE_DELAY_MS = 800;
 
 const ctx = () => ({ projects, people });
 
-// Budgets are spent at the project's bill rate (see rates.js).
+// Budgets are spent at each person's bill rate (see rates.js).
 function billRate(e) {
   return billRateOf(e, ctx());
 }
@@ -513,7 +529,7 @@ function personRowHtml(a, color) {
 
 function addPersonHtml(task) {
   const assignedIds = assignments.filter((a) => a.taskId === task.id).map((a) => a.personId);
-  const available = people.filter((p) => !assignedIds.includes(p.id));
+  const available = people.filter((p) => !p.inactive && !assignedIds.includes(p.id));
   if (available.length === 0) return "";
   if (addingTaskId !== task.id) {
     return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Add person</button>`;
@@ -743,53 +759,6 @@ taskBlocks.addEventListener("click", async (e) => {
   }
 });
 
-// Assignments used to be stored as dollar amounts. Convert any old ones to
-// hours once (at the rate they were entered against) so they stop shifting
-// when someone's pay rate changes.
-let assignmentsMigrated = false;
-async function migrateLegacyAssignments() {
-  if (assignmentsMigrated || !assignmentsLoaded || !people.length || !projects.length) return;
-  const legacy = assignments.filter((a) => a.hours == null);
-  assignmentsMigrated = true;
-  for (const a of legacy) {
-    const hours = Math.round(assignedHours(a, ctx()) * 100) / 100;
-    try { await Assignments.update(a.id, { hours }); } catch (err) { console.warn("Assignment migration failed:", err); }
-  }
-}
-
-// Hours logged before rates were saved onto each entry were priced at the
-// person's *current* rate — so changing someone's rate quietly rewrote past
-// spending and even invoiced amounts. Lock rates onto those entries once:
-// invoiced hours get the rate they were actually invoiced at (from the
-// invoice's labor lines); anything else gets today's pay rate.
-let entryRatesMigrated = false;
-async function migrateEntryRates() {
-  if (entryRatesMigrated || !entriesLoaded || !invoicesLoaded || !people.length || !projects.length) return;
-  entryRatesMigrated = true;
-  const internalPending = timeEntries.filter((e) =>
-    !e.approved && !e.invoiced && isInternal(projects.find((p) => p.id === e.projectId)));
-  if (internalPending.length) {
-    try { await TimeEntries.approve(internalPending.map((e) => e.id)); } catch (err) { console.warn("Auto-approve failed:", err); }
-  }
-  for (const e of timeEntries) {
-    const person = personById(e.personId);
-    const update = {};
-    if (e.invoiced && e.billRate == null) {
-      const invoice = invoices.find((i) => i.id === e.invoiceId);
-      const laborRow = invoice && person ? (invoice.laborRows || []).find((r) => r.name === person.name) : null;
-      const rate = laborRow && laborRow.rate != null
-        ? Number(laborRow.rate)
-        : (e.rate != null ? Number(e.rate) : personPayRate(person));
-      update.billRate = rate;
-      if (e.rate == null) update.rate = rate;
-    } else if (e.rate == null && person) {
-      update.rate = personPayRate(person);
-    }
-    if (Object.keys(update).length === 0) continue;
-    try { await TimeEntries.update(e.id, update); } catch (err) { console.warn("Rate lock failed:", err); }
-  }
-}
-
 // ---------- Pending Approval ----------
 const pendingApprovalCard = document.getElementById("pendingApprovalCard");
 const pendingApprovalTbody = document.querySelector("#pendingApprovalTable tbody");
@@ -835,7 +804,7 @@ function renderPendingApproval() {
   pendingApprovalTbody.innerHTML = groups.map((g) => {
     const expanded = g.personId === expandedApprovalPersonId;
     const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-person-row="${g.personId}">
-      <td colspan="4">${g.name} <span class="empty" style="padding:0;">(${g.entries.length} ${g.entries.length === 1 ? "entry" : "entries"})</span>${g.entries.some(isOverAssigned) ? " <span class=\"pill orange\">Over assigned hours</span>" : ""}</td>
+      <td colspan="4">${esc(g.name)} <span class="empty" style="padding:0;">(${g.entries.length} ${g.entries.length === 1 ? "entry" : "entries"})</span>${g.entries.some(isOverAssigned) ? " <span class=\"pill orange\">Over assigned hours</span>" : ""}</td>
       <td>${g.totalHours.toFixed(2)}</td>
       <td class="row-actions">
         <button class="small" data-action="approve-person" data-id="${g.personId}">Approve All</button>
@@ -851,8 +820,8 @@ function renderPendingApproval() {
       return `<tr class="pending-sub-row">
         <td>${formatDate(e.date)}</td>
         <td></td>
-        <td>${project ? project.name : "—"}</td>
-        <td>${task ? task.name : "—"}${isOverAssigned(e) ? " <span class=\"pill orange\" title=\"This person has logged more on this task than they are assigned\">Over assigned</span>" : ""}${noteHtml}</td>
+        <td>${project ? esc(project.name) : "—"}</td>
+        <td>${task ? esc(task.name) : "—"}${isOverAssigned(e) ? " <span class=\"pill orange\" title=\"This person has logged more on this task than they are assigned\">Over assigned</span>" : ""}${noteHtml}</td>
         <td>${e.hours}</td>
         <td class="row-actions">
           <button class="small" data-action="approve-entry" data-id="${e.id}">Approve</button>
