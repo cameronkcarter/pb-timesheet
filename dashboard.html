@@ -22,27 +22,36 @@
 <main>
   <h1>Dashboard</h1>
 
-  <div class="stat-row stat-row-big">
-    <div class="stat">
-      <div class="label">Timesheet</div>
-      <div class="value"><span id="statWeekHours">0</span><span class="unit">hrs this week</span></div>
-      <div class="stat-sub" id="statWeekCaption"></div>
-    </div>
+  <div class="stat-row stat-row-big" id="statRow">
     <div class="stat">
       <div class="label">Hours</div>
-      <div class="value"><span id="statRemaining">0</span><span class="unit">hrs remaining</span></div>
+      <div class="stat-pair">
+        <div>
+          <div class="value"><span id="statWeekHours">0</span></div>
+          <div class="stat-sub">this week</div>
+        </div>
+        <div>
+          <div class="value"><span id="statRemaining">0</span></div>
+          <div class="stat-sub">remaining</div>
+        </div>
+      </div>
       <div class="stat-bar"><div id="statRemainingBar"></div></div>
       <div class="stat-sub" id="statRemainingCaption"></div>
     </div>
-    <button type="button" class="stat stat-button" id="payToggle" aria-expanded="false" aria-controls="payPanel">
+    <div class="stat">
+      <div class="label">Subtasks</div>
+      <div class="value"><span id="statOpenItems">0</span><span class="unit">open</span></div>
+      <div class="stat-sub" id="statNextItem"></div>
+    </div>
+    <div class="stat stat-pay" id="payBox">
       <div class="label">Pay</div>
       <div class="value"><span id="statOwed">$0</span><span class="unit">unpaid</span></div>
       <div class="stat-split">
         <span><i class="dot pending"></i>Not invoiced <strong id="statNotInvoiced">$0</strong></span>
         <span><i class="dot invoiced"></i>Invoiced <strong id="statInvoiced">$0</strong></span>
       </div>
-      <div class="stat-more">Pay stubs <span class="chev" aria-hidden="true">&#9662;</span></div>
-    </button>
+      <button type="button" class="stat-more" id="payToggle" aria-expanded="false" aria-controls="payPanel">Pay stubs <span class="chev" aria-hidden="true">&#9662;</span></button>
+    </div>
   </div>
 
   <div id="payPanel" class="pay-panel" hidden></div>

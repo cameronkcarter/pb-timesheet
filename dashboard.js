@@ -18,7 +18,6 @@ let dueDates = [];
 let invoices = [];
 let navChecked = false;
 let payOpen = false;            // the pay stubs panel under the stat boxes
-const openStubs = new Set();    // pay stubs expanded to show their details
 let showAllStubs = false;
 let showCompleted = true; // completed subtasks show by default; can be hidden
 
@@ -56,15 +55,10 @@ function render() {
   const myEntries = timeEntries.filter((e) => e.personId === personId);
   const sumHours = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
-  // This week (Sunday start), compared with last week.
+  // Hours logged this week (Sunday start).
   const weekStart = getWeekStart(todayISO());
-  const weekOf = (start) => Array.from({ length: 7 }, (_, i) => toISODate(addDays(start, i)));
-  const thisWeek = weekOf(weekStart);
-  const lastWeek = weekOf(addDays(weekStart, -7));
-  const weekHours = sumHours(myEntries.filter((e) => thisWeek.includes(e.date)));
-  const lastWeekHours = sumHours(myEntries.filter((e) => lastWeek.includes(e.date)));
-  document.getElementById("statWeekHours").textContent = fmtHrs(weekHours);
-  document.getElementById("statWeekCaption").textContent = `Last week: ${fmtHrs(lastWeekHours)} hrs`;
+  const thisWeek = Array.from({ length: 7 }, (_, i) => toISODate(addDays(weekStart, i)));
+  document.getElementById("statWeekHours").textContent = fmtHrs(sumHours(myEntries.filter((e) => thisWeek.includes(e.date))));
 
   // Hours remaining across all your assigned tasks (billable projects).
   let assignedTotal = 0;
@@ -94,6 +88,19 @@ function render() {
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedUnpaid);
   renderPay(myEntries);
+
+  // Open subtasks assigned to you, and the next one due.
+  const today = todayISO();
+  const openItems = dueDates
+    .filter((x) => (x.personIds || []).includes(personId) && !x.completed)
+    .sort((x, y) => (x.dueDate < y.dueDate ? -1 : 1));
+  const overdue = openItems.filter((x) => x.dueDate && x.dueDate < today).length;
+  document.getElementById("statOpenItems").textContent = openItems.length;
+  const next = openItems.find((x) => x.dueDate >= today) || openItems[0];
+  document.getElementById("statNextItem").innerHTML = [
+    overdue ? `<span class="hours-over">${overdue} overdue</span>` : "",
+    next ? `Next: <strong>${esc(next.title)}</strong> · ${next.dueDate === today ? "today" : shortDate(next.dueDate)}` : "Nothing due",
+  ].filter(Boolean).join(" · ");
 
   // Your subtasks; completed ones too unless hidden.
   const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId)
@@ -188,128 +195,76 @@ function render() {
 }
 
 // ---------- Pay stubs ----------
-// One stub per invoice your hours were on (newest first), plus one for hours
-// not invoiced yet. "Client paid" means the client paid Place Builders, not
-// that your paycheck went out.
-const STUB_LIMIT = 5;
+// A compact list under the Pay box: one row per invoice your hours were on
+// (newest first), with rows on top for each project's hours not invoiced yet —
+// what will go on that project's next invoice. "Client paid" means the client
+// paid Place Builders, not that your paycheck went out.
+const STUB_LIMIT = 8;
 const shortDate = (iso) => new Date(iso.slice(0, 10) + "T00:00:00")
   .toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 function renderPay(myEntries) {
   payToggle.setAttribute("aria-expanded", String(payOpen));
-  payToggle.classList.toggle("open", payOpen);
+  document.getElementById("payBox").classList.toggle("open", payOpen);
   payPanel.hidden = !payOpen;
   if (!payOpen) return;
 
   const ctx = { projects, people };
-  const billable = myEntries.filter((e) => !isInternal(projects.find((p) => p.id === e.projectId)));
-  const stubs = [];
+  const projectOf = (id) => projects.find((p) => p.id === id);
+  const billable = myEntries.filter((e) => !isInternal(projectOf(e.projectId)));
+  const hoursOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
-  const pending = billable.filter((e) => !e.invoiced);
-  if (pending.length) {
-    const awaitingApproval = pending.filter((e) => !e.approved);
-    stubs.push({
-      key: "pending",
-      title: "Not invoiced yet",
-      sub: awaitingApproval.length
-        ? `${fmtHrs(awaitingApproval.reduce((s, e) => s + Number(e.hours || 0), 0))} hrs awaiting approval`
-        : "Approved, waiting for the next invoice",
-      status: ["Not invoiced", "pending"],
-      entries: pending,
-      groupBy: "project",
-    });
-  }
+  // Not invoiced yet: one row per project.
+  const upcoming = [...new Set(billable.filter((e) => !e.invoiced).map((e) => e.projectId))].map((pid) => {
+    const entries = billable.filter((e) => !e.invoiced && e.projectId === pid);
+    return { date: "", number: "", projectId: pid, entries, status: ["Not invoiced", "pending"] };
+  });
 
+  // Invoiced: one row per invoice.
   const byInvoice = new Map();
   billable.filter((e) => e.invoiced).forEach((e) => {
     const k = e.invoiceId || `${e.projectId}|${(e.invoicedDate || "").slice(0, 10)}`;
     if (!byInvoice.has(k)) byInvoice.set(k, []);
     byInvoice.get(k).push(e);
   });
-  const invoiceStubs = [...byInvoice].map(([k, entries]) => {
+  const invoiced = [...byInvoice].map(([k, entries]) => {
     const inv = invoices.find((i) => i.id === k);
-    const project = projects.find((p) => p.id === entries[0].projectId);
-    const date = (inv && inv.date) || entries[0].invoicedDate || "";
     const paid = (inv && inv.paid) || entries.every((e) => e.paid);
     const paidDate = (inv && inv.paidDate) || entries.find((e) => e.paidDate)?.paidDate;
     return {
-      key: k,
-      date,
-      color: project ? projectColor(project.id) : null,
-      title: project ? project.name : (inv && inv.projectName) || "Project",
-      sub: [inv && inv.invoiceNumber ? `Invoice ${inv.invoiceNumber}` : null, inv && inv.periodLabel].filter(Boolean).join(" · "),
-      status: paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "paid"] : ["Awaiting client", "invoiced"],
-      invoicedOn: date,
-      paidOn: paid ? paidDate : null,
+      date: (inv && inv.date) || entries[0].invoicedDate || "",
+      number: (inv && inv.invoiceNumber) || "",
+      projectId: entries[0].projectId,
+      projectName: inv && inv.projectName,
       entries,
-      groupBy: "task",
+      status: paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "paid"] : ["Awaiting client", "invoiced"],
     };
   }).sort((x, y) => (x.date < y.date ? 1 : -1));
 
-  const shown = showAllStubs ? invoiceStubs : invoiceStubs.slice(0, STUB_LIMIT);
-  stubs.push(...shown);
-
-  if (!stubs.length) {
+  const rows = [...upcoming, ...(showAllStubs ? invoiced : invoiced.slice(0, STUB_LIMIT))];
+  if (!rows.length) {
     payPanel.innerHTML = '<div class="pay-empty">No hours logged on billable projects yet.</div>';
     return;
   }
 
-  payPanel.innerHTML = `<div class="pay-list">${stubs.map((stub) => {
-    const hours = stub.entries.reduce((s, e) => s + Number(e.hours || 0), 0);
-    const open = openStubs.has(stub.key);
-    return `<div class="pay-stub ${open ? "open" : ""}">
-      <button type="button" class="pay-stub-row" data-stub="${esc(stub.key)}" aria-expanded="${open}">
-        <span class="pay-dot" style="${stub.color ? `--c:${stub.color};` : ""}"></span>
-        <span class="pay-main">
-          <span class="pay-title">${esc(stub.title)}</span>
-          <span class="pay-sub">${esc(stub.sub || "")}</span>
-        </span>
-        <span class="pay-amount">
-          <strong>${formatCurrency(payOf(stub.entries, ctx))}</strong>
-          <span>${fmtHrs(hours)} hrs</span>
-        </span>
-        <span class="pay-status ${stub.status[1]}">${esc(stub.status[0])}</span>
-        <span class="chev" aria-hidden="true">&#9662;</span>
-      </button>
-      ${open ? stubDetails(stub, ctx) : ""}
-    </div>`;
-  }).join("")}</div>
-  ${invoiceStubs.length > STUB_LIMIT ? `<button type="button" class="link-btn pay-more" data-action="all-stubs">${showAllStubs ? "Show fewer" : `Show ${invoiceStubs.length - STUB_LIMIT} older`}</button>` : ""}`;
-}
-
-const payOf = (entries, ctx) => paidAmount(entries, ctx);
-
-// Breakdown inside an open stub: when it was invoiced/paid, the dates worked,
-// and hours + pay by task (or by project, for hours not invoiced yet).
-function stubDetails(stub, ctx) {
-  const dates = stub.entries.map((e) => e.date).sort();
-  const days = new Set(dates).size;
-  const facts = [
-    stub.invoicedOn ? `Invoiced ${formatDate(stub.invoicedOn.slice(0, 10))}` : null,
-    stub.invoicedOn ? (stub.paidOn ? `Client paid ${formatDate(stub.paidOn.slice(0, 10))}` : "Client hasn't paid yet") : null,
-    `Worked ${dates[0] === dates[dates.length - 1] ? shortDate(dates[0]) : `${shortDate(dates[0])} – ${shortDate(dates[dates.length - 1])}`} · ${days} day${days === 1 ? "" : "s"}`,
-  ].filter(Boolean);
-
-  const groups = new Map();
-  stub.entries.forEach((e) => {
-    const k = stub.groupBy === "task" ? e.taskId : e.projectId;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(e);
-  });
-  const lines = [...groups].map(([k, entries]) => {
-    const name = stub.groupBy === "task"
-      ? (tasks.find((t) => t.id === k) || {}).name || "Task"
-      : (projects.find((p) => p.id === k) || {}).name || "Project";
-    const hrs = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
-    return { name, hrs, pay: payOf(entries, ctx) };
-  }).sort((x, y) => y.pay - x.pay);
-
-  return `<div class="pay-details">
-    <div class="pay-facts">${facts.map((f) => `<span>${esc(f)}</span>`).join("")}</div>
-    ${lines.map((l) => `<div class="pay-line">
-      <span>${esc(l.name)}</span><span>${fmtHrs(l.hrs)} hrs</span><span>${formatCurrency(l.pay)}</span>
-    </div>`).join("")}
-  </div>`;
+  payPanel.innerHTML = `<table class="pay-table">
+    <thead><tr>
+      <th class="col-num">Date</th><th class="col-num">Invoice #</th><th>Project</th>
+      <th class="num">Hours</th><th class="num">Pay</th><th>Status</th>
+    </tr></thead>
+    <tbody>${rows.map((r) => {
+      const project = projectOf(r.projectId);
+      return `<tr>
+        <td class="col-num ${r.date ? "" : "blank"}">${r.date ? shortDate(r.date) : "—"}</td>
+        <td class="col-num ${r.number ? "" : "blank"}">${r.number ? esc(r.number) : "—"}</td>
+        <td class="proj"><span class="pay-dot" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : r.projectName || "Project")}</td>
+        <td class="num">${fmtHrs(hoursOf(r.entries))}</td>
+        <td class="num"><strong>${formatCurrency(paidAmount(r.entries, ctx))}</strong></td>
+        <td><span class="pay-status ${r.status[1]}">${esc(r.status[0])}</span></td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>
+  ${invoiced.length > STUB_LIMIT ? `<button type="button" class="link-btn pay-more" data-action="all-stubs">${showAllStubs ? "Show fewer" : `Show ${invoiced.length - STUB_LIMIT} older`}</button>` : ""}`;
 }
 
 payToggle.addEventListener("click", () => {
@@ -318,13 +273,6 @@ payToggle.addEventListener("click", () => {
 });
 
 payPanel.addEventListener("click", (e) => {
-  const row = e.target.closest("[data-stub]");
-  if (row) {
-    const k = row.dataset.stub;
-    if (openStubs.has(k)) openStubs.delete(k); else openStubs.add(k);
-    render();
-    return;
-  }
   if (e.target.closest('[data-action="all-stubs"]')) {
     showAllStubs = !showAllStubs;
     render();
