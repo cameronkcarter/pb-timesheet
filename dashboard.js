@@ -55,10 +55,25 @@ function render() {
   const myEntries = timeEntries.filter((e) => e.personId === personId);
   const sumHours = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
-  // Hours logged this week (Sunday start).
+  // Hours logged per week (Sunday start) for the last 8 weeks; this week last.
+  const WEEKS = 8;
   const weekStart = getWeekStart(todayISO());
-  const thisWeek = Array.from({ length: 7 }, (_, i) => toISODate(addDays(weekStart, i)));
-  document.getElementById("statWeekHours").textContent = fmtHrs(sumHours(myEntries.filter((e) => thisWeek.includes(e.date))));
+  const weeks = Array.from({ length: WEEKS }, (_, i) => {
+    const start = addDays(weekStart, (i - (WEEKS - 1)) * 7);
+    const days = Array.from({ length: 7 }, (_, j) => toISODate(addDays(start, j)));
+    return { start: toISODate(start), hours: sumHours(myEntries.filter((e) => days.includes(e.date))) };
+  });
+  const maxWeek = Math.max(1, ...weeks.map((w) => w.hours));
+  document.getElementById("statWeekHours").textContent = fmtHrs(weeks[WEEKS - 1].hours);
+  document.getElementById("weekChart").innerHTML = weeks.map((w, i) => {
+    const current = i === WEEKS - 1;
+    const label = current ? "This wk" : new Date(w.start + "T00:00:00").toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+    return `<div class="week-col ${current ? "current" : ""}" title="Week of ${shortDate(w.start)}: ${fmtHrs(w.hours)} hrs">
+      <span class="week-val">${w.hours ? fmtHrs(w.hours) : ""}</span>
+      <div class="week-bar" style="height:${Math.max(w.hours ? 4 : 2, (w.hours / maxWeek) * 100)}%;"></div>
+      <span class="week-label">${label}</span>
+    </div>`;
+  }).join("");
 
   // Hours remaining across all your assigned tasks (billable projects).
   let assignedTotal = 0;
@@ -73,13 +88,7 @@ function render() {
       loggedTotal += logged;
       remainingTotal += Math.max(0, assigned - logged);
     });
-  document.getElementById("statLogged").textContent = fmtHrs(loggedTotal);
   document.getElementById("statRemaining").textContent = fmtHrs(remainingTotal);
-  document.getElementById("statAssigned").textContent = fmtHrs(assignedTotal);
-  document.getElementById("statRemainingBar").style.width =
-    `${assignedTotal > 0 ? Math.min(100, (loggedTotal / assignedTotal) * 100) : 0}%`;
-  document.getElementById("assignedBlock").hidden = assignedTotal === 0;
-  document.getElementById("noAssigned").hidden = assignedTotal > 0;
 
   // Your pay that the client hasn't paid yet: not invoiced + invoiced.
   const payOf = (entries) => paidAmount(entries, { projects, people });
