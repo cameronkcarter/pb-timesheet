@@ -22,29 +22,26 @@
 <main>
   <h1>Dashboard</h1>
 
-  <div class="stat-row">
+  <div class="stat-row stat-row-big">
     <div class="stat">
-      <div class="label">Logged This Week</div>
-      <div class="value" id="statWeekHours">0</div>
-      <div class="empty" style="padding-top:4px;" id="statMonthCaption">0 hrs this month</div>
+      <div class="label">This week</div>
+      <div class="value"><span id="statWeekHours">0</span><span class="unit">hrs</span></div>
+      <div class="stat-sub" id="statWeekCaption"></div>
     </div>
-    <div class="stat stage-orange">
-      <div class="label">Pending Approval</div>
-      <div class="value" id="statPending">$0</div>
+    <div class="stat">
+      <div class="label">Hours remaining</div>
+      <div class="value"><span id="statRemaining">0</span><span class="unit">hrs</span></div>
+      <div class="stat-sub" id="statRemainingCaption"></div>
     </div>
-    <div class="stat stage-teal">
-      <div class="label">Approved</div>
-      <div class="value" id="statApproved">$0</div>
-    </div>
-    <div class="stat stage-blue">
-      <div class="label">Invoiced</div>
-      <div class="value" id="statInvoiced">$0</div>
-    </div>
-    <div class="stat stage-green">
-      <div class="label">Paid</div>
-      <div class="value" id="statPaid">$0</div>
-    </div>
+    <button type="button" class="stat stat-button" id="payToggle" aria-expanded="false" aria-controls="payPanel">
+      <div class="label">Awaiting payment</div>
+      <div class="value" id="statOwed">$0</div>
+      <div class="stat-sub" id="statOwedCaption"></div>
+      <div class="stat-more">Pay stubs <span class="chev" aria-hidden="true">&#9662;</span></div>
+    </button>
   </div>
+
+  <div id="payPanel" class="pay-panel" hidden></div>
 
   <div class="section-head">
     <h2 style="margin:0;">Projects</h2>
