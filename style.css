@@ -2378,3 +2378,47 @@ button.link-btn.pay-more {
     margin-left: 14px;
   }
 }
+
+.stat-row-big .stat .value .unit {
+  font-size: 14px;
+}
+
+.stat-bar {
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 3px;
+  background: #eceef1;
+  overflow: hidden;
+}
+
+.stat-bar > div {
+  height: 100%;
+  background: var(--navy-light);
+  border-radius: 3px;
+}
+
+.stat-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.stat-split strong {
+  color: var(--text);
+  margin-left: 2px;
+}
+
+.stat-split .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.stat-split .dot.pending { background: #e0a35b; }
+.stat-split .dot.invoiced { background: #2a5fb0; }

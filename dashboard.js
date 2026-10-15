@@ -64,7 +64,7 @@ function render() {
   const weekHours = sumHours(myEntries.filter((e) => thisWeek.includes(e.date)));
   const lastWeekHours = sumHours(myEntries.filter((e) => lastWeek.includes(e.date)));
   document.getElementById("statWeekHours").textContent = fmtHrs(weekHours);
-  document.getElementById("statWeekCaption").textContent = `${fmtHrs(lastWeekHours)} hrs last week`;
+  document.getElementById("statWeekCaption").textContent = `Last week: ${fmtHrs(lastWeekHours)} hrs`;
 
   // Hours remaining across all your assigned tasks (billable projects).
   let assignedTotal = 0;
@@ -81,16 +81,18 @@ function render() {
     });
   document.getElementById("statRemaining").textContent = fmtHrs(remainingTotal);
   document.getElementById("statRemainingCaption").textContent = assignedTotal > 0
-    ? `${fmtHrs(loggedTotal)} logged of ${fmtHrs(assignedTotal)} assigned`
+    ? `${fmtHrs(loggedTotal)} of ${fmtHrs(assignedTotal)} assigned hrs logged`
     : "No hours assigned yet";
+  document.getElementById("statRemainingBar").style.width =
+    `${assignedTotal > 0 ? Math.min(100, (loggedTotal / assignedTotal) * 100) : 0}%`;
 
   // Your pay that the client hasn't paid yet: not invoiced + invoiced.
   const payOf = (entries) => paidAmount(entries, { projects, people });
   const notInvoiced = payOf(myEntries.filter((e) => !e.invoiced));
   const invoicedUnpaid = payOf(myEntries.filter((e) => e.invoiced && !e.paid));
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid);
-  document.getElementById("statOwedCaption").textContent =
-    `${formatCurrency(notInvoiced)} not invoiced · ${formatCurrency(invoicedUnpaid)} invoiced`;
+  document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
+  document.getElementById("statInvoiced").textContent = formatCurrency(invoicedUnpaid);
   renderPay(myEntries);
 
   // Your subtasks; completed ones too unless hidden.
