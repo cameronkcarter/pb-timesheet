@@ -2230,16 +2230,6 @@ button.link-btn.item-delete {
 .stat-split .dot.pending { background: #e0a35b; }
 .stat-split .dot.invoiced { background: #2a5fb0; }
 
-/* Hours box: two numbers side by side. */
-.stat-pair {
-  display: flex;
-  gap: 28px;
-}
-
-.stat-pair .stat-sub {
-  margin-top: 0;
-}
-
 .stat-row-big .stat {
   display: flex;
   flex-direction: column;
@@ -2281,25 +2271,6 @@ button.stat-more:focus-visible {
 
 .stat-pay.open .chev {
   transform: rotate(180deg);
-}
-
-.stat-pay.open {
-  z-index: 1;
-  margin-bottom: -15px;
-  padding-bottom: 33px;
-  border-bottom-color: var(--card);
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.pay-panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px 0 14px 14px;
-  padding: 4px 6px 6px;
-  margin-bottom: 20px;
-  overflow-x: auto;
-  animation: pay-roll 0.18s ease-out;
 }
 
 @keyframes pay-roll {
@@ -2386,20 +2357,11 @@ button.link-btn.pay-more {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
   }
-  .stat-row-big .stat-pay {
-    grid-column: 1 / -1;
-  }
   .stat-row-big .stat {
     padding: 14px 16px;
   }
   .stat-row-big .stat .value {
     font-size: 28px;
-  }
-  .stat-pay.open {
-    padding-bottom: 29px;
-  }
-  .pay-panel {
-    border-top-left-radius: 0;
   }
   .pay-table .col-num {
     display: none;
@@ -2423,5 +2385,100 @@ button.link-btn.pay-more {
   }
   .pay-dot {
     margin-right: 5px;
+  }
+}
+
+/* ---------- Dashboard: Hours + Pay ---------- */
+.stat-row.stat-row-big {
+  grid-template-columns: 3fr 2fr;
+}
+
+.stat-pay.open {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 1px var(--navy);
+}
+
+.assigned-block {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.assigned-block[hidden] {
+  display: none;
+}
+
+.assigned-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.assigned-block .stat-bar {
+  height: 8px;
+  margin-top: 6px;
+}
+
+.assigned-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.assigned-legend strong {
+  color: var(--text);
+}
+
+.assigned-legend .assigned-total {
+  margin-left: auto;
+}
+
+.assigned-legend .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.assigned-legend .dot.logged { background: var(--navy-light); }
+.assigned-legend .dot.remaining { background: #e2dde6; }
+
+/* Pay stubs: a regular card under the boxes. */
+.card.pay-card {
+  padding: 14px 16px 10px;
+  animation: pay-roll 0.18s ease-out;
+}
+
+.pay-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+
+.pay-card-head h2 {
+  margin: 0 auto 0 0;
+  font-size: 16px;
+}
+
+.pay-card-head .icon-btn {
+  font-size: 22px;
+  padding: 0 8px;
+}
+
+.pay-scroll {
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .stat-row.stat-row-big {
+    grid-template-columns: 1fr;
+  }
+  .assigned-legend .assigned-total {
+    margin-left: 0;
   }
 }

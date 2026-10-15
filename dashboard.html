@@ -23,25 +23,19 @@
   <h1>Dashboard</h1>
 
   <div class="stat-row stat-row-big" id="statRow">
-    <div class="stat">
+    <div class="stat stat-hours">
       <div class="label">Hours</div>
-      <div class="stat-pair">
-        <div>
-          <div class="value"><span id="statWeekHours">0</span></div>
-          <div class="stat-sub">this week</div>
-        </div>
-        <div>
-          <div class="value"><span id="statRemaining">0</span></div>
-          <div class="stat-sub">remaining</div>
+      <div class="value"><span id="statWeekHours">0</span><span class="unit">hrs logged this week</span></div>
+      <div class="assigned-block" id="assignedBlock">
+        <div class="assigned-title">On your assigned tasks</div>
+        <div class="stat-bar"><div id="statRemainingBar"></div></div>
+        <div class="assigned-legend">
+          <span><i class="dot logged"></i><strong id="statLogged">0</strong> logged</span>
+          <span><i class="dot remaining"></i><strong id="statRemaining">0</strong> remaining</span>
+          <span class="assigned-total"><strong id="statAssigned">0</strong> assigned</span>
         </div>
       </div>
-      <div class="stat-bar"><div id="statRemainingBar"></div></div>
-      <div class="stat-sub" id="statRemainingCaption"></div>
-    </div>
-    <div class="stat">
-      <div class="label">Subtasks</div>
-      <div class="value"><span id="statOpenItems">0</span><span class="unit">open</span></div>
-      <div class="stat-sub" id="statNextItem"></div>
+      <div class="stat-sub" id="noAssigned" hidden>No hours assigned to you yet.</div>
     </div>
     <div class="stat stat-pay" id="payBox">
       <div class="label">Pay</div>
@@ -54,7 +48,7 @@
     </div>
   </div>
 
-  <div id="payPanel" class="pay-panel" hidden></div>
+  <div id="payPanel" class="card pay-card" hidden></div>
 
   <div class="section-head">
     <h2 style="margin:0;">Projects</h2>

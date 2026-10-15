@@ -18,7 +18,7 @@ let dueDates = [];
 let invoices = [];
 let navChecked = false;
 let payOpen = false;            // the pay stubs panel under the stat boxes
-let showAllStubs = false;
+let showClientPaid = false;     // client-paid rows are hidden unless asked for
 let showCompleted = true; // completed subtasks show by default; can be hidden
 
 const projectSummaryCards = document.getElementById("projectSummaryCards");
@@ -73,12 +73,13 @@ function render() {
       loggedTotal += logged;
       remainingTotal += Math.max(0, assigned - logged);
     });
+  document.getElementById("statLogged").textContent = fmtHrs(loggedTotal);
   document.getElementById("statRemaining").textContent = fmtHrs(remainingTotal);
-  document.getElementById("statRemainingCaption").textContent = assignedTotal > 0
-    ? `${fmtHrs(loggedTotal)} of ${fmtHrs(assignedTotal)} assigned hrs logged`
-    : "No hours assigned yet";
+  document.getElementById("statAssigned").textContent = fmtHrs(assignedTotal);
   document.getElementById("statRemainingBar").style.width =
     `${assignedTotal > 0 ? Math.min(100, (loggedTotal / assignedTotal) * 100) : 0}%`;
+  document.getElementById("assignedBlock").hidden = assignedTotal === 0;
+  document.getElementById("noAssigned").hidden = assignedTotal > 0;
 
   // Your pay that the client hasn't paid yet: not invoiced + invoiced.
   const payOf = (entries) => paidAmount(entries, { projects, people });
@@ -88,19 +89,6 @@ function render() {
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedUnpaid);
   renderPay(myEntries);
-
-  // Open subtasks assigned to you, and the next one due.
-  const today = todayISO();
-  const openItems = dueDates
-    .filter((x) => (x.personIds || []).includes(personId) && !x.completed)
-    .sort((x, y) => (x.dueDate < y.dueDate ? -1 : 1));
-  const overdue = openItems.filter((x) => x.dueDate && x.dueDate < today).length;
-  document.getElementById("statOpenItems").textContent = openItems.length;
-  const next = openItems.find((x) => x.dueDate >= today) || openItems[0];
-  document.getElementById("statNextItem").innerHTML = [
-    overdue ? `<span class="hours-over">${overdue} overdue</span>` : "",
-    next ? `Next: <strong>${esc(next.title)}</strong> · ${next.dueDate === today ? "today" : shortDate(next.dueDate)}` : "Nothing due",
-  ].filter(Boolean).join(" · ");
 
   // Your subtasks; completed ones too unless hidden.
   const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId)
@@ -199,7 +187,6 @@ function render() {
 // (newest first), with rows on top for each project's hours not invoiced yet —
 // what will go on that project's next invoice. "Client paid" means the client
 // paid Place Builders, not that your paycheck went out.
-const STUB_LIMIT = 8;
 const shortDate = (iso) => new Date(iso.slice(0, 10) + "T00:00:00")
   .toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
@@ -237,17 +224,24 @@ function renderPay(myEntries) {
       projectId: entries[0].projectId,
       projectName: inv && inv.projectName,
       entries,
+      paid,
       status: paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "paid"] : ["Awaiting client", "invoiced"],
     };
   }).sort((x, y) => (x.date < y.date ? 1 : -1));
 
-  const rows = [...upcoming, ...(showAllStubs ? invoiced : invoiced.slice(0, STUB_LIMIT))];
+  const paidCount = invoiced.filter((r) => r.paid).length;
+  const rows = [...upcoming, ...invoiced.filter((r) => showClientPaid || !r.paid)];
+  const head = `<div class="pay-card-head">
+    <h2>Pay stubs</h2>
+    ${paidCount ? `<button type="button" class="link-btn" data-action="toggle-paid">${showClientPaid ? "Hide client-paid" : `Show client-paid (${paidCount})`}</button>` : ""}
+    <button type="button" class="icon-btn" data-action="close-pay" aria-label="Close">&times;</button>
+  </div>`;
   if (!rows.length) {
-    payPanel.innerHTML = '<div class="pay-empty">No hours logged on billable projects yet.</div>';
+    payPanel.innerHTML = head + `<div class="pay-empty">${paidCount ? "Nothing unpaid — every invoice with your hours has been paid by the client." : "No hours logged on billable projects yet."}</div>`;
     return;
   }
 
-  payPanel.innerHTML = `<table class="pay-table">
+  payPanel.innerHTML = head + `<div class="pay-scroll"><table class="pay-table">
     <thead><tr>
       <th class="col-num">Date</th><th class="col-num">Invoice #</th><th>Project</th>
       <th class="num">Hours</th><th class="num">Pay</th><th>Status</th>
@@ -263,8 +257,7 @@ function renderPay(myEntries) {
         <td><span class="pay-status ${r.status[1]}">${esc(r.status[0])}</span></td>
       </tr>`;
     }).join("")}</tbody>
-  </table>
-  ${invoiced.length > STUB_LIMIT ? `<button type="button" class="link-btn pay-more" data-action="all-stubs">${showAllStubs ? "Show fewer" : `Show ${invoiced.length - STUB_LIMIT} older`}</button>` : ""}`;
+  </table></div>`;
 }
 
 payToggle.addEventListener("click", () => {
@@ -273,10 +266,11 @@ payToggle.addEventListener("click", () => {
 });
 
 payPanel.addEventListener("click", (e) => {
-  if (e.target.closest('[data-action="all-stubs"]')) {
-    showAllStubs = !showAllStubs;
-    render();
-  }
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  if (btn.dataset.action === "toggle-paid") showClientPaid = !showClientPaid;
+  if (btn.dataset.action === "close-pay") payOpen = false;
+  render();
 });
 
 // The person who created a subtask, or an admin, can edit or delete it.
