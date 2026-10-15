@@ -246,7 +246,7 @@ function renderPay(myEntries) {
     <button type="button" class="icon-btn" data-action="close-pay" aria-label="Close">&times;</button>
   </div>`;
   if (!rows.length) {
-    payPanel.innerHTML = head + `<div class="pay-empty">${paidCount ? "Nothing unpaid — every invoice with your hours has been paid by the client." : "No hours logged on billable projects yet."}</div>`;
+    payPanel.innerHTML = head + `<div class="pay-empty">${paidCount ? "All paid." : "No billable hours yet."}</div>`;
     return;
   }
 
