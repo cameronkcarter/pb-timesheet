@@ -33,34 +33,38 @@ export async function deleteItem(d) {
 
 const MARKUP = `
 <div id="itemModal" class="modal-overlay" style="display:none;">
-  <div class="modal sheet-modal sheet-small" role="dialog" aria-labelledby="itemTitle">
-    <div class="sheet-head">
-      <div class="sheet-kicker" id="itemKicker">New subtask</div>
-      <input type="text" id="itemTitle" class="title-input" placeholder="What needs doing?" />
-      <button type="button" id="itemClose" class="icon-btn sheet-close" aria-label="Close">&times;</button>
+  <div class="modal sheet-modal sheet-small item-sheet" role="dialog" aria-labelledby="itemHeading">
+    <div class="item-head">
+      <h2 id="itemHeading">New subtask</h2>
+      <button type="button" id="itemClose" class="icon-btn" aria-label="Close">&times;</button>
     </div>
     <div class="sheet-body">
-      <div class="field-grid">
-        <div class="field">
-          <label for="itemProject">Project</label>
+      <label for="itemTitle" class="item-label" id="itemTitleLabel">Subtask</label>
+      <input type="text" id="itemTitle" class="item-name" placeholder="e.g. Draft plan review memo" autocomplete="off" />
+
+      <div class="item-label">Details</div>
+      <div class="row-group">
+        <label class="row-item" for="itemProject">
+          <span class="row-label">Project</span>
           <select id="itemProject"></select>
-        </div>
-        <div class="field">
-          <label for="itemTask">Task</label>
+        </label>
+        <label class="row-item" for="itemTask">
+          <span class="row-label">Task</span>
           <select id="itemTask"></select>
-        </div>
-        <div class="field">
-          <label for="itemDate" id="itemDateLabel">Due date</label>
+        </label>
+        <label class="row-item" for="itemDate">
+          <span class="row-label" id="itemDateLabel">Due date</span>
           <input type="date" id="itemDate" />
-        </div>
+        </label>
       </div>
-      <div class="field" id="itemPeopleField">
-        <label>Assigned to</label>
-        <div id="itemPeople" class="dd-people-pills"></div>
+
+      <div id="itemPeopleField">
+        <div class="item-label">Assigned to</div>
+        <div id="itemPeople" class="person-chips"></div>
       </div>
     </div>
     <div class="sheet-foot">
-      <button type="button" id="itemDelete" class="danger" style="margin-right:auto; display:none;">Delete</button>
+      <button type="button" id="itemDelete" class="link-btn item-delete" style="display:none;">Delete</button>
       <button type="button" id="itemCancel" class="secondary">Cancel</button>
       <button type="button" id="itemSave">Save</button>
     </div>
@@ -74,7 +78,9 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
   document.body.insertAdjacentHTML("beforeend", MARKUP);
   const $ = (id) => document.getElementById(id);
   const modal = $("itemModal");
-  const kicker = $("itemKicker");
+  const heading = $("itemHeading");
+  const titleLabel = $("itemTitleLabel");
+  const saveBtn = $("itemSave");
   const titleInput = $("itemTitle");
   const projectSelect = $("itemProject");
   const taskSelect = $("itemTask");
@@ -98,9 +104,11 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
     const { people } = getData();
     // Active people, plus anyone already on this subtask.
     const choices = people.filter((p) => !p.inactive || (selectedIds || []).includes(p.id));
-    peoplePills.innerHTML = [...choices].sort((a, b) => a.name.localeCompare(b.name)).map((p) => `<label>
+    const initials = (name) => String(name).split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+    peoplePills.innerHTML = [...choices].sort((a, b) => a.name.localeCompare(b.name)).map((p) => `<label class="person-chip">
       <input type="checkbox" class="itemPerson" value="${p.id}" ${(selectedIds || []).includes(p.id) ? "checked" : ""} />
-      ${esc(p.name)}
+      <span class="person-chip-avatar">${esc(initials(p.name))}</span>
+      <span>${esc(p.name)}</span>
     </label>`).join("");
   }
 
@@ -113,9 +121,11 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
     editing = record || null;
     mode = record ? (isSubtask(record) ? "subtask" : "event") : (preset.mode || "subtask");
     const noun = mode === "event" ? "event" : "subtask";
-    kicker.textContent = `${record ? "Edit" : "New"} ${noun}`;
-    titleInput.placeholder = mode === "event" ? "Event name, e.g. Community Workshop" : "What needs doing?";
+    heading.textContent = `${record ? "Edit" : "New"} ${noun}`;
+    titleLabel.textContent = mode === "event" ? "Event" : "Subtask";
+    titleInput.placeholder = mode === "event" ? "e.g. Community Workshop" : "e.g. Draft plan review memo";
     dateLabel.textContent = mode === "event" ? "Date" : "Due date";
+    saveBtn.textContent = record ? "Save changes" : `Add ${noun}`;
     peopleField.style.display = mode === "subtask" ? "block" : "none";
 
     const choices = projectChoices();
@@ -134,6 +144,7 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
   }
 
   projectSelect.addEventListener("change", () => fillTasks(projectSelect.value, ""));
+  titleInput.addEventListener("keydown", (e) => { if (e.key === "Enter") saveBtn.click(); });
   $("itemCancel").addEventListener("click", close);
   $("itemClose").addEventListener("click", close);
   closeOnBackdropClick(modal, close);
@@ -142,7 +153,7 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
     if (await deleteItem(editing)) close();
   });
 
-  $("itemSave").addEventListener("click", async () => {
+  saveBtn.addEventListener("click", async () => {
     const projectId = projectSelect.value;
     const taskId = taskSelect.value || null;
     const title = titleInput.value.trim();

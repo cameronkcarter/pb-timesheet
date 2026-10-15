@@ -1979,3 +1979,174 @@ button.link-btn.assign-link {
 tr.inactive-row td {
   color: var(--text-muted);
 }
+
+/* ---------- Subtask / event editor (app-style sheet) ---------- */
+.item-sheet .item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px 6px 26px;
+}
+
+.item-sheet .item-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.item-sheet .item-head .icon-btn {
+  font-size: 24px;
+  padding: 4px 10px;
+}
+
+.item-sheet .sheet-body {
+  padding-top: 8px;
+}
+
+.item-sheet .item-label {
+  display: block;
+  margin: 18px 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.item-sheet .item-label:first-child {
+  margin-top: 4px;
+}
+
+input[type="text"].item-name {
+  font-size: 17px;
+  font-weight: 600;
+  padding: 13px 14px;
+  border: 1.5px solid #d9cfe0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+input[type="text"].item-name:focus {
+  outline: none;
+  border-color: var(--navy-light);
+  box-shadow: 0 0 0 3px rgba(122, 57, 147, 0.15);
+}
+
+/* Grouped rows: label on the left, value on the right, one per line. */
+.row-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+label.row-item {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 6px 4px 14px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+}
+
+label.row-item + label.row-item {
+  border-top: 1px solid var(--border);
+}
+
+label.row-item:hover {
+  background: #faf7fc;
+}
+
+.row-item .row-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.row-item select,
+.row-item input[type="date"] {
+  border: none;
+  background: transparent;
+  padding: 9px 6px;
+  font-size: 14px;
+  min-width: 0;
+  width: 100%;
+  cursor: pointer;
+}
+
+.row-item select:focus,
+.row-item input[type="date"]:focus {
+  outline: none;
+}
+
+/* People as tappable chips with initials. */
+.person-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+label.person-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+label.person-chip input {
+  display: none;
+}
+
+.person-chip-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eee8f2;
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+label.person-chip:hover {
+  border-color: #cdbcd8;
+}
+
+label.person-chip:has(input:checked) {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+label.person-chip:has(input:checked) .person-chip-avatar {
+  background: #fff;
+  color: var(--navy);
+}
+
+button.link-btn.item-delete {
+  margin: 0 auto 0 0;
+  color: var(--red);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  label.row-item {
+    grid-template-columns: 72px 1fr;
+    gap: 6px;
+  }
+}
