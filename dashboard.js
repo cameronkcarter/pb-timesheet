@@ -102,13 +102,14 @@ function render() {
   // Your subtasks; completed ones too unless hidden.
   const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId)
     && (showCompleted || !d.completed));
-  // Internal projects (e.g. Proposals & Pursuits) are just for logging time
-  // on the Timesheet, so they are left off the Dashboard.
+  // Internal projects (e.g. Proposals & Pursuits) only show when you have
+  // subtasks on them; they sort last.
   const myProjectIds = [...new Set([
     ...assignments.filter((a) => a.personId === personId).map((a) => a.projectId),
     ...myEntries.map((e) => e.projectId),
     ...myOpenItems.map((d) => d.projectId),
-  ])].filter((id) => !isInternal(projects.find((p) => p.id === id)));
+  ])].filter((id) => !isInternal(projects.find((p) => p.id === id))
+    || myOpenItems.some((d) => d.projectId === id));
   // Same order as everywhere else: newest projects first.
   const order = sortProjects(projects).map((p) => p.id);
   myProjectIds.sort((a, b) => order.indexOf(a) - order.indexOf(b));
@@ -144,6 +145,7 @@ function render() {
       .sort((a, b) => a.name.localeCompare(b.name));
 
     const color = projectColor(project.id);
+    const internal = isInternal(project);
     const projectBudget = tasks.filter((t) => t.projectId === projectId).reduce((s, t) => s + Number(t.budget || 0), 0);
     const projectSpent = billedAmount(timeEntries.filter((e) => e.projectId === projectId), { projects, people });
     const budgetPct = projectBudget > 0 ? Math.round((projectSpent / projectBudget) * 100) : null;
@@ -164,7 +166,9 @@ function render() {
           <button class="link-btn assign-link" data-action="add-subtask" data-project-id="${projectId}" data-task-id="${task.id}">+ Add subtask</button>
         </div>
         <div>
-          ${assigned > 0 || used > 0 ? hoursBarHtml(used, assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
+          ${internal
+            ? (used > 0 ? `<div class="hours-logged-only">${fmtHrs(used)} hrs logged</div>` : "")
+            : assigned > 0 || used > 0 ? hoursBarHtml(used, assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
           ${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}
         </div>
       </div>`;
@@ -291,8 +295,8 @@ function canManage(d) {
 const itemEditor = createItemEditor({
   getData: () => ({ people, tasks, projects }),
   sessionPersonId: selectedPersonId,
-  // Projects you're on (not internal ones), newest first.
-  projectChoices: () => sortProjects(projects.filter((p) => !isInternal(p) && (
+  // Projects you're on, plus internal ones (open to all); newest first.
+  projectChoices: () => sortProjects(projects.filter((p) => isInternal(p) || (
     assignments.some((a) => a.projectId === p.id && a.personId === selectedPersonId)
     || dueDates.some((d) => d.projectId === p.id && (d.personIds || []).includes(selectedPersonId))))),
   canManage,

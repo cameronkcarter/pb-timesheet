@@ -1739,23 +1739,6 @@ button:disabled:hover {
   cursor: not-allowed;
 }
 
-/* Internal project task: hours logged per person. */
-.logged-list {
-  max-width: 360px;
-}
-
-.logged-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
-}
-
-.logged-row:last-child {
-  border-bottom: none;
-}
-
 /* Timesheet: Log Hours button row, with notes beside the button. */
 .entry-actions {
   display: flex;
@@ -2566,4 +2549,10 @@ button.link-btn.pay-more {
   .hours-remaining {
     justify-content: flex-start;
   }
+}
+
+.hours-logged-only {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
 }

@@ -228,7 +228,7 @@ function renderBudget() {
   }
   budgetEmpty.style.display = "none";
   budgetHint.style.display = "block";
-  budgetHint.textContent = internal ? "Click a task to see who has logged time on it." : "Click a task to see who's assigned to it.";
+  budgetHint.textContent = "Click a task to see who's on it.";
 
   budgetTbody.innerHTML = projectTasks.map((t, i) => {
     const expanded = t.id === expandedTaskId;
@@ -256,19 +256,8 @@ function renderBudget() {
 
 // Who's on a task: each person's hours bar and their subtasks for it.
 function taskPeopleHtml(task) {
-  if (isInternal(projects.find((p) => p.id === task.projectId))) {
-    // Internal: who has logged how much, most first.
-    const byPerson = {};
-    timeEntries.filter((e) => e.taskId === task.id).forEach((e) => {
-      byPerson[e.personId] = (byPerson[e.personId] || 0) + Number(e.hours || 0);
-    });
-    const rows = Object.entries(byPerson)
-      .map(([pid, hours]) => ({ name: people.find((p) => p.id === pid)?.name || "—", hours }))
-      .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
-    if (rows.length === 0) return `<div class="empty">No hours logged yet.</div>`;
-    return `<div class="logged-list">${rows.map((r) =>
-      `<div class="logged-row"><span>${esc(r.name)}</span><strong>${fmtHrs(r.hours)} hrs</strong></div>`).join("")}</div>`;
-  }
+  // Internal tasks have no assigned hours, just hours logged.
+  const internal = isInternal(projects.find((p) => p.id === task.projectId));
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
   const taskItems = projectItems({ taskId: task.id });
@@ -302,7 +291,9 @@ function taskPeopleHtml(task) {
         <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Assign subtask</button>
       </div>
       <div>
-        ${r.isAssigned || r.logged ? hoursBarHtml(r.logged, r.assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
+        ${internal
+          ? (r.logged ? `<div class="hours-logged-only">${fmtHrs(r.logged)} hrs logged</div>` : "")
+          : r.isAssigned || r.logged ? hoursBarHtml(r.logged, r.assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
         ${itemsListHtml(r.items)}
       </div>
     </div>`).join("")}</div>`;
