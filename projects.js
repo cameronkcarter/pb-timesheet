@@ -197,7 +197,7 @@ function renderBudget() {
   if (internal) {
     const projectEntries = timeEntries.filter((e) => e.projectId === selectedProjectId);
     budgetSummary.innerHTML = `
-      <span class="pill blue">Internal &middot; just tracking hours</span>
+      <span class="pill blue">Internal</span>
       <span><span class="summary-label">Logged</span> ${fmtHrs(loggedHours(projectEntries))} hrs</span>
       <span><span class="summary-label">People</span> ${new Set(projectEntries.map((e) => e.personId)).size}</span>`;
     budgetOverallBar.innerHTML = "";
