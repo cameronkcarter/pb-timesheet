@@ -2557,12 +2557,14 @@ button.link-btn.pay-more {
   color: var(--text-muted);
 }
 
-.assign-row.assign-row-internal {
-  grid-template-columns: 200px 1fr;
+/* Admin, internal task: one sub-row per person under the task. */
+.task-table tr.person-subrow td {
+  background: #f6f4f8;
+  font-size: 13px;
+  padding-top: 7px;
+  padding-bottom: 7px;
 }
 
-.assign-logged {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
+.task-table tr.person-subrow td:first-child {
+  padding-left: 34px;
 }

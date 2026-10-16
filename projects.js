@@ -198,10 +198,9 @@ function renderBudget() {
     const projectEntries = timeEntries.filter((e) => e.projectId === selectedProjectId);
     budgetSummary.innerHTML = `
       <span class="pill blue">Internal</span>
-      <span><span class="summary-label">Logged</span> ${fmtHrs(loggedHours(projectEntries))} hrs</span>
-      <span><span class="summary-label">People</span> ${new Set(projectEntries.map((e) => e.personId)).size}</span>`;
+      <span><span class="summary-label">Logged</span> ${fmtHrs(loggedHours(projectEntries))} hrs</span>`;
     budgetOverallBar.innerHTML = "";
-    thead.innerHTML = `<tr><th>Task</th><th>Hours logged</th><th>People</th><th></th><th></th></tr>`;
+    thead.innerHTML = `<tr><th>Task</th><th colspan="4">Hours logged</th></tr>`;
   } else {
     const totalBudget = projectTasks.reduce((s, t) => s + Number(t.budget || 0), 0);
     const totalSpent = projectTasks.reduce((s, t) => s + spentOnTask(t.id), 0);
@@ -235,7 +234,7 @@ function renderBudget() {
     let cells;
     if (internal) {
       const taskEntries = timeEntries.filter((e) => e.taskId === t.id);
-      cells = `<td>${fmtHrs(loggedHours(taskEntries))} hrs</td><td>${new Set(taskEntries.map((e) => e.personId)).size || "—"}</td><td></td><td></td>`;
+      cells = `<td colspan="4">${fmtHrs(loggedHours(taskEntries))} hrs</td>`;
     } else {
       const budget = Number(t.budget || 0);
       const spent = spentOnTask(t.id);

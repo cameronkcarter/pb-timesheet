@@ -557,14 +557,12 @@ function loggedByPersonHtml(task) {
   const rows = [...ids]
     .map((pid) => ({ name: personById(pid)?.name || "—", hours: loggedHours(task.id, pid) }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return `<div class="assign-list">${rows.map((r) => `<div class="assign-row assign-row-internal">
-    <div class="assign-name">${esc(r.name)}</div>
-    <div class="assign-logged">${r.hours ? `${fmtHrs(r.hours)} hrs logged` : "—"}</div>
-  </div>`).join("")}</div>`;
+  return rows.map((r) => `<tr class="person-subrow">
+    <td>${esc(r.name)}</td><td>${r.hours ? `${fmtHrs(r.hours)} hrs` : "—"}</td>
+  </tr>`).join("");
 }
 
 function taskDetailHtml(task, project) {
-  if (isInternal(project)) return loggedByPersonHtml(task);
   const color = projectColor(project.id);
   const rows = assignments.filter((a) => a.taskId === task.id)
     .sort((a, b) => (personById(a.personId)?.name || "").localeCompare(personById(b.personId)?.name || ""))
@@ -595,17 +593,15 @@ function renderTasks() {
   const internal = isInternal(project);
 
   const head = internal
-    ? `<tr><th>Task</th><th>Hours logged</th><th>People</th></tr>`
+    ? `<tr><th>Task</th><th>Hours logged</th></tr>`
     : `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th><th>Unassigned</th></tr>`;
-  const cols = internal ? 3 : 6;
+  const cols = internal ? 2 : 6;
 
   const body = projectTasks.map((t, i) => {
     const open = openTaskIds.has(t.id);
     let cells;
     if (internal) {
-      const taskEntries = timeEntries.filter((e) => e.taskId === t.id);
-      const peopleCount = new Set(taskEntries.map((e) => e.personId)).size;
-      cells = `<td>${fmtHrs(loggedHours(t.id))} hrs</td><td>${peopleCount || "—"}</td>`;
+      cells = `<td>${fmtHrs(loggedHours(t.id))} hrs</td>`;
     } else {
       const budget = Number(t.budget || 0);
       const spent = spentOnTask(t.id);
@@ -620,6 +616,7 @@ function renderTasks() {
     const mainRow = `<tr class="task-row ${stripe} ${open ? "expanded" : ""}" data-task-id="${t.id}">
       <td><span class="task-chevron" aria-hidden="true">&#9656;</span> ${esc(t.name)}</td>${cells}</tr>`;
     if (!open) return mainRow;
+    if (internal) return mainRow + loggedByPersonHtml(t);
     return mainRow + `<tr class="task-detail" data-task-id="${t.id}"><td colspan="${cols}" class="accordion-cell">${taskDetailHtml(t, project)}</td></tr>`;
   }).join("");
 
