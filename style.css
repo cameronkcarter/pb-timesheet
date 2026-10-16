@@ -2556,3 +2556,13 @@ button.link-btn.pay-more {
   font-weight: 600;
   color: var(--text-muted);
 }
+
+.assign-row.assign-row-internal {
+  grid-template-columns: 200px 1fr;
+}
+
+.assign-logged {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}

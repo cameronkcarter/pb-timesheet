@@ -546,18 +546,21 @@ function addPersonHtml(task) {
   </div>`;
 }
 
-// Internal projects have no assignments — just show who has logged time.
+// Internal projects are open to everyone and have no assigned hours, so
+// each person just shows the hours they've logged.
 function loggedByPersonHtml(task) {
-  const byPerson = {};
-  timeEntries.filter((e) => e.taskId === task.id).forEach((e) => {
-    byPerson[e.personId] = (byPerson[e.personId] || 0) + Number(e.hours || 0);
-  });
-  const rows = Object.entries(byPerson)
-    .map(([pid, hours]) => ({ name: personById(pid)?.name || "—", hours }))
-    .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
-  if (rows.length === 0) return '<div class="empty" style="padding:4px 0;">No hours logged yet.</div>';
-  return `<div class="logged-list">${rows.map((r) =>
-    `<div class="logged-row"><span>${esc(r.name)}</span><strong>${fmtHrs(r.hours)} hrs</strong></div>`).join("")}</div>`;
+  const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
+  const ids = new Set([
+    ...people.filter((p) => !p.inactive).map((p) => p.id),
+    ...taskEntries.map((e) => e.personId),
+  ]);
+  const rows = [...ids]
+    .map((pid) => ({ name: personById(pid)?.name || "—", hours: loggedHours(task.id, pid) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return `<div class="assign-list">${rows.map((r) => `<div class="assign-row assign-row-internal">
+    <div class="assign-name">${esc(r.name)}</div>
+    <div class="assign-logged">${r.hours ? `${fmtHrs(r.hours)} hrs logged` : "—"}</div>
+  </div>`).join("")}</div>`;
 }
 
 function taskDetailHtml(task, project) {

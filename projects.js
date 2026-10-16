@@ -262,6 +262,7 @@ function taskPeopleHtml(task) {
   const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
   const taskItems = projectItems({ taskId: task.id });
   const personIds = [...new Set([
+    ...(internal ? people.filter((x) => !x.inactive).map((x) => x.id) : []),
     ...taskAssignments.map((a) => a.personId),
     ...taskEntries.map((e) => e.personId),
     ...taskItems.flatMap((d) => d.personIds || []),
