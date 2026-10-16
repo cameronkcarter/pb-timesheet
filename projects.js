@@ -200,7 +200,7 @@ function renderBudget() {
       <span class="pill blue">Internal</span>
       <span><span class="summary-label">Logged</span> ${fmtHrs(loggedHours(projectEntries))} hrs</span>`;
     budgetOverallBar.innerHTML = "";
-    thead.innerHTML = `<tr><th>Task</th><th colspan="4">Hours logged</th></tr>`;
+    thead.innerHTML = `<tr><th class="internal-task-col">Task</th><th colspan="4">Hours logged</th></tr>`;
   } else {
     const totalBudget = projectTasks.reduce((s, t) => s + Number(t.budget || 0), 0);
     const totalSpent = projectTasks.reduce((s, t) => s + spentOnTask(t.id), 0);
@@ -292,7 +292,7 @@ function taskPeopleHtml(task) {
       </div>
       <div>
         ${internal
-          ? (r.logged ? `<div class="hours-logged-only">${fmtHrs(r.logged)} hrs logged</div>` : "")
+          ? `<div class="hours-logged-only">${r.logged ? `${fmtHrs(r.logged)} hrs` : "—"}</div>`
           : r.isAssigned || r.logged ? hoursBarHtml(r.logged, r.assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
         ${itemsListHtml(r.items)}
       </div>

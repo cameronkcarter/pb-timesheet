@@ -593,7 +593,7 @@ function renderTasks() {
   const internal = isInternal(project);
 
   const head = internal
-    ? `<tr><th>Task</th><th>Hours logged</th></tr>`
+    ? `<tr><th class="internal-task-col">Task</th><th>Hours logged</th></tr>`
     : `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th><th>Unassigned</th></tr>`;
   const cols = internal ? 2 : 6;
 

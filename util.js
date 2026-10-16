@@ -188,16 +188,24 @@ export function dueItemHtml(d, { canComplete = false, canEdit = false, canDelete
   const today = todayISO();
   const overdue = !d.completed && d.dueDate < today;
   const soon = !d.completed && !overdue && daysBetween(today, d.dueDate) <= 3;
+  const short = (iso) => {
+    const dt = new Date(iso + "T00:00:00");
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric",
+      ...(dt.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
+  };
+  const days = daysBetween(today, d.dueDate);
+  const rel = days === 0 ? "today" : days === 1 ? "tomorrow" : days > 1 ? `in ${days} days`
+    : days === -1 ? "1 day overdue" : `${-days} days overdue`;
   const when = d.completed
-    ? `Completed${d.completedDate ? " " + formatDate(String(d.completedDate).slice(0, 10)) : ""}`
-    : `${formatDate(d.dueDate)} &middot; ${dueLabel(d.dueDate)}`;
+    ? `Done${d.completedDate ? " " + short(String(d.completedDate).slice(0, 10)) : ""}`
+    : `${short(d.dueDate)} &middot; ${rel}`;
   const action = !canComplete ? ""
     : d.completed
       ? `<button type="button" class="small secondary due-btn" data-action="reopen-duedate" data-id="${d.id}">Reopen</button>`
       : `<button type="button" class="small due-btn due-complete" data-action="complete-duedate" data-id="${d.id}">Mark complete</button>`;
   return `<div class="due-item ${d.completed ? "done" : ""} ${overdue ? "overdue" : ""} ${soon ? "soon" : ""}">
     <span class="due-mark" aria-hidden="true">${d.completed ? "&#10003;" : ""}</span>
-    <span class="due-title">${esc(d.title)}${who ? ` <span class="due-who">${esc(who)}</span>` : ""}</span>
+    <span class="due-title" title="${esc(d.title)}">${esc(d.title)}${who ? ` <span class="due-who">${esc(who)}</span>` : ""}</span>
     <span class="due-when">${when}</span>
     ${canEdit && !d.completed ? `<button type="button" class="link-btn due-edit" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : ""}
     ${action}

@@ -2568,3 +2568,21 @@ button.link-btn.pay-more {
 .task-table tr.person-subrow td:first-child {
   padding-left: 34px;
 }
+
+/* Subtasks stay on one line; long titles are cut off with "…". */
+.due-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Projects: narrower name column in an open task, more room for subtasks. */
+td.accordion-cell .hours-row {
+  grid-template-columns: 180px 1fr;
+}
+
+/* Internal tasks: Task column width matches the name column of the people
+   rows below (20px cell padding + 180px + 20px gap, less the 10px header padding), so hours line up. */
+th.internal-task-col {
+  width: 210px;
+}
