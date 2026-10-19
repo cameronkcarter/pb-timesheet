@@ -26,6 +26,12 @@ export function startTestSession(personId) {
   sessionStorage.setItem(TEST_PERSON_KEY, personId);
 }
 
+function exitTestSession() {
+  sessionStorage.removeItem(TEST_ACTIVE_KEY);
+  sessionStorage.removeItem(TEST_PERSON_KEY);
+  clearTestSandboxData();
+}
+
 export function getSessionPersonId() {
   if (isTestMode()) return sessionStorage.getItem(TEST_PERSON_KEY);
   return localStorage.getItem(KEY);
@@ -61,11 +67,29 @@ export function clearSession() {
   clearTestSandboxData();
 }
 
+// "Test Mode" link beside Log Out: switches this tab to a copy of the data
+// that's never saved (as yourself), or back to the real thing.
+function renderTestModeToggle() {
+  const logout = document.getElementById("logoutLink");
+  if (!logout || document.getElementById("testModeLink")) return;
+  const link = document.createElement("a");
+  link.href = "#";
+  link.id = "testModeLink";
+  link.textContent = isTestMode() ? "Exit Test Mode" : "Test Mode";
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (isTestMode()) exitTestSession();
+    else startTestSession(localStorage.getItem(KEY));
+    window.location.reload();
+  });
+  logout.before(link);
+}
+
 function renderTestModeBanner() {
   if (!isTestMode() || document.getElementById("testModeBanner")) return;
   const banner = document.createElement("div");
   banner.id = "testModeBanner";
-  banner.textContent = "TEST MODE — nothing you do here is saved. Log out to exit.";
+  banner.textContent = "TEST MODE — nothing you do here is saved.";
   banner.style.cssText =
     "background:#d98936;color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;letter-spacing:0.2px;";
   document.body.insertBefore(banner, document.body.firstChild);
@@ -90,6 +114,7 @@ export function requireSession() {
     return null;
   }
   renderTestModeBanner();
+  renderTestModeToggle();
   if (!isTestMode()) {
     authChecked.then(async (user) => {
       const entry = user ? await staffEntryFor(user).catch(() => null) : null;
@@ -130,5 +155,5 @@ export function renderNavUserName(person) {
   const el = document.getElementById("navUserName");
   if (!el) return;
   if (!person) { el.textContent = ""; return; }
-  el.textContent = isTestMode() ? `${person.name} (Test Mode)` : person.name;
+  el.textContent = person.name;
 }
