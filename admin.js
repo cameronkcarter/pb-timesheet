@@ -851,6 +851,17 @@ function pendingGroups() {
   }).sort((x, y) => x.name.localeCompare(y.name));
 }
 
+// "Oct 14", "Oct 14 – 16" or "Sep 30 – Oct 2" for a task's entries.
+function dateRange(entries) {
+  const dates = entries.map((e) => e.date).sort();
+  const fmt = (iso, opts) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", opts);
+  const a = dates[0], b = dates[dates.length - 1];
+  if (a === b) return fmt(a, { month: "short", day: "numeric" });
+  return a.slice(0, 7) === b.slice(0, 7)
+    ? `${fmt(a, { month: "short", day: "numeric" })} – ${fmt(b, { day: "numeric" })}`
+    : `${fmt(a, { month: "short", day: "numeric" })} – ${fmt(b, { month: "short", day: "numeric" })}`;
+}
+
 const apprDate = (iso) => new Date(iso + "T00:00:00")
   .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -865,11 +876,11 @@ function renderPendingApproval() {
   pendingTotal.textContent = `${fmtHrs(groups.reduce((s, g) => s + g.hours, 0))} hrs`;
 
   pendingBody.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table">
-    <thead><tr><th>Task</th><th class="num">Hours</th><th>Notes</th><th></th><th></th></tr></thead>
+    <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" /><col /><col class="c-actions" /><col class="c-chev" /></colgroup>
+    <thead><tr><th>Date</th><th>Task</th><th class="num">Hours</th><th>Notes</th><th></th><th></th></tr></thead>
     ${groups.map((g) => `<tbody>
       <tr class="appr-person">
-        <td colspan="2"><strong>${esc(g.name)}</strong> <span class="appr-muted">${fmtHrs(g.hours)} hrs</span></td>
-        <td></td>
+        <td colspan="4"><strong>${esc(g.name)}</strong> <span class="appr-muted">${fmtHrs(g.hours)} hrs</span></td>
         <td class="num" colspan="2">${g.tasks.length > 1
           ? `<button type="button" class="link-btn" data-action="approve-person" data-id="${g.personId}">Approve all</button>` : ""}</td>
       </tr>
@@ -878,8 +889,9 @@ function renderPendingApproval() {
         const notes = t.entries.filter((e) => e.note);
         const over = isOverAssigned(g.personId, t.task?.id, t.project?.id);
         return `<tr class="appr-row ${open ? "open" : ""}" data-key="${esc(t.key)}">
-          <td class="proj"><span class="pay-dot" style="--c:${t.project ? projectColor(t.project.id) : "#c9c2cf"};"></span>${t.project ? esc(t.project.name) : "—"} <span class="appr-muted">· ${t.task ? esc(t.task.name) : "—"}</span>${over ? ' <span class="pay-status pending" title="Logged more than assigned on this task">Over assigned</span>' : ""}</td>
-          <td class="num">${fmtHrs(t.hours)}</td>
+          <td class="appr-date">${dateRange(t.entries)}</td>
+          <td class="appr-task" title="${esc((t.project?.name || "") + " · " + (t.task?.name || ""))}"><span class="pay-dot" style="--c:${t.project ? projectColor(t.project.id) : "#c9c2cf"};"></span>${t.project ? esc(t.project.name) : "—"} <span class="appr-muted">· ${t.task ? esc(t.task.name) : "—"}</span></td>
+          <td class="num ${over ? "appr-over" : ""}" ${over ? 'title="More than their assigned hours on this task"' : ""}>${fmtHrs(t.hours)}</td>
           <td class="appr-note">${notes.length
             ? `${esc(notes[notes.length - 1].note)}${notes.length > 1 ? ` <span class="appr-muted">+${notes.length - 1}</span>` : ""}`
             : '<span class="appr-muted">—</span>'}</td>
@@ -894,7 +906,7 @@ function renderPendingApproval() {
 
 function entryRowHtml(e) {
   const editing = apprEditing && apprEditing.id === e.id ? apprEditing.mode : null;
-  const date = `<td class="appr-date">${apprDate(e.date)}</td>`;
+  const date = `<td class="appr-date">${apprDate(e.date)}</td><td></td>`;
   if (editing === "edit") {
     return `<tr class="appr-entry editing" data-entry="${e.id}">${date}
       <td class="num"><input type="number" class="appr-hours" min="0" step="0.25" value="${Number(e.hours)}" /></td>

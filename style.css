@@ -2712,17 +2712,27 @@ table.inv-people {
   border-bottom-color: transparent;
 }
 
-.appr-table td.proj {
-  width: auto;
-  white-space: nowrap;
+table.appr-table {
+  table-layout: fixed;
+  min-width: 760px;
 }
 
+.appr-table col.c-date { width: 92px; }
+.appr-table col.c-task { width: 22%; }
+.appr-table col.c-hours { width: 64px; }
+.appr-table col.c-actions { width: 172px; }
+.appr-table col.c-chev { width: 30px; }
+
+.appr-table td.appr-task,
 .appr-table td.appr-note {
-  width: 100%;
-  max-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.appr-table td.appr-over {
+  color: #9a5a16;
+  font-weight: 700;
 }
 
 .appr-table button.small {
@@ -2742,8 +2752,8 @@ table.inv-people {
 }
 
 .appr-table td.appr-date {
-  padding-left: 30px;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .appr-table td.appr-entry-note {
@@ -2757,14 +2767,14 @@ table.inv-people {
 .appr-actions .link-btn {
   font-size: 12px;
   font-weight: 600;
-  margin-left: 12px;
+  margin-left: 10px;
 }
 
 .appr-actions .link-btn.appr-decline { color: var(--red); }
 .appr-actions .link-btn.appr-approve { color: var(--green); }
 
 .appr-actions button.small {
-  margin-left: 12px;
+  margin-left: 10px;
 }
 
 .appr-entry input {
