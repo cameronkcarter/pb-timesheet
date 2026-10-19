@@ -20,7 +20,7 @@ export function sheetSyncEnabled() {
 // Rolls time entries up into one line per task x person x rate, dropping the
 // individual work dates (the sheet only cares about invoiced totals).
 // rate/amount are what the client was billed; payRate/payAmount are what the
-// person earns (the same on projects that bill at staff pay rates).
+// person earns.
 function linesFromEntries(entries, { tasks, people, projects }) {
   const groups = {};
   entries.forEach((e) => {

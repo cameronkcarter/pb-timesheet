@@ -126,8 +126,8 @@ export const normEmail = (e) => String(e || "").trim().toLowerCase();
 
 // Project documents look like:
 // { name, client, projectNumber, billToName, billToCompany, billToAddress1,
-//   billToAddress2, billAtPayRate (bill at staff pay rates instead of bill
-//   rates), internal (not billed or paid, e.g. Proposals & Pursuits) }
+//   billToAddress2, pmPersonId (project manager: approves its hours),
+//   internal (not billed or paid, e.g. Proposals & Pursuits) }
 export const Projects = {
   listen: (cb) => listenCollection("projects", cb, "name"),
   add: (data) => add("projects", data),

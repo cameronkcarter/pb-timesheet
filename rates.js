@@ -8,12 +8,9 @@
 //               changes later never rewrite past invoices. Falls back to the
 //               pay rate if a person has no bill rate set.
 //
-// Projects choose how they bill:
-//   default                  — each person's bill rate
-//   project.billAtPayRate    — each person's pay rate (older contracts with no
-//                              overhead, e.g. Cache County)
-//   project.internal         — not billed or paid at all (e.g. Proposals &
-//                              Pursuits); only hours are tracked
+// Projects either bill at each person's bill rate, or are internal
+// (project.internal: not billed or paid, e.g. Proposals & Pursuits; only
+// hours are tracked).
 //
 // Assignments are hours per person per task (assignment.hours).
 
@@ -52,14 +49,12 @@ export function billRateOf(entry, { projects, people }) {
   // Invoiced hours keep the rate they were billed at. Hours invoiced before
   // bill rates existed were billed at the person's pay rate.
   if (entry.invoiced) return entry.billRate != null ? Number(entry.billRate) : payRateOf(entry, { projects, people });
-  if (project && project.billAtPayRate) return payRateOf(entry, { projects, people });
   return personBillRate(findPerson(entry.personId, people));
 }
 
 // What an hour of this person's time costs the project's budget.
 export function assignmentRate(project, person) {
   if (isInternal(project)) return 0;
-  if (project && project.billAtPayRate) return personPayRate(person);
   return personBillRate(person);
 }
 

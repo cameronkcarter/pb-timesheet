@@ -18,6 +18,7 @@ let assignments = [];
 let timeEntries = [];
 let selectedProjectId = null;
 let selectedTaskId = null;
+let projectPicked = false; // until you pick one, the first (newest) project is selected
 let navChecked = false;
 let isDirty = false;
 let editingEntryId = null; // entry loaded into the form by its Edit button
@@ -210,6 +211,7 @@ dayEntries.addEventListener("click", async (e) => {
     const entry = timeEntries.find((x) => x.id === editBtn.dataset.editEntry);
     if (!entry) return;
     editingEntryId = entry.id;
+    projectPicked = true;
     selectedProjectId = entry.projectId;
     selectedTaskId = entry.taskId;
     entryHours.value = entry.hours;
@@ -291,7 +293,7 @@ function renderLogForm() {
   }
   projectCardsEmpty.style.display = "none";
   if (selectedProjectId && !mine.some((p) => p.id === selectedProjectId)) selectedProjectId = null;
-  if (!selectedProjectId && mine.length === 1) selectedProjectId = mine[0].id;
+  if (!projectPicked || !selectedProjectId) selectedProjectId = mine[0].id;
 
   projectCardsEl.innerHTML = mine.map((p) => `
     <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
@@ -345,8 +347,10 @@ function renderTaskCards(options) {
     return `<div class="project-card task-card ${active ? "active" : ""}" data-task-card="${c.task.id}">
       <div class="name">${esc(c.task.name)}</div>
       <div class="task-card-stats">
-        <div><span class="summary-label">Assigned</span><div class="summary-value">${fmtHours(assigned)} hrs</div></div>
-        <div><span class="summary-label">Logged</span><div class="summary-value ${over ? "hours-over" : ""}">${fmtHours(logged)} hrs</div></div>
+        ${over
+          ? `<div><span class="summary-label">Over</span><div class="summary-value hours-over">${fmtHours(logged - assigned)} hrs</div></div>`
+          : `<div><span class="summary-label">Remaining</span><div class="summary-value">${fmtHours(assigned - logged)} hrs</div></div>`}
+        <div><span class="summary-label">Logged</span><div class="summary-value">${fmtHours(logged)} hrs</div></div>
       </div>
     </div>`;
   }).join("");
@@ -404,6 +408,7 @@ projectCardsEl.addEventListener("click", (e) => {
   const card = e.target.closest(".project-card");
   if (!card || card.dataset.projectCard === selectedProjectId) return;
   selectedProjectId = card.dataset.projectCard;
+  projectPicked = true;
   selectedTaskId = null;
   renderLogForm();
 });

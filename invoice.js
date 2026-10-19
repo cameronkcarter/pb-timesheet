@@ -52,9 +52,8 @@ if (sessionPersonId) {
   Invoices.listen((d) => { invoices = d; render(); renderSheetSync(); });
 }
 
-// Invoices charge each person's bill rate (or pay rate on projects billed at
-// staff pay rates); hours already invoiced keep the rate they were billed at
-// (see rates.js).
+// Invoices charge each person's bill rate; hours already invoiced keep the
+// rate they were billed at (see rates.js).
 function entryRate(e) {
   return billRateOf(e, { projects, people });
 }

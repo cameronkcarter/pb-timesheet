@@ -16,14 +16,14 @@ let assignments = [];
 let timeEntries = [];
 let dueDates = [];
 let navChecked = false;
-let selectedProjectId = loadSelectedProject();
+let selectedProjectId = null;
+let projectPicked = false; // until you pick one, the first (newest) project is selected
 let expandedTaskId = null;
 let openDotId = null;
 let showCompleted = true; // completed subtasks show by default; can be hidden
 
 const PX_PER_DAY = 4;
 const LABEL_COL_WIDTH = 200;
-const SELECTED_PROJECT_KEY = "pb_projects_selected";
 
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
@@ -51,14 +51,6 @@ const timelineModalTitle = document.getElementById("timelineModalTitle");
 const timelineModalRows = document.getElementById("timelineModalRows");
 
 wireLogout("logoutLink");
-
-function loadSelectedProject() {
-  try { return localStorage.getItem(SELECTED_PROJECT_KEY); } catch { return null; }
-}
-
-function saveSelectedProject(id) {
-  try { localStorage.setItem(SELECTED_PROJECT_KEY, id); } catch { /* not critical */ }
-}
 
 function currentPerson() {
   return people.find((p) => p.id === sessionPersonId);
@@ -119,12 +111,14 @@ if (sessionPersonId) {
 
 // Admins see every project; everyone else sees the projects they're
 // assigned to a task on.
+// Projects you're on: assigned to a task, or its project manager, plus
+// internal ones (open to everyone). Admins edit all projects in Admin.
 function visibleProjects() {
-  if (isAdmin()) return sortProjects(projects);
   const assignedProjectIds = new Set(
     assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId)
   );
-  return sortProjects(projects.filter((p) => assignedProjectIds.has(p.id) || isInternal(p)));
+  return sortProjects(projects.filter((p) =>
+    assignedProjectIds.has(p.id) || p.pmPersonId === sessionPersonId || isInternal(p)));
 }
 
 function renderAll() {
@@ -145,7 +139,7 @@ function renderProjectCards() {
   projectCardsEmpty.style.display = "none";
   projectDetail.style.display = "block";
 
-  if (!selectedProjectId || !visible.some((p) => p.id === selectedProjectId)) {
+  if (!projectPicked || !selectedProjectId || !visible.some((p) => p.id === selectedProjectId)) {
     selectedProjectId = visible[0].id;
   }
 
@@ -161,7 +155,7 @@ projectCardsEl.addEventListener("click", (e) => {
   const card = e.target.closest(".project-card");
   if (!card || card.dataset.projectCard === selectedProjectId) return;
   selectedProjectId = card.dataset.projectCard;
-  saveSelectedProject(selectedProjectId);
+  projectPicked = true;
   expandedTaskId = null;
   userHasScrolledGantt = false;
   closeDotPopover();
@@ -185,6 +179,12 @@ function loggedHours(entries) {
   return entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 }
 
+function pmHtml() {
+  const project = projects.find((x) => x.id === selectedProjectId);
+  const pm = project && people.find((x) => x.id === project.pmPersonId);
+  return pm ? `<span><span class="summary-label">PM</span> ${esc(pm.name)}</span>` : "";
+}
+
 // Billed projects show dollars (budget / spent / remaining). Internal projects
 // have no budget, so they show hours logged instead.
 function renderBudget() {
@@ -198,6 +198,7 @@ function renderBudget() {
     const projectEntries = timeEntries.filter((e) => e.projectId === selectedProjectId);
     budgetSummary.innerHTML = `
       <span class="pill blue">Internal</span>
+      ${pmHtml()}
       <span><span class="summary-label">Logged</span> ${fmtHrs(loggedHours(projectEntries))} hrs</span>`;
     budgetOverallBar.innerHTML = "";
     thead.innerHTML = `<tr><th class="internal-task-col">Task</th><th colspan="4">Hours logged</th></tr>`;
@@ -206,6 +207,7 @@ function renderBudget() {
     const totalSpent = projectTasks.reduce((s, t) => s + spentOnTask(t.id), 0);
     const totalRemaining = totalBudget - totalSpent;
     budgetSummary.innerHTML = `
+      ${pmHtml()}
       <span><span class="summary-label">Budget</span> ${formatCurrency(totalBudget)}</span>
       <span><span class="summary-label">Spent</span> ${formatCurrency(totalSpent)}</span>
       <span><span class="summary-label">Remaining</span> <span ${totalRemaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(totalRemaining)}</span></span>`;

@@ -4,6 +4,7 @@ import {
 } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
+import { createApprovals } from "./approvals.js";
 import {
   DEFAULT_BILL_RATE, billRateOf, assignmentRate, assignedHours, isInternal, personPayRate, personBillRate,
   taskBudgetUse,
@@ -29,6 +30,12 @@ let pendingTaskDeletions = new Set();
 
 wireLogout("logoutLink");
 
+// Pending approval: hours on the projects you manage (see approvals.js).
+const approvals = createApprovals({
+  getData: () => ({ people, projects, tasks, assignments, timeEntries }),
+  sessionPersonId,
+});
+
 if (sessionPersonId) {
   People.listen((d) => {
     people = d;
@@ -40,14 +47,14 @@ if (sessionPersonId) {
     }
     renderPeople();
     renderTasks();
-    renderPendingApproval();
+    approvals.render();
     syncStaff();
   });
   Staff.listen((d) => { staff = d; staffLoaded = true; syncStaff(); });
-  Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); });
-  Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
-  Assignments.listen((d) => { assignments = d; renderTasks(); renderPendingApproval(); });
-  TimeEntries.listen((d) => { timeEntries = d; renderTasks(); renderPendingApproval(); });
+  Projects.listen((d) => { projects = d; renderProjectCards(); approvals.render(); });
+  Tasks.listen((d) => { tasks = d; renderTasks(); approvals.render(); });
+  Assignments.listen((d) => { assignments = d; renderTasks(); approvals.render(); });
+  TimeEntries.listen((d) => { timeEntries = d; renderTasks(); approvals.render(); });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; });
 }
@@ -216,25 +223,23 @@ const modalBillToAddress1 = document.getElementById("modalBillToAddress1");
 const modalBillToAddress2 = document.getElementById("modalBillToAddress2");
 const modalProjectNumber = document.getElementById("modalProjectNumber");
 const modalProjectType = document.getElementById("modalProjectType");
+const modalProjectPm = document.getElementById("modalProjectPm");
 const modalTypeHint = document.getElementById("modalTypeHint");
 const modalBillingFields = document.getElementById("modalBillingFields");
 const modalTaskRows = document.getElementById("modalTaskRows");
 const modalTaskHead = document.getElementById("modalTaskHead");
 const modalTaskTotal = document.getElementById("modalTaskTotal");
 
-// How a project bills: each person's bill rate (default), each person's pay
-// rate (older no-overhead contracts like Cache County), or not at all.
+// How a project bills: each person's bill rate, or not at all (internal).
 const PROJECT_TYPES = {
-  rates: "Hours are billed, and the budget spent, at each person's bill rate (set under People & Rates).",
-  pay: "Hours are billed at each person's pay rate, with no overhead — for older contracts like Cache County.",
-  internal: "Not billed to a client and staff aren't paid. Just tracks hours, e.g. Proposals & Pursuits.",
+  rates: "Billed at each person's bill rate.",
+  internal: "Not billed or paid. Just tracks hours.",
 };
 let modalType = "rates";
 
 function projectTypeOf(project) {
   if (!project) return "rates";
-  if (project.internal) return "internal";
-  return project.billAtPayRate ? "pay" : "rates";
+  return project.internal ? "internal" : "rates";
 }
 
 function setModalType(type) {
@@ -280,7 +285,7 @@ function renderProjectCards() {
     <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
       <div class="name">${esc(p.name)}</div>
       <div class="client">${p.client ? esc(p.client) : "&nbsp;"}</div>
-      <div class="client">${p.internal ? "Internal &middot; not billed or paid" : p.billAtPayRate ? "Bills at staff pay rates" : "Bills at staff bill rates"}</div>
+      <div class="client">${p.internal ? "Internal" : "PM: " + esc(personById(p.pmPersonId)?.name || "none")}</div>
       <div class="card-actions">
         <button class="small secondary" data-action="edit-project" data-id="${p.id}">Edit</button>
         <button class="danger small" data-action="remove-project" data-id="${p.id}">Remove</button>
@@ -381,6 +386,11 @@ function openProjectModal(project) {
   modalBillToAddress1.value = project ? project.billToAddress1 || "" : "";
   modalBillToAddress2.value = project ? project.billToAddress2 || "" : "";
   modalProjectNumber.value = project ? project.projectNumber || "" : "";
+  const pmChoices = people.filter((p) => !p.inactive || (project && p.id === project.pmPersonId))
+    .sort((x, y) => x.name.localeCompare(y.name));
+  modalProjectPm.innerHTML = '<option value="">None</option>' + pmChoices
+    .map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  modalProjectPm.value = project ? project.pmPersonId || "" : "";
 
   const projectTasks = project
     ? tasks.filter((t) => t.projectId === project.id).sort((a, b) => a.name.localeCompare(b.name))
@@ -449,7 +459,8 @@ document.getElementById("modalSaveProject").addEventListener("click", async () =
     billToAddress2: modalBillToAddress2.value.trim(),
     projectNumber: modalProjectNumber.value.trim(),
     internal,
-    billAtPayRate: modalType === "pay",
+    billAtPayRate: false,
+    pmPersonId: modalProjectPm.value || null,
   };
   try {
     let projectId = modalEditingProjectId;
@@ -790,233 +801,5 @@ taskBlocks.addEventListener("click", async (e) => {
       await Assignments.add({ projectId: btn.dataset.projectId, taskId: btn.dataset.taskId, personId, hours });
       showToast("Assigned.");
     } catch (err) { showToast("Error: " + err.message); }
-  }
-});
-
-// ---------- Pending approval ----------
-// Grouped by person, then one row per task with their notes up front.
-// Clicking a task row lists each entry (date, hours, note) with Edit,
-// Decline and Approve. Declined entries go back to the person's Timesheet
-// (with the reason) and return here once they edit them.
-const pendingApprovalCard = document.getElementById("pendingApprovalCard");
-const pendingBody = document.getElementById("pendingBody");
-const pendingTotal = document.getElementById("pendingTotal");
-const approveAllBtn = document.getElementById("approveAllBtn");
-
-let openApprovalKey = null; // "<personId>|<taskId>"
-let apprEditing = null;      // { id, mode: "edit" | "decline" }
-
-function pendingEntries() {
-  return timeEntries
-    .filter((e) => !e.approved && !e.invoiced && !e.declined)
-    .sort((a, b) => (a.date < b.date ? -1 : 1));
-}
-
-// True when this person has logged more on the task than assigned.
-function isOverAssigned(personId, taskId, projectId) {
-  if (isInternal(projects.find((p) => p.id === projectId))) return false;
-  const assignment = assignments.find((a) => a.taskId === taskId && a.personId === personId);
-  const assigned = assignment ? assignedHours(assignment, ctx()) : 0;
-  return loggedHours(taskId, personId) - assigned > 0.005;
-}
-
-// [{ personId, name, hours, entries, tasks: [{ key, project, task, hours, entries }] }]
-function pendingGroups() {
-  const byPerson = new Map();
-  pendingEntries().forEach((e) => {
-    if (!byPerson.has(e.personId)) byPerson.set(e.personId, new Map());
-    const tasksMap = byPerson.get(e.personId);
-    const key = `${e.personId}|${e.taskId}`;
-    if (!tasksMap.has(key)) tasksMap.set(key, []);
-    tasksMap.get(key).push(e);
-  });
-  const order = sortProjects(projects).map((p) => p.id);
-  return [...byPerson].map(([personId, tasksMap]) => {
-    const taskRows = [...tasksMap].map(([key, entries]) => ({
-      key,
-      entries,
-      project: projects.find((p) => p.id === entries[0].projectId),
-      task: tasks.find((t) => t.id === entries[0].taskId),
-      hours: entries.reduce((s, e) => s + Number(e.hours || 0), 0),
-    })).sort((x, y) => order.indexOf(x.project?.id) - order.indexOf(y.project?.id)
-      || (x.task?.name || "").localeCompare(y.task?.name || ""));
-    const entries = taskRows.flatMap((t) => t.entries);
-    return {
-      personId,
-      name: personById(personId)?.name || "—",
-      hours: entries.reduce((s, e) => s + Number(e.hours || 0), 0),
-      entries,
-      tasks: taskRows,
-    };
-  }).sort((x, y) => x.name.localeCompare(y.name));
-}
-
-// "Oct 14", "Oct 14 – 16" or "Sep 30 – Oct 2" for a task's entries.
-function dateRange(entries) {
-  const dates = entries.map((e) => e.date).sort();
-  const fmt = (iso, opts) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", opts);
-  const a = dates[0], b = dates[dates.length - 1];
-  if (a === b) return fmt(a, { month: "short", day: "numeric" });
-  return a.slice(0, 7) === b.slice(0, 7)
-    ? `${fmt(a, { month: "short", day: "numeric" })} – ${fmt(b, { day: "numeric" })}`
-    : `${fmt(a, { month: "short", day: "numeric" })} – ${fmt(b, { month: "short", day: "numeric" })}`;
-}
-
-const apprDate = (iso) => new Date(iso + "T00:00:00")
-  .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-
-function renderPendingApproval() {
-  if (apprEditing && pendingBody.contains(document.activeElement) && document.activeElement.matches("input")) return;
-  const groups = pendingGroups();
-  if (groups.length === 0) {
-    pendingApprovalCard.style.display = "none";
-    return;
-  }
-  pendingApprovalCard.style.display = "block";
-  pendingTotal.textContent = `${fmtHrs(groups.reduce((s, g) => s + g.hours, 0))} hrs`;
-
-  pendingBody.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table">
-    <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" /><col /><col class="c-actions" /><col class="c-chev" /></colgroup>
-    <thead><tr><th>Date</th><th>Task</th><th class="num">Hours</th><th>Notes</th><th></th><th></th></tr></thead>
-    ${groups.map((g) => `<tbody>
-      <tr class="appr-person">
-        <td colspan="4"><strong>${esc(g.name)}</strong> <span class="appr-muted">${fmtHrs(g.hours)} hrs</span></td>
-        <td class="num" colspan="2">${g.tasks.length > 1
-          ? `<button type="button" class="link-btn" data-action="approve-person" data-id="${g.personId}">Approve all</button>` : ""}</td>
-      </tr>
-      ${g.tasks.map((t) => {
-        const open = openApprovalKey === t.key;
-        const over = isOverAssigned(g.personId, t.task?.id, t.project?.id);
-        return `<tr class="appr-row ${open ? "open" : ""}" data-key="${esc(t.key)}">
-          <td class="appr-date">${dateRange(t.entries)}</td>
-          <td class="appr-task" title="${esc((t.project?.name || "") + " · " + (t.task?.name || ""))}"><span class="pay-dot" style="--c:${t.project ? projectColor(t.project.id) : "#c9c2cf"};"></span>${t.project ? esc(t.project.name) : "—"} <span class="appr-muted">· ${t.task ? esc(t.task.name) : "—"}</span></td>
-          <td class="num appr-subtotal ${over ? "appr-over" : ""}" ${over ? 'title="More than their assigned hours on this task"' : ""}>${fmtHrs(t.hours)}</td>
-          <td class="appr-note appr-muted">${t.entries.length} ${t.entries.length === 1 ? "entry" : "entries"}</td>
-          <td class="num"><button type="button" class="small due-btn due-complete" data-action="approve-task" data-key="${esc(t.key)}">${t.entries.length > 1 ? `Approve all (${t.entries.length})` : "Approve"}</button></td>
-          <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
-        </tr>
-        ${open ? t.entries.map(entryRowHtml).join("") : ""}`;
-      }).join("")}
-    </tbody>`).join("")}
-  </table></div>`;
-}
-
-function entryRowHtml(e) {
-  const editing = apprEditing && apprEditing.id === e.id ? apprEditing.mode : null;
-  const date = `<td class="appr-date">${apprDate(e.date)}</td><td></td>`;
-  if (editing === "edit") {
-    return `<tr class="appr-entry editing" data-entry="${e.id}">${date}
-      <td class="num"><input type="number" class="appr-hours" min="0" step="0.25" value="${Number(e.hours)}" /></td>
-      <td><input type="text" class="appr-note-input" value="${esc(e.note || "")}" /></td>
-      <td class="num appr-actions" colspan="2">
-        <button type="button" class="link-btn" data-action="cancel-entry">Cancel</button>
-        <button type="button" class="small" data-action="save-entry" data-id="${e.id}">Save</button>
-      </td></tr>`;
-  }
-  if (editing === "decline") {
-    return `<tr class="appr-entry editing" data-entry="${e.id}">${date}
-      <td class="num">${fmtHrs(Number(e.hours))}</td>
-      <td><input type="text" class="appr-reason" placeholder="Reason (optional)" /></td>
-      <td class="num appr-actions" colspan="2">
-        <button type="button" class="link-btn" data-action="cancel-entry">Cancel</button>
-        <button type="button" class="small danger" data-action="confirm-decline" data-id="${e.id}">Decline</button>
-      </td></tr>`;
-  }
-  return `<tr class="appr-entry" data-entry="${e.id}">${date}
-    <td class="num">${fmtHrs(Number(e.hours))}</td>
-    <td class="appr-entry-note ${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}</td>
-    <td class="num appr-actions" colspan="2">
-      <button type="button" class="link-btn" data-action="edit-entry" data-id="${e.id}">Edit</button>
-      <button type="button" class="link-btn appr-decline" data-action="decline-entry" data-id="${e.id}">Decline</button>
-      <button type="button" class="link-btn appr-approve" data-action="approve-entry" data-id="${e.id}">Approve</button>
-    </td></tr>`;
-}
-
-async function approveIds(ids, message) {
-  try {
-    await TimeEntries.approve(ids);
-    showToast(message);
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-}
-
-pendingBody.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-action]");
-  if (!btn) {
-    const row = e.target.closest("tr.appr-row");
-    if (row) {
-      openApprovalKey = openApprovalKey === row.dataset.key ? null : row.dataset.key;
-      renderPendingApproval();
-    }
-    return;
-  }
-  const groups = pendingGroups();
-  const { action } = btn.dataset;
-  if (action === "edit-entry" || action === "decline-entry") {
-    apprEditing = { id: btn.dataset.id, mode: action === "edit-entry" ? "edit" : "decline" };
-    renderPendingApproval();
-    const input = pendingBody.querySelector(".appr-entry.editing input");
-    if (input) input.focus();
-    return;
-  }
-  if (action === "cancel-entry") {
-    apprEditing = null;
-    renderPendingApproval();
-    return;
-  }
-  if (action === "save-entry") {
-    const row = btn.closest("tr");
-    const hours = Number(row.querySelector(".appr-hours").value);
-    const note = row.querySelector(".appr-note-input").value.trim();
-    if (!(hours > 0) || hours > 24) return showToast("Enter hours between 0 and 24.");
-    try {
-      await TimeEntries.update(btn.dataset.id, { hours, note });
-      apprEditing = null;
-      renderPendingApproval();
-      showToast("Entry updated.");
-    } catch (err) {
-      showToast("Error: " + err.message);
-    }
-    return;
-  }
-  if (action === "confirm-decline") {
-    const reason = btn.closest("tr").querySelector(".appr-reason").value.trim();
-    try {
-      await TimeEntries.update(btn.dataset.id, { declined: true, declineReason: reason || null });
-      apprEditing = null;
-      renderPendingApproval();
-      showToast("Declined — sent back to their Timesheet.");
-    } catch (err) {
-      showToast("Error: " + err.message);
-    }
-    return;
-  }
-  if (action === "approve-entry") return approveIds([btn.dataset.id], "Approved.");
-  if (action === "approve-task") {
-    const t = groups.flatMap((g) => g.tasks).find((x) => x.key === btn.dataset.key);
-    if (t) return approveIds(t.entries.map((x) => x.id), "Approved.");
-  }
-  if (action === "approve-person") {
-    const g = groups.find((x) => x.personId === btn.dataset.id);
-    if (g) return approveIds(g.entries.map((x) => x.id), `${g.name}'s hours approved.`);
-  }
-});
-
-pendingBody.addEventListener("keydown", (e) => {
-  if (!e.target.matches(".appr-entry input")) return;
-  if (e.key === "Escape") { apprEditing = null; renderPendingApproval(); }
-  if (e.key === "Enter") e.target.closest("tr").querySelector("button.small")?.click();
-});
-
-approveAllBtn.addEventListener("click", async () => {
-  const ids = pendingEntries().map((e) => e.id);
-  if (ids.length === 0) return;
-  if (!confirm(`Approve all ${ids.length} pending ${ids.length === 1 ? "entry" : "entries"}?`)) return;
-  try {
-    await TimeEntries.approve(ids);
-    showToast("All entries approved.");
-  } catch (err) {
-    showToast("Error: " + err.message);
   }
 });
