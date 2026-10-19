@@ -1,4 +1,4 @@
-// Pending approval (on Admin): hours waiting on the projects you
+// Hours to approve (on Admin): hours waiting on the projects you
 // manage — or, for admins, on projects with no project manager yet. Grouped
 // by project, then one row per person; clicking a person lists each entry
 // (date, task, hours, note) with Edit, Decline and Approve. Declined entries
@@ -121,11 +121,13 @@ export function createApprovals({ getData, sessionPersonId }) {
     // Don't redraw under someone typing in an entry being edited.
     if (editing && body.contains(document.activeElement) && document.activeElement.matches("input")) return;
     const gs = groups();
+    card.style.display = "block";
+    approveAllBtn.style.display = gs.length ? "" : "none";
     if (gs.length === 0) {
-      card.style.display = "none";
+      total.textContent = "";
+      body.innerHTML = '<div class="empty">Nothing to approve.</div>';
       return;
     }
-    card.style.display = "block";
     total.textContent = `${fmtHrs(gs.reduce((s, g) => s + g.hours, 0))} hrs`;
 
     body.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table">
