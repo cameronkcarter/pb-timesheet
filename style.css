@@ -1084,7 +1084,7 @@ h1.login-title {
 
 .hours-row {
   display: grid;
-  grid-template-columns: minmax(140px, 300px) 1fr;
+  grid-template-columns: minmax(140px, 300px) minmax(0, 1fr);
   gap: 20px;
   align-items: center;
   padding: 8px 0;
@@ -2431,7 +2431,7 @@ button.link-btn.pay-more {
 
 /* Projects: narrower name column in an open task, more room for subtasks. */
 td.accordion-cell .hours-row {
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 180px minmax(0, 1fr);
 }
 
 /* Internal tasks: Task column width matches the name column of the people
