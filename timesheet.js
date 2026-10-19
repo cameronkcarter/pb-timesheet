@@ -50,7 +50,7 @@ function dayLabel(iso, opts = { weekday: "long", month: "short", day: "numeric",
   return new Date(iso + "T00:00:00").toLocaleDateString("en-US", opts);
 }
 
-wireLogout("logoutLink", "navBrandLink");
+wireLogout("logoutLink");
 
 if (selectedPersonId) {
   People.listen((data) => {

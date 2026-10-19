@@ -41,7 +41,7 @@ const historyCard = document.getElementById("historyCard");
 const historyTbody = document.querySelector("#historyTable tbody");
 const historyEmpty = document.getElementById("historyEmpty");
 
-wireLogout("logoutLink", "navBrandLink");
+wireLogout("logoutLink");
 
 if (sessionPersonId) {
   People.listen((d) => {

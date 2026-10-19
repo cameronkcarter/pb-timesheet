@@ -50,7 +50,7 @@ const timelineModal = document.getElementById("timelineModal");
 const timelineModalTitle = document.getElementById("timelineModalTitle");
 const timelineModalRows = document.getElementById("timelineModalRows");
 
-wireLogout("logoutLink", "navBrandLink");
+wireLogout("logoutLink");
 
 function loadSelectedProject() {
   try { return localStorage.getItem(SELECTED_PROJECT_KEY); } catch { return null; }

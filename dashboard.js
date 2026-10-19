@@ -26,7 +26,7 @@ const toggleCompletedBtn = document.getElementById("toggleCompletedBtn");
 const payToggle = document.getElementById("payToggle");
 const payPanel = document.getElementById("payPanel");
 
-wireLogout("logoutLink", "navBrandLink");
+wireLogout("logoutLink");
 
 if (selectedPersonId) {
   People.listen((d) => {

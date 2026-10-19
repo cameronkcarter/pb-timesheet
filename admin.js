@@ -27,7 +27,7 @@ let selectedProjectId = null;
 let modalEditingProjectId = null;
 let pendingTaskDeletions = new Set();
 
-wireLogout("logoutLink", "navBrandLink");
+wireLogout("logoutLink");
 
 if (sessionPersonId) {
   People.listen((d) => {
