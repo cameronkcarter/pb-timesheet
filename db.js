@@ -95,8 +95,8 @@ async function approve(ids) {
 
 // People documents look like:
 // { name, email (Google sign-in), rate (pay $/hr), billRate ($/hr charged to clients), isAdmin,
-//   password (optional, plain text), inactive (deactivated: hidden from login
-//   and pickers, kept on past records) }
+//   inactive (deactivated: can't sign in, hidden from pickers, kept on
+//   past records) }
 export const People = {
   listen: (cb) => listenCollection("people", cb, "name"),
   add: (data) => add("people", data),

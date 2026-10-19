@@ -2,7 +2,7 @@
 // by db.js when a test session is active. Each collection is lazily seeded
 // once per tab from a real one-time read of Firestore, then all further
 // reads/writes stay local to sessionStorage — nothing touches Firestore.
-import { db } from "./firebase-config.js";
+import { db, authReady } from "./firebase-config.js";
 import {
   collection,
   getDocs,
@@ -46,6 +46,7 @@ function notifyAll(name) {
 
 async function seedIfNeeded(name) {
   if (sessionStorage.getItem(seededKey(name))) return;
+  await authReady;
   const snap = await getDocs(collection(db, name));
   writeData(name, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   sessionStorage.setItem(seededKey(name), "true");

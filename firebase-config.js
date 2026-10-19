@@ -14,17 +14,36 @@ const firebaseConfig = {
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import {
+  getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut,
+} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-// This app has no real login screen (see README) — every visitor is signed
-// in anonymously so Firestore security rules can require request.auth != null,
-// which blocks anyone/any bot hitting the database directly without ever
-// loading the app. db.js awaits this before touching Firestore.
-export const authReady = signInAnonymously(auth).catch((err) => {
-  console.error("Anonymous sign-in failed:", err);
-  throw err;
+// Everyone signs in with Google (see login.js); security rules then check
+// their email against the staff list (see firestore.rules).
+
+// Resolves with the signed-in user, or null, once Firebase knows which.
+export const authChecked = new Promise((resolve) => {
+  const unsub = onAuthStateChanged(auth, (user) => { unsub(); resolve(user); });
 });
+
+// Resolves once someone is signed in. db.js awaits this before touching
+// Firestore; pages without a signed-in user are sent to the login page.
+export const authReady = new Promise((resolve) => {
+  const unsub = onAuthStateChanged(auth, (user) => {
+    if (user) { unsub(); resolve(user); }
+  });
+});
+
+export function signInWithGoogle() {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  return signInWithPopup(auth, provider);
+}
+
+export function signOutUser() {
+  return signOut(auth).catch(() => {});
+}

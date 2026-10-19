@@ -1,3 +1,6 @@
+import { authChecked, signOutUser, db } from "./firebase-config.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
 const KEY = "pb_session_person_id";
 const TEST_ACTIVE_KEY = "pb_test_active";
 const TEST_PERSON_KEY = "pb_test_person_id";
@@ -44,9 +47,10 @@ export function wireLogout(...ids) {
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener("click", (e) => {
+    el.addEventListener("click", async (e) => {
       e.preventDefault();
       clearSession();
+      await signOutUser();
       window.location.href = "index.html";
     });
   });
@@ -69,8 +73,18 @@ function renderTestModeBanner() {
   document.body.insertBefore(banner, document.body.firstChild);
 }
 
+// The staff list entry for a Google user: { personId, isAdmin }, or null if
+// they aren't on it.
+export async function staffEntryFor(user) {
+  if (!user || !user.email) return null;
+  const snap = await getDoc(doc(db, "staff", user.email.toLowerCase()));
+  return snap.exists() ? snap.data() : null;
+}
+
 // Call at the top of any page that requires someone to be logged in.
 // Redirects to the login page and returns null if no one is logged in.
+// Real sessions also need a Google sign-in that's on the staff list; if that
+// lapses or belongs to someone else, the page goes back to login.
 export function requireSession() {
   const id = getSessionPersonId();
   if (!id) {
@@ -78,6 +92,16 @@ export function requireSession() {
     return null;
   }
   renderTestModeBanner();
+  if (!isTestMode()) {
+    authChecked.then(async (user) => {
+      const entry = user ? await staffEntryFor(user).catch(() => null) : null;
+      if (!entry || entry.personId !== id) {
+        clearSession();
+        await signOutUser();
+        window.location.href = "index.html";
+      }
+    });
+  }
   return id;
 }
 

@@ -62,7 +62,6 @@ const modalPersonName = document.getElementById("modalPersonName");
 const modalPersonRate = document.getElementById("modalPersonRate");
 const modalPersonBillRate = document.getElementById("modalPersonBillRate");
 const modalPersonAdmin = document.getElementById("modalPersonAdmin");
-const modalPersonPassword = document.getElementById("modalPersonPassword");
 const modalPersonEmail = document.getElementById("modalPersonEmail");
 
 function renderPeople() {
@@ -123,6 +122,7 @@ async function syncStaff() {
     if (!cur || cur.personId !== data.personId || !!cur.isAdmin !== data.isAdmin) ops.push(Staff.set(email, data));
   });
   staff.filter((s) => !want.has(s.id)).forEach((s) => ops.push(Staff.remove(s.id)));
+  people.filter((p) => p.password).forEach((p) => ops.push(People.update(p.id, { password: null })));
   if (!ops.length) return;
   syncing = true;
   try { await Promise.all(ops); } catch (err) { showToast("Error updating sign-in list: " + err.message); }
@@ -160,7 +160,6 @@ function openPersonModal(person) {
   // New people start at the firm's standard bill rate.
   modalPersonBillRate.value = person ? (person.billRate ?? "") : DEFAULT_BILL_RATE;
   modalPersonAdmin.checked = person ? !!person.isAdmin : false;
-  modalPersonPassword.value = person ? (person.password || "") : "";
   modalPersonEmail.value = person ? (person.email || "") : "";
   personModal.style.display = "flex";
   modalPersonName.focus();
@@ -180,7 +179,6 @@ document.getElementById("modalSavePerson").addEventListener("click", async () =>
   const rate = Number(modalPersonRate.value);
   const billRate = modalPersonBillRate.value === "" ? null : Number(modalPersonBillRate.value);
   const isAdmin = modalPersonAdmin.checked;
-  const password = modalPersonPassword.value.trim() || null;
   const email = normEmail(modalPersonEmail.value) || null;
   if (!name || !rate) return showToast("Enter a name and pay rate.");
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return showToast("Enter a valid email.");
@@ -190,10 +188,10 @@ document.getElementById("modalSavePerson").addEventListener("click", async () =>
   if (billRate != null && !(billRate >= 0)) return showToast("Enter a valid bill rate.");
   try {
     if (modalEditingPersonId) {
-      await People.update(modalEditingPersonId, { name, email, rate, billRate, isAdmin, password });
+      await People.update(modalEditingPersonId, { name, email, rate, billRate, isAdmin, password: null });
       showToast("Person updated.");
     } else {
-      await People.add({ name, email, rate, billRate, isAdmin, password });
+      await People.add({ name, email, rate, billRate, isAdmin });
       showToast("Person added.");
     }
     closePersonModal();
