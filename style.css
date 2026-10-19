@@ -2718,7 +2718,7 @@ table.appr-table {
 }
 
 .appr-table col.c-date { width: 92px; }
-.appr-table col.c-task { width: 22%; }
+.appr-table col.c-task { width: 28%; }
 .appr-table col.c-hours { width: 64px; }
 .appr-table col.c-actions { width: 172px; }
 .appr-table col.c-chev { width: 30px; }
@@ -2798,4 +2798,8 @@ table.appr-table {
   font-size: 12px;
   font-weight: 600;
   color: var(--red);
+}
+
+.appr-table td.appr-subtotal {
+  font-weight: 700;
 }

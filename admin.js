@@ -886,16 +886,13 @@ function renderPendingApproval() {
       </tr>
       ${g.tasks.map((t) => {
         const open = openApprovalKey === t.key;
-        const notes = t.entries.filter((e) => e.note);
         const over = isOverAssigned(g.personId, t.task?.id, t.project?.id);
         return `<tr class="appr-row ${open ? "open" : ""}" data-key="${esc(t.key)}">
           <td class="appr-date">${dateRange(t.entries)}</td>
           <td class="appr-task" title="${esc((t.project?.name || "") + " · " + (t.task?.name || ""))}"><span class="pay-dot" style="--c:${t.project ? projectColor(t.project.id) : "#c9c2cf"};"></span>${t.project ? esc(t.project.name) : "—"} <span class="appr-muted">· ${t.task ? esc(t.task.name) : "—"}</span></td>
-          <td class="num ${over ? "appr-over" : ""}" ${over ? 'title="More than their assigned hours on this task"' : ""}>${fmtHrs(t.hours)}</td>
-          <td class="appr-note">${notes.length
-            ? `${esc(notes[notes.length - 1].note)}${notes.length > 1 ? ` <span class="appr-muted">+${notes.length - 1}</span>` : ""}`
-            : '<span class="appr-muted">—</span>'}</td>
-          <td class="num"><button type="button" class="small due-btn due-complete" data-action="approve-task" data-key="${esc(t.key)}">Approve</button></td>
+          <td class="num appr-subtotal ${over ? "appr-over" : ""}" ${over ? 'title="More than their assigned hours on this task"' : ""}>${fmtHrs(t.hours)}</td>
+          <td class="appr-note appr-muted">${t.entries.length} ${t.entries.length === 1 ? "entry" : "entries"}</td>
+          <td class="num"><button type="button" class="small due-btn due-complete" data-action="approve-task" data-key="${esc(t.key)}">${t.entries.length > 1 ? `Approve all (${t.entries.length})` : "Approve"}</button></td>
           <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
         </tr>
         ${open ? t.entries.map(entryRowHtml).join("") : ""}`;
