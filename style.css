@@ -2659,3 +2659,112 @@ table.inv-people {
   color: var(--text-muted);
   border-bottom: none;
 }
+
+/* ---------- Admin: pending approval ---------- */
+.appr-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.appr-head h2 {
+  margin: 0;
+}
+
+.appr-head h2 span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.appr-head button {
+  margin: 0;
+}
+
+.appr-muted {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.appr-table tr.appr-person td {
+  padding-top: 14px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.appr-table tbody:first-of-type tr.appr-person td {
+  padding-top: 8px;
+}
+
+.appr-table tr.appr-row {
+  cursor: pointer;
+}
+
+.appr-table tr.appr-row:hover td {
+  background: #faf7fc;
+}
+
+.appr-table tr.appr-row.open td {
+  background: #f5eef8;
+  border-bottom-color: transparent;
+}
+
+.appr-table td.proj {
+  width: auto;
+  white-space: nowrap;
+}
+
+.appr-table td.appr-note {
+  width: 100%;
+  max-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appr-table button.small {
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.appr-table .chev.up {
+  transform: rotate(180deg);
+}
+
+.appr-table tr.appr-detail > td {
+  background: #faf8fb;
+  padding: 6px 16px 10px;
+  white-space: normal;
+}
+
+.appr-entry {
+  display: grid;
+  grid-template-columns: 110px 60px 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 5px 0;
+  font-size: 13px;
+}
+
+.appr-entry + .appr-entry {
+  border-top: 1px solid #eee8f2;
+}
+
+.appr-entry .link-btn {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .appr-entry {
+    grid-template-columns: 90px 50px 1fr;
+  }
+  .appr-entry .link-btn {
+    grid-column: 3;
+    justify-self: start;
+  }
+}

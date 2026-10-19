@@ -23,14 +23,11 @@
   <h1>Admin</h1>
 
   <div class="card" id="pendingApprovalCard" style="display:none;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0;">Pending Approval</h2>
-      <button id="approveAllBtn" class="secondary small">Approve All</button>
+    <div class="appr-head">
+      <h2>Pending approval <span id="pendingTotal"></span></h2>
+      <button id="approveAllBtn" class="small">Approve all</button>
     </div>
-    <table id="pendingApprovalTable" style="margin-top:16px;">
-      <thead><tr><th>Date</th><th>Person</th><th>Project</th><th>Task</th><th>Hours</th><th style="width:100px;"></th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <div id="pendingBody"></div>
   </div>
 
   <div class="card">

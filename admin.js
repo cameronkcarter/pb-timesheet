@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, normEmail } from "./db.js";
 import {
-  formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor, budgetBarHtml, sortProjects, esc,
+  formatCurrency, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor, budgetBarHtml, sortProjects, esc,
 } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
@@ -793,109 +793,135 @@ taskBlocks.addEventListener("click", async (e) => {
   }
 });
 
-// ---------- Pending Approval ----------
+// ---------- Pending approval ----------
+// Grouped by person, then one row per task with their notes up front.
+// Clicking a task row shows each entry (date, hours, note).
 const pendingApprovalCard = document.getElementById("pendingApprovalCard");
-const pendingApprovalTbody = document.querySelector("#pendingApprovalTable tbody");
+const pendingBody = document.getElementById("pendingBody");
+const pendingTotal = document.getElementById("pendingTotal");
 const approveAllBtn = document.getElementById("approveAllBtn");
 
-let expandedApprovalPersonId = null;
+let openApprovalKey = null; // "<personId>|<taskId>"
 
 function pendingEntries() {
   return timeEntries
     .filter((e) => !e.approved && !e.invoiced)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
-// True when this person has logged more on the entry's task than assigned.
-function isOverAssigned(e) {
-  if (isInternal(projects.find((p) => p.id === e.projectId))) return false;
-  const assignment = assignments.find((a) => a.taskId === e.taskId && a.personId === e.personId);
+// True when this person has logged more on the task than assigned.
+function isOverAssigned(personId, taskId, projectId) {
+  if (isInternal(projects.find((p) => p.id === projectId))) return false;
+  const assignment = assignments.find((a) => a.taskId === taskId && a.personId === personId);
   const assigned = assignment ? assignedHours(assignment, ctx()) : 0;
-  return loggedHours(e.taskId, e.personId) - assigned > 0.005;
+  return loggedHours(taskId, personId) - assigned > 0.005;
 }
 
-function pendingByPerson() {
-  const byPerson = {};
+// [{ personId, name, hours, entries, tasks: [{ key, project, task, hours, entries }] }]
+function pendingGroups() {
+  const byPerson = new Map();
   pendingEntries().forEach((e) => {
-    if (!byPerson[e.personId]) byPerson[e.personId] = [];
-    byPerson[e.personId].push(e);
+    if (!byPerson.has(e.personId)) byPerson.set(e.personId, new Map());
+    const tasksMap = byPerson.get(e.personId);
+    const key = `${e.personId}|${e.taskId}`;
+    if (!tasksMap.has(key)) tasksMap.set(key, []);
+    tasksMap.get(key).push(e);
   });
-  return Object.entries(byPerson).map(([personId, entries]) => {
-    const person = people.find((p) => p.id === personId);
-    const totalHours = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
-    return { personId, name: person ? person.name : "—", entries, totalHours };
-  }).sort((a, b) => a.name.localeCompare(b.name));
+  const order = sortProjects(projects).map((p) => p.id);
+  return [...byPerson].map(([personId, tasksMap]) => {
+    const taskRows = [...tasksMap].map(([key, entries]) => ({
+      key,
+      entries,
+      project: projects.find((p) => p.id === entries[0].projectId),
+      task: tasks.find((t) => t.id === entries[0].taskId),
+      hours: entries.reduce((s, e) => s + Number(e.hours || 0), 0),
+    })).sort((x, y) => order.indexOf(x.project?.id) - order.indexOf(y.project?.id)
+      || (x.task?.name || "").localeCompare(y.task?.name || ""));
+    const entries = taskRows.flatMap((t) => t.entries);
+    return {
+      personId,
+      name: personById(personId)?.name || "—",
+      hours: entries.reduce((s, e) => s + Number(e.hours || 0), 0),
+      entries,
+      tasks: taskRows,
+    };
+  }).sort((x, y) => x.name.localeCompare(y.name));
 }
+
+const apprDate = (iso) => new Date(iso + "T00:00:00")
+  .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 function renderPendingApproval() {
-  const groups = pendingByPerson();
+  const groups = pendingGroups();
   if (groups.length === 0) {
     pendingApprovalCard.style.display = "none";
     return;
   }
   pendingApprovalCard.style.display = "block";
+  pendingTotal.textContent = `${fmtHrs(groups.reduce((s, g) => s + g.hours, 0))} hrs`;
 
-  pendingApprovalTbody.innerHTML = groups.map((g) => {
-    const expanded = g.personId === expandedApprovalPersonId;
-    const mainRow = `<tr class="task-row ${expanded ? "expanded" : ""}" data-person-row="${g.personId}">
-      <td colspan="4">${esc(g.name)} <span class="empty" style="padding:0;">(${g.entries.length} ${g.entries.length === 1 ? "entry" : "entries"})</span>${g.entries.some(isOverAssigned) ? " <span class=\"pill orange\">Over assigned hours</span>" : ""}</td>
-      <td>${g.totalHours.toFixed(2)}</td>
-      <td class="row-actions">
-        <button class="small" data-action="approve-person" data-id="${g.personId}">Approve All</button>
-      </td>
-    </tr>`;
-
-    if (!expanded) return mainRow;
-
-    const subRows = g.entries.map((e) => {
-      const project = projects.find((p) => p.id === e.projectId);
-      const task = tasks.find((t) => t.id === e.taskId);
-      const noteHtml = e.note ? `<div class="empty" style="padding:2px 0 0;">${esc(e.note)}</div>` : "";
-      return `<tr class="pending-sub-row">
-        <td>${formatDate(e.date)}</td>
+  pendingBody.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table">
+    <thead><tr><th>Task</th><th class="num">Hours</th><th>Notes</th><th></th><th></th></tr></thead>
+    ${groups.map((g) => `<tbody>
+      <tr class="appr-person">
+        <td colspan="2"><strong>${esc(g.name)}</strong> <span class="appr-muted">${fmtHrs(g.hours)} hrs</span></td>
         <td></td>
-        <td>${project ? esc(project.name) : "—"}</td>
-        <td>${task ? esc(task.name) : "—"}${isOverAssigned(e) ? " <span class=\"pill orange\" title=\"This person has logged more on this task than they are assigned\">Over assigned</span>" : ""}${noteHtml}</td>
-        <td>${e.hours}</td>
-        <td class="row-actions">
-          <button class="small" data-action="approve-entry" data-id="${e.id}">Approve</button>
-        </td>
-      </tr>`;
-    }).join("");
-
-    return mainRow + subRows;
-  }).join("");
+        <td class="num" colspan="2">${g.tasks.length > 1
+          ? `<button type="button" class="link-btn" data-action="approve-person" data-id="${g.personId}">Approve all</button>` : ""}</td>
+      </tr>
+      ${g.tasks.map((t) => {
+        const open = openApprovalKey === t.key;
+        const notes = t.entries.filter((e) => e.note);
+        const over = isOverAssigned(g.personId, t.task?.id, t.project?.id);
+        return `<tr class="appr-row ${open ? "open" : ""}" data-key="${esc(t.key)}">
+          <td class="proj"><span class="pay-dot" style="--c:${t.project ? projectColor(t.project.id) : "#c9c2cf"};"></span>${t.project ? esc(t.project.name) : "—"} <span class="appr-muted">· ${t.task ? esc(t.task.name) : "—"}</span>${over ? ' <span class="pay-status pending" title="Logged more than assigned on this task">Over assigned</span>' : ""}</td>
+          <td class="num">${fmtHrs(t.hours)}</td>
+          <td class="appr-note">${notes.length
+            ? `${esc(notes[notes.length - 1].note)}${notes.length > 1 ? ` <span class="appr-muted">+${notes.length - 1}</span>` : ""}`
+            : '<span class="appr-muted">—</span>'}</td>
+          <td class="num"><button type="button" class="small due-btn due-complete" data-action="approve-task" data-key="${esc(t.key)}">Approve</button></td>
+          <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
+        </tr>
+        ${open ? `<tr class="appr-detail"><td colspan="5">${t.entries.map((e) => `<div class="appr-entry">
+            <span class="appr-muted">${apprDate(e.date)}</span>
+            <span>${fmtHrs(Number(e.hours))} hrs</span>
+            <span class="${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}</span>
+            ${t.entries.length > 1 ? `<button type="button" class="link-btn" data-action="approve-entry" data-id="${e.id}">Approve</button>` : "<span></span>"}
+          </div>`).join("")}</td></tr>` : ""}`;
+      }).join("")}
+    </tbody>`).join("")}
+  </table></div>`;
 }
 
-pendingApprovalTbody.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button");
+async function approveIds(ids, message) {
+  try {
+    await TimeEntries.approve(ids);
+    showToast(message);
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
+pendingBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
   if (!btn) {
-    const row = e.target.closest("tr.task-row");
+    const row = e.target.closest("tr.appr-row");
     if (row) {
-      const id = row.dataset.personRow;
-      expandedApprovalPersonId = expandedApprovalPersonId === id ? null : id;
+      openApprovalKey = openApprovalKey === row.dataset.key ? null : row.dataset.key;
       renderPendingApproval();
     }
     return;
   }
-  const { action, id } = btn.dataset;
-  if (action === "approve-entry") {
-    try {
-      await TimeEntries.approve([id]);
-      showToast("Entry approved.");
-    } catch (err) {
-      showToast("Error: " + err.message);
-    }
+  const groups = pendingGroups();
+  const { action } = btn.dataset;
+  if (action === "approve-entry") return approveIds([btn.dataset.id], "Approved.");
+  if (action === "approve-task") {
+    const t = groups.flatMap((g) => g.tasks).find((x) => x.key === btn.dataset.key);
+    if (t) return approveIds(t.entries.map((x) => x.id), "Approved.");
   }
   if (action === "approve-person") {
-    const group = pendingByPerson().find((g) => g.personId === id);
-    if (!group) return;
-    try {
-      await TimeEntries.approve(group.entries.map((e) => e.id));
-      showToast(`${group.name}'s hours approved.`);
-    } catch (err) {
-      showToast("Error: " + err.message);
-    }
+    const g = groups.find((x) => x.personId === btn.dataset.id);
+    if (g) return approveIds(g.entries.map((x) => x.id), `${g.name}'s hours approved.`);
   }
 });
 
