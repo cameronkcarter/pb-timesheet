@@ -1,8 +1,8 @@
-import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices } from "./db.js";
+import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, normEmail } from "./db.js";
 import {
   formatCurrency, formatDate, showToast, fmtHrs, closeOnBackdropClick, hoursBarHtml, projectColor, budgetBarHtml, sortProjects, esc,
 } from "./util.js";
-import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
+import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
 import {
   DEFAULT_BILL_RATE, billRateOf, assignmentRate, assignedHours, isInternal, personPayRate, personBillRate,
@@ -19,6 +19,8 @@ let timeEntries = [];
 let dueDates = [];
 let invoices = [];
 let adminCheckDone = false;
+let staff = [];
+let staffLoaded = false;
 
 let modalEditingPersonId = null;
 let selectedProjectId = null;
@@ -39,7 +41,9 @@ if (sessionPersonId) {
     renderPeople();
     renderTasks();
     renderPendingApproval();
+    syncStaff();
   });
+  Staff.listen((d) => { staff = d; staffLoaded = true; syncStaff(); });
   Projects.listen((d) => { projects = d; renderProjectCards(); renderPendingApproval(); });
   Tasks.listen((d) => { tasks = d; renderTasks(); renderPendingApproval(); });
   Assignments.listen((d) => { assignments = d; renderTasks(); renderPendingApproval(); });
@@ -59,6 +63,7 @@ const modalPersonRate = document.getElementById("modalPersonRate");
 const modalPersonBillRate = document.getElementById("modalPersonBillRate");
 const modalPersonAdmin = document.getElementById("modalPersonAdmin");
 const modalPersonPassword = document.getElementById("modalPersonPassword");
+const modalPersonEmail = document.getElementById("modalPersonEmail");
 
 function renderPeople() {
   if (people.length === 0) {
@@ -72,7 +77,8 @@ function renderPeople() {
     (!!a.inactive - !!b.inactive) || personPayRate(b) - personPayRate(a) || a.name.localeCompare(b.name));
   peopleTbody.innerHTML = byPay.map((p, i) => `
     <tr class="${i % 2 === 1 ? "stripe-row" : ""} ${p.inactive ? "inactive-row" : ""}">
-      <td>${esc(p.name)}${p.isAdmin ? ' <span class="pill orange">Admin</span>' : ""}${p.inactive ? ' <span class="pill">Inactive</span>' : ""}</td>
+      <td>${esc(p.name)}${p.isAdmin ? ' <span class="pill orange">Admin</span>' : ""}${p.inactive ? ' <span class="pill">Inactive</span>' : ""}
+        <div class="person-email ${p.email ? "" : "missing"}">${p.email ? esc(p.email) : "No email"}</div></td>
       <td>${formatCurrency(personPayRate(p))}/hr</td>
       <td>${formatCurrency(personBillRate(p))}/hr${p.billRate == null ? ' <span class="empty" style="padding:0;">(not set — using pay rate)</span>' : ""}</td>
       <td><div class="row-actions" style="justify-content:flex-end;">
@@ -98,6 +104,30 @@ peopleTbody.addEventListener("click", async (e) => {
     try { await People.update(id, { inactive: false }); showToast("Reactivated."); } catch (err) { showToast("Error: " + err.message); }
   }
 });
+
+// Keep the Google sign-in list (Staff) matching People: one entry per active
+// person with an email, carrying their admin flag. Runs whenever either
+// changes, so adding an email, toggling admin or deactivating someone
+// updates who can sign in.
+let syncing = false;
+async function syncStaff() {
+  if (!staffLoaded || syncing || isTestMode()) return;
+  const me = people.find((p) => p.id === sessionPersonId);
+  if (!me || !me.isAdmin) return;
+  const want = new Map(people
+    .filter((p) => !p.inactive && normEmail(p.email))
+    .map((p) => [normEmail(p.email), { personId: p.id, isAdmin: !!p.isAdmin }]));
+  const ops = [];
+  want.forEach((data, email) => {
+    const cur = staff.find((s) => s.id === email);
+    if (!cur || cur.personId !== data.personId || !!cur.isAdmin !== data.isAdmin) ops.push(Staff.set(email, data));
+  });
+  staff.filter((s) => !want.has(s.id)).forEach((s) => ops.push(Staff.remove(s.id)));
+  if (!ops.length) return;
+  syncing = true;
+  try { await Promise.all(ops); } catch (err) { showToast("Error updating sign-in list: " + err.message); }
+  syncing = false;
+}
 
 // People with logged hours or task assignments can't be deleted without
 // breaking history (timesheets, invoices), so they're deactivated instead:
@@ -131,6 +161,7 @@ function openPersonModal(person) {
   modalPersonBillRate.value = person ? (person.billRate ?? "") : DEFAULT_BILL_RATE;
   modalPersonAdmin.checked = person ? !!person.isAdmin : false;
   modalPersonPassword.value = person ? (person.password || "") : "";
+  modalPersonEmail.value = person ? (person.email || "") : "";
   personModal.style.display = "flex";
   modalPersonName.focus();
 }
@@ -150,14 +181,19 @@ document.getElementById("modalSavePerson").addEventListener("click", async () =>
   const billRate = modalPersonBillRate.value === "" ? null : Number(modalPersonBillRate.value);
   const isAdmin = modalPersonAdmin.checked;
   const password = modalPersonPassword.value.trim() || null;
+  const email = normEmail(modalPersonEmail.value) || null;
   if (!name || !rate) return showToast("Enter a name and pay rate.");
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return showToast("Enter a valid email.");
+  if (email && people.some((p) => p.id !== modalEditingPersonId && normEmail(p.email) === email)) {
+    return showToast("Someone else already has that email.");
+  }
   if (billRate != null && !(billRate >= 0)) return showToast("Enter a valid bill rate.");
   try {
     if (modalEditingPersonId) {
-      await People.update(modalEditingPersonId, { name, rate, billRate, isAdmin, password });
+      await People.update(modalEditingPersonId, { name, email, rate, billRate, isAdmin, password });
       showToast("Person updated.");
     } else {
-      await People.add({ name, rate, billRate, isAdmin, password });
+      await People.add({ name, email, rate, billRate, isAdmin, password });
       showToast("Person added.");
     }
     closePersonModal();

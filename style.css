@@ -2586,3 +2586,13 @@ td.accordion-cell .hours-row {
 th.internal-task-col {
   width: 210px;
 }
+
+.person-email {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.person-email.missing {
+  color: #9a5a16;
+  font-weight: 600;
+}

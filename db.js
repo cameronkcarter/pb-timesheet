@@ -2,6 +2,7 @@ import { db, authReady } from "./firebase-config.js";
 import {
   collection,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   doc,
@@ -93,7 +94,7 @@ async function approve(ids) {
 }
 
 // People documents look like:
-// { name, rate (pay $/hr), billRate ($/hr charged to clients), isAdmin,
+// { name, email (Google sign-in), rate (pay $/hr), billRate ($/hr charged to clients), isAdmin,
 //   password (optional, plain text), inactive (deactivated: hidden from login
 //   and pickers, kept on past records) }
 export const People = {
@@ -102,6 +103,26 @@ export const People = {
   update: (id, data) => update("people", id, data),
   remove: (id) => remove("people", id),
 };
+
+// Staff documents are the Google sign-in list, one per active person with an
+// email: id = lowercase email, { personId, isAdmin }. Admin keeps them in
+// sync with People (see admin.js); security rules use them to decide who can
+// read and write what (see firestore.rules).
+export const Staff = {
+  listen: (cb) => listenCollection("staff", cb),
+  async set(email, data) {
+    if (isTestMode()) return;
+    await authReady;
+    return setDoc(doc(db, "staff", email), data);
+  },
+  async remove(email) {
+    if (isTestMode()) return;
+    await authReady;
+    return deleteDoc(doc(db, "staff", email));
+  },
+};
+
+export const normEmail = (e) => String(e || "").trim().toLowerCase();
 
 // Project documents look like:
 // { name, client, projectNumber, billToName, billToCompany, billToAddress1,
