@@ -74,10 +74,9 @@ function nextInvoiceNumber() {
 // One table for every billable project: a row per project for approved hours
 // not invoiced yet (its next invoice), then past invoices, newest first. Paid
 // invoices are hidden unless asked for. Clicking a row shows each person's
-// hours (with their notes) and lets you edit the invoice # and billing period,
-// generate the invoice, or download it again.
+// hours (with their notes). The next invoice's # and billing period can be
+// edited until it's generated; after that they're locked.
 const drafts = {};        // projectId -> { number, label } typed over
-const invoiceEdits = {};  // invoiceId -> { number, label } typed over
 let openRow = null;       // "next:<projectId>" or "inv:<invoiceId>"
 let openNotes = null;     // personId whose notes show in the open row
 let showPaid = false;
@@ -140,13 +139,12 @@ function invoiceRows() {
   return [...invoices]
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .map((inv) => {
-      const edit = invoiceEdits[inv.id] || {};
       const entries = timeEntries.filter((e) => e.invoiceId === inv.id);
       return {
         key: `inv:${inv.id}`, kind: "inv", inv, entries,
         project: projects.find((p) => p.id === inv.projectId),
-        number: edit.number ?? inv.invoiceNumber,
-        label: edit.label ?? (inv.periodLabel || ""),
+        number: inv.invoiceNumber,
+        label: inv.periodLabel || "",
         amount: Number(inv.total || 0),
         hours: entries.length ? sumHours(entries) : (inv.laborRows || []).reduce((s, r) => s + Number(r.hours || 0), 0),
       };
@@ -219,14 +217,12 @@ function detailHtml(row) {
       </div>`;
   }
   const inv = row.inv;
-  const edited = row.number !== inv.invoiceNumber || row.label !== (inv.periodLabel || "");
   const canPdf = !inv.historical && inv.taskRows && inv.laborRows;
-  return `${fieldsHtml(row)}
+  return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}</div>` : ""}
     ${peopleHtml(row.key, row.entries, inv.laborRows)}
     <div class="inv-actions">
-      ${edited ? '<button type="button" class="secondary" data-action="cancel-edit">Cancel</button><button type="button" data-action="save">Save</button>' : ""}
-      ${!edited && canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
-      ${!edited && !inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : ""}
+      ${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
+      ${!inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : ""}
     </div>`;
 }
 
@@ -292,18 +288,8 @@ invoiceBody.addEventListener("input", (e) => {
   const field = e.target.dataset.field;
   if (!field || !openRow) return;
   const [kind, id] = openRow.split(":");
-  const store = kind === "next" ? drafts : invoiceEdits;
-  store[id] = { ...(store[id] || {}), [field]: e.target.value };
-  if (kind === "inv") {
-    // Show Save/Cancel as soon as something changes.
-    const row = currentRow();
-    const actions = invoiceBody.querySelector(".inv-actions");
-    if (row && actions) {
-      const tmp = document.createElement("div");
-      tmp.innerHTML = detailHtml(row);
-      actions.replaceWith(tmp.querySelector(".inv-actions"));
-    }
-  }
+  if (kind !== "next") return;
+  drafts[id] = { ...(drafts[id] || {}), [field]: e.target.value };
 });
 
 invoiceBody.addEventListener("keydown", (e) => {
@@ -331,12 +317,6 @@ invoiceBody.addEventListener("click", async (e) => {
   if (!row) return;
   if (action === "preview" || action === "generate") return generate(row, action === "preview", btn);
   if (action === "pdf") return downloadPdf(row.inv);
-  if (action === "cancel-edit") {
-    delete invoiceEdits[row.inv.id];
-    render();
-    return;
-  }
-  if (action === "save") return saveInvoiceEdit(row);
   if (action === "mark-paid") return markPaid(row.inv);
 });
 
@@ -677,8 +657,7 @@ async function generate(row, isPreview, btn) {
   }
 }
 
-// Re-download a past invoice's PDF from what was saved when it was made
-// (with any edited invoice # or billing period).
+// Re-download a past invoice's PDF from what was saved when it was made.
 async function downloadPdf(inv) {
   const project = projects.find((p) => p.id === inv.projectId) || { name: inv.projectName || "Project" };
   try {
@@ -698,23 +677,6 @@ async function downloadPdf(inv) {
       laborRows: inv.laborRows,
       laborTotal: inv.total,
     });
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-}
-
-async function saveInvoiceEdit(row) {
-  const inv = row.inv;
-  const invoiceNumber = row.number.trim();
-  const periodLabel = row.label.trim();
-  if (!invoiceNumber) return showToast("Enter an invoice #.");
-  if (invoiceNumber !== inv.invoiceNumber && invoices.some((i) => i.id !== inv.id && i.invoiceNumber === invoiceNumber) &&
-    !confirm(`Invoice # ${invoiceNumber} has already been used. Use it again anyway?`)) return;
-  try {
-    await Invoices.update(inv.id, { invoiceNumber, periodLabel });
-    delete invoiceEdits[inv.id];
-    showToast("Invoice updated.");
-    render();
   } catch (err) {
     showToast("Error: " + err.message);
   }
