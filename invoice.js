@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, TimeEntries, Invoices } from "./db.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
-  formatCurrency, formatDate, daysAgo, showToast,
+  formatCurrency, showToast, fmtHrs,
   lastDayOfMonth, formatShortMDY, toISODate, sortProjects, esc, projectColor,
 } from "./util.js";
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
@@ -27,19 +27,11 @@ let projects = [];
 let tasks = [];
 let timeEntries = [];
 let invoices = [];
-let selectedProjectId = null;
 let adminCheckDone = false;
-let expandedInvoiceId = null;
-let expandedNotesKey = null;
 
-const projectCardsEl = document.getElementById("projectCards");
-const projectCardsEmpty = document.getElementById("projectCardsEmpty");
-const outstandingHeading = document.getElementById("outstandingHeading");
-const monthsContainer = document.getElementById("monthsContainer");
-const monthsEmpty = document.getElementById("monthsEmpty");
-const historyCard = document.getElementById("historyCard");
-const historyTbody = document.querySelector("#historyTable tbody");
-const historyEmpty = document.getElementById("historyEmpty");
+const invoiceBody = document.getElementById("invoiceBody");
+const invoiceTotals = document.getElementById("invoiceTotals");
+const togglePaidBtn = document.getElementById("togglePaid");
 
 wireLogout("logoutLink");
 
@@ -52,12 +44,12 @@ if (sessionPersonId) {
       if (!enforceAdmin(me)) return;
       renderNavUserName(me);
     }
-    renderDraft();
+    render();
   });
-  Projects.listen((d) => { projects = d; renderProjectCards(); });
-  Tasks.listen((d) => { tasks = d; renderDraft(); });
-  TimeEntries.listen((d) => { timeEntries = d; renderDraft(); });
-  Invoices.listen((d) => { invoices = d; renderHistory(); renderSheetSync(); });
+  Projects.listen((d) => { projects = d; render(); });
+  Tasks.listen((d) => { tasks = d; render(); });
+  TimeEntries.listen((d) => { timeEntries = d; render(); });
+  Invoices.listen((d) => { invoices = d; render(); renderSheetSync(); });
 }
 
 // Invoices charge each person's bill rate (or pay rate on projects billed at
@@ -78,68 +70,22 @@ function nextInvoiceNumber() {
   return `${base}-${n}`;
 }
 
-// ---------- Project cards ----------
+// ---------- Invoices table ----------
+// One table for every billable project: a row per project for approved hours
+// not invoiced yet (its next invoice), then past invoices, newest first. Paid
+// invoices are hidden unless asked for. Clicking a row shows each person's
+// hours (with their notes) and lets you edit the invoice # and billing period,
+// generate the invoice, or download it again.
+const drafts = {};        // projectId -> { number, label } typed over
+const invoiceEdits = {};  // invoiceId -> { number, label } typed over
+let openRow = null;       // "next:<projectId>" or "inv:<invoiceId>"
+let openNotes = null;     // personId whose notes show in the open row
+let showPaid = false;
+let renderDeferred = false;
+
 // Internal projects (e.g. Proposals & Pursuits) are never invoiced.
 function billableProjects() {
   return sortProjects(projects.filter((p) => !p.internal));
-}
-
-function renderProjectCards() {
-  const billable = billableProjects();
-  if (billable.length === 0) {
-    projectCardsEl.innerHTML = "";
-    projectCardsEmpty.style.display = "block";
-    outstandingHeading.style.display = "none";
-    monthsContainer.innerHTML = "";
-    monthsEmpty.style.display = "none";
-    historyCard.style.display = "none";
-    return;
-  }
-  projectCardsEmpty.style.display = "none";
-
-  if (!selectedProjectId || !billable.some((p) => p.id === selectedProjectId)) {
-    selectedProjectId = billable[0].id;
-  }
-
-  projectCardsEl.innerHTML = billable.map((p) => `
-    <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
-      <div class="name">${esc(p.name)}</div>
-      <div class="client">${p.client ? esc(p.client) : "&nbsp;"}</div>
-    </div>
-  `).join("");
-
-  renderDraft();
-  renderHistory();
-}
-
-projectCardsEl.addEventListener("click", (e) => {
-  const card = e.target.closest(".project-card");
-  if (!card) return;
-  selectedProjectId = card.dataset.projectCard;
-  expandedInvoiceId = null;
-  expandedNotesKey = null;
-  renderProjectCards();
-});
-
-// ---------- Ready to invoice (all approved, uninvoiced hours) ----------
-// One draft invoice per project covering every approved hour not yet invoiced.
-// The date range defaults to the earliest/latest such hours but can be
-// narrowed, and the billing period label (e.g. "August – September 2026")
-// follows the range unless it's been typed over.
-let draft = null; // { projectId, from, to, label, rangeTouched, labelTouched }
-
-function uninvoicedEntries({ approved }) {
-  if (!selectedProjectId) return [];
-  return timeEntries.filter((e) =>
-    e.projectId === selectedProjectId && !e.invoiced && !!e.approved === approved);
-}
-
-function inDraftRange(e) {
-  return !!draft && e.date >= draft.from && e.date <= draft.to;
-}
-
-function draftEntries() {
-  return uninvoicedEntries({ approved: true }).filter(inDraftRange);
 }
 
 function periodLabelFor(from, to) {
@@ -149,12 +95,6 @@ function periodLabelFor(from, to) {
   if (a.getFullYear() !== b.getFullYear()) return `${month(a)} ${a.getFullYear()} – ${month(b)} ${b.getFullYear()}`;
   if (a.getMonth() !== b.getMonth()) return `${month(a)} – ${month(b)} ${b.getFullYear()}`;
   return `${month(a)} ${a.getFullYear()}`;
-}
-
-function notesForPerson(personId) {
-  return draftEntries()
-    .filter((e) => e.personId === personId && e.note)
-    .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
 function groupByPerson(entries) {
@@ -173,176 +113,236 @@ function groupByPerson(entries) {
   });
 }
 
-function hoursSummary(entries) {
-  const hours = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
-  return `${hours.toFixed(2)} hrs (${entries.length} ${entries.length === 1 ? "entry" : "entries"})`;
+const sumHours = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+const shortDate = (iso) => new Date(String(iso).slice(0, 10) + "T00:00:00")
+  .toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+// Next invoice per project: its approved, uninvoiced hours.
+function nextRows() {
+  return billableProjects().map((project) => {
+    const open = timeEntries.filter((e) => e.projectId === project.id && !e.invoiced);
+    const entries = open.filter((e) => e.approved);
+    const pending = open.filter((e) => !e.approved);
+    if (!open.length) return null;
+    const dates = (entries.length ? entries : pending).map((e) => e.date).sort();
+    const draft = drafts[project.id] || {};
+    return {
+      key: `next:${project.id}`, kind: "next", project, entries, pending,
+      from: dates[0], to: dates[dates.length - 1],
+      number: draft.number ?? nextInvoiceNumber(),
+      label: draft.label ?? periodLabelFor(dates[0], dates[dates.length - 1]),
+      amount: groupByPerson(entries).reduce((s, r) => s + r.total, 0),
+    };
+  }).filter(Boolean);
 }
 
-function renderDraft() {
-  if (!selectedProjectId || projects.length === 0) {
-    outstandingHeading.style.display = "none";
-    monthsContainer.innerHTML = "";
-    monthsEmpty.style.display = "none";
-    return;
-  }
-
-  const approved = uninvoicedEntries({ approved: true });
-  const pending = uninvoicedEntries({ approved: false });
-  if (approved.length === 0) {
-    draft = null;
-    outstandingHeading.style.display = "none";
-    monthsContainer.innerHTML = "";
-    monthsEmpty.style.display = "block";
-    monthsEmpty.textContent = pending.length
-      ? `Nothing ready to invoice — ${hoursSummary(pending)} still waiting for approval in Admin.`
-      : "No uninvoiced hours for this project — everything logged so far has already been invoiced.";
-    return;
-  }
-  outstandingHeading.style.display = "block";
-  monthsEmpty.style.display = "none";
-
-  const dates = approved.map((e) => e.date).sort();
-  if (!draft || draft.projectId !== selectedProjectId) {
-    draft = { projectId: selectedProjectId, rangeTouched: false, labelTouched: false, number: nextInvoiceNumber() };
-  }
-  if (!draft.rangeTouched) {
-    draft.from = dates[0];
-    draft.to = dates[dates.length - 1];
-  }
-  if (!draft.labelTouched) draft.label = periodLabelFor(draft.from, draft.to);
-
-  if (!monthsContainer.querySelector("#draftFrom")) {
-    monthsContainer.innerHTML = `<div class="card">
-      <div class="inline-form">
-        <div>
-          <label for="draftFrom">Hours from</label>
-          <input type="date" id="draftFrom" />
-        </div>
-        <div>
-          <label for="draftTo">Through</label>
-          <input type="date" id="draftTo" />
-        </div>
-        <div style="flex:2;">
-          <label for="draftLabel">Billing period (shown on the invoice)</label>
-          <input type="text" id="draftLabel" />
-        </div>
-        <div style="flex:0 0 150px;">
-          <label for="draftNumber">Invoice #</label>
-          <input type="text" id="draftNumber" />
-        </div>
-      </div>
-      <div id="draftBody"></div>
-      <div class="row-actions" style="margin-top:16px;">
-        <button class="secondary" data-action="preview">Preview PDF (Test)</button>
-        <button data-action="generate">Generate Invoice</button>
-      </div>
-    </div>`;
-  }
-  const setIfIdle = (id, value) => {
-    const el = document.getElementById(id);
-    if (document.activeElement !== el) el.value = value;
-  };
-  setIfIdle("draftFrom", draft.from);
-  setIfIdle("draftTo", draft.to);
-  setIfIdle("draftLabel", draft.label);
-  setIfIdle("draftNumber", draft.number);
-  renderDraftBody(approved, pending);
+function invoiceRows() {
+  return [...invoices]
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .map((inv) => {
+      const edit = invoiceEdits[inv.id] || {};
+      const entries = timeEntries.filter((e) => e.invoiceId === inv.id);
+      return {
+        key: `inv:${inv.id}`, kind: "inv", inv, entries,
+        project: projects.find((p) => p.id === inv.projectId),
+        number: edit.number ?? inv.invoiceNumber,
+        label: edit.label ?? (inv.periodLabel || ""),
+        amount: Number(inv.total || 0),
+        hours: entries.length ? sumHours(entries) : (inv.laborRows || []).reduce((s, r) => s + Number(r.hours || 0), 0),
+      };
+    });
 }
 
-function renderDraftBody(approved, pending) {
-  const body = document.getElementById("draftBody");
-  const entries = approved.filter(inDraftRange);
-  const laborRows = groupByPerson(entries).sort((a, b) => a.name.localeCompare(b.name));
-  const grand = laborRows.reduce((s, r) => s + r.total, 0);
-  const hours = laborRows.reduce((s, r) => s + r.hours, 0);
-
-  const notices = [];
-  const pendingInRange = pending.filter(inDraftRange);
-  if (pendingInRange.length) {
-    notices.push(`${hoursSummary(pendingInRange)} in this range ${pendingInRange.length === 1 ? "is" : "are"} still pending approval and won't be included — approve in Admin first.`);
+function statusHtml(row) {
+  if (row.kind === "next") {
+    return row.entries.length
+      ? '<span class="pay-status paid">Ready</span>'
+      : '<span class="pay-status pending">Needs approval</span>';
   }
-  const outside = approved.filter((e) => !inDraftRange(e));
-  if (outside.length) {
-    notices.push(`${hoursSummary(outside)} of approved hours fall outside this range and will stay uninvoiced. <a href="#" data-action="reset-range">Include all</a>`);
-  }
+  const inv = row.inv;
+  return (inv.paid
+    ? `<span class="pay-status paid">Paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}</span>`
+    : '<span class="pay-status invoiced">Awaiting client</span>') +
+    (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — click Sync">Not in sheet</span>' : "");
+}
 
-  const rowsHtml = laborRows.map((r) => {
-    const isOpen = expandedNotesKey === r.personId;
-    const notes = notesForPerson(r.personId);
-    return `
-      <tr>
+// Each person's hours, bill rate, amount billed and pay, then the firm's
+// overhead (billed minus pay), with each person's notes on request.
+function peopleHtml(rowKey, entries, fallbackRows) {
+  const rows = (entries.length ? groupByPerson(entries) : (fallbackRows || []))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (!rows.length) return '<div class="empty">No hours.</div>';
+  const ctx = { projects, people };
+  const payOf = (personId) => entries.length
+    ? paidAmount(entries.filter((e) => e.personId === personId), ctx) : null;
+  const totalPay = entries.length ? paidAmount(entries, ctx) : null;
+  const totalBilled = rows.reduce((s, r) => s + r.total, 0);
+  return `<table class="inv-people">
+    <thead><tr><th>Person</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Billed</th><th class="num">Pay</th><th></th></tr></thead>
+    <tbody>${rows.map((r) => {
+      const notes = entries.filter((e) => e.personId === r.personId && e.note)
+        .sort((a, b) => (a.date < b.date ? -1 : 1));
+      const open = openNotes === r.personId;
+      return `<tr>
         <td>${esc(r.name)}</td>
-        <td>${r.hours.toFixed(2)}</td>
-        <td>${formatCurrency(r.rate)}</td>
-        <td>${formatCurrency(r.total)}</td>
-        <td><button class="small secondary" data-action="toggle-notes" data-key="${r.personId}">${isOpen ? "Hide notes" : "View notes"}</button></td>
+        <td class="num">${fmtHrs(r.hours)}</td>
+        <td class="num">${formatCurrency(r.rate)}</td>
+        <td class="num">${formatCurrency(r.total)}</td>
+        <td class="num">${payOf(r.personId) == null ? "—" : formatCurrency(payOf(r.personId))}</td>
+        <td class="num">${notes.length ? `<button type="button" class="link-btn" data-action="notes" data-person="${r.personId}">Notes (${notes.length}) <span class="chev ${open ? "up" : ""}">&#9662;</span></button>` : ""}</td>
       </tr>
-      ${isOpen ? `<tr class="notes-row"><td colspan="5">
-        ${notes.length === 0
-          ? '<div class="empty">No notes logged for this person in this range.</div>'
-          : notes.map((e) => `<div>${formatDate(e.date)} — ${Number(e.hours).toFixed(2)}h: ${esc(e.note)}</div>`).join("")}
-      </td></tr>` : ""}`;
-  }).join("");
-
-  // Admin-only page, so show what the firm keeps when billing above pay rates.
-  const staffPay = paidAmount(entries, { projects, people });
-  const overheadHtml = entries.length && Math.abs(grand - staffPay) > 0.005
-    ? `<div class="empty" style="padding-top:10px;">Staff pay for these hours: ${formatCurrency(staffPay)} &middot; Firm overhead: <strong>${formatCurrency(grand - staffPay)}</strong></div>`
-    : "";
-
-  body.innerHTML = `
-    ${notices.map((n) => `<div class="draft-notice">${n}</div>`).join("")}
-    ${entries.length === 0
-      ? '<div class="empty">No approved hours in this date range.</div>'
-      : `<table style="margin-top:16px;">
-          <thead><tr><th>Person</th><th>Hours</th><th>Rate</th><th>Total</th><th></th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
-          <tfoot><tr><td>Total</td><td>${hours.toFixed(2)}</td><td></td><td>${formatCurrency(grand)}</td><td></td></tr></tfoot>
-        </table>`}
-    ${overheadHtml}`;
-  monthsContainer.querySelectorAll('[data-action="preview"], [data-action="generate"]')
-    .forEach((b) => { b.disabled = entries.length === 0; });
+      ${open && notes.length ? `<tr class="inv-notes"><td colspan="6">${notes.map((e) =>
+        `<div><span>${shortDate(e.date)} · ${fmtHrs(Number(e.hours))} hrs</span>${esc(e.note)}</div>`).join("")}</td></tr>` : ""}`;
+    }).join("")}
+    ${totalPay != null ? `<tr class="inv-overhead">
+      <td>Overhead</td><td></td><td></td><td></td>
+      <td class="num">${formatCurrency(totalBilled - totalPay)}</td><td></td>
+    </tr>` : ""}</tbody>
+  </table>`;
 }
 
-monthsContainer.addEventListener("input", (e) => {
-  if (!draft) return;
-  if (e.target.id === "draftFrom" || e.target.id === "draftTo") {
-    const value = e.target.value;
-    if (!value) return;
-    draft.rangeTouched = true;
-    if (e.target.id === "draftFrom") draft.from = value; else draft.to = value;
-    if (!draft.labelTouched) {
-      draft.label = periodLabelFor(draft.from, draft.to);
-      document.getElementById("draftLabel").value = draft.label;
-    }
-    renderDraft();
+function fieldsHtml(row) {
+  return `<div class="inv-fields">
+    <label>Invoice #<input type="text" data-field="number" value="${esc(row.number)}" /></label>
+    <label>Billing period<input type="text" data-field="label" value="${esc(row.label)}" /></label>
+  </div>`;
+}
+
+function detailHtml(row) {
+  if (row.kind === "next") {
+    return `${fieldsHtml(row)}
+      ${row.pending.length ? `<div class="inv-note">${fmtHrs(sumHours(row.pending))} hrs awaiting approval won't be included.</div>` : ""}
+      ${peopleHtml(row.key, row.entries)}
+      <div class="inv-actions">
+        <button type="button" class="secondary" data-action="preview" ${row.entries.length ? "" : "disabled"}>Preview PDF</button>
+        <button type="button" data-action="generate" ${row.entries.length ? "" : "disabled"}>Generate invoice</button>
+      </div>`;
   }
-  if (e.target.id === "draftNumber") draft.number = e.target.value;
-  if (e.target.id === "draftLabel") {
-    draft.label = e.target.value;
-    draft.labelTouched = e.target.value.trim() !== "";
+  const inv = row.inv;
+  const edited = row.number !== inv.invoiceNumber || row.label !== (inv.periodLabel || "");
+  const canPdf = !inv.historical && inv.taskRows && inv.laborRows;
+  return `${fieldsHtml(row)}
+    ${peopleHtml(row.key, row.entries, inv.laborRows)}
+    <div class="inv-actions">
+      ${edited ? '<button type="button" class="secondary" data-action="cancel-edit">Cancel</button><button type="button" data-action="save">Save</button>' : ""}
+      ${!edited && canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
+      ${!edited && !inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : ""}
+    </div>`;
+}
+
+function render() {
+  // Don't redraw under someone typing in an invoice # or billing period.
+  if (invoiceBody.contains(document.activeElement) && document.activeElement.matches("input")) {
+    renderDeferred = true;
+    return;
+  }
+  renderDeferred = false;
+
+  const next = nextRows();
+  const past = invoiceRows();
+  const paidCount = past.filter((r) => r.inv.paid).length;
+  const rows = [...next, ...past.filter((r) => showPaid || !r.inv.paid)];
+
+  const ready = next.reduce((s, r) => s + r.amount, 0);
+  const awaiting = past.filter((r) => !r.inv.paid).reduce((s, r) => s + r.amount, 0);
+  invoiceTotals.innerHTML = `<span><i class="dot ready"></i>Ready <strong>${formatCurrency(ready)}</strong></span>
+    <span><i class="dot invoiced"></i>Awaiting client <strong>${formatCurrency(awaiting)}</strong></span>`;
+  togglePaidBtn.style.display = paidCount ? "" : "none";
+  togglePaidBtn.textContent = showPaid ? "Hide paid" : `Show paid (${paidCount})`;
+
+  if (!rows.length) {
+    invoiceBody.innerHTML = '<div class="empty">Nothing to invoice.</div>';
+    return;
+  }
+
+  invoiceBody.innerHTML = `<div class="pay-scroll"><table class="pay-table inv-table">
+    <thead><tr>
+      <th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th>
+    </tr></thead>
+    <tbody>${rows.map((row) => {
+      const open = openRow === row.key;
+      // Projects with only unapproved hours show those hours, and no amount yet.
+      const waiting = row.kind === "next" && !row.entries.length;
+      const hours = row.kind === "next" ? sumHours(waiting ? row.pending : row.entries) : row.hours;
+      const date = row.kind === "next" ? "" : row.inv.date;
+      const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
+      return `<tr class="inv-row ${open ? "open" : ""} ${row.kind === "next" ? "next" : ""}" data-row="${esc(row.key)}">
+        <td class="${date ? "" : "blank"}">${date ? shortDate(date) : "—"}</td>
+        <td class="${row.kind === "next" ? "blank" : ""}">${row.kind === "next" ? "—" : esc(row.inv.invoiceNumber)}</td>
+        <td class="proj"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(name)}</td>
+        <td class="num">${fmtHrs(hours)}</td>
+        <td class="num ${waiting ? "blank" : ""}">${waiting ? "—" : `<strong>${formatCurrency(row.amount)}</strong>`}</td>
+        <td>${statusHtml(row)}</td>
+        <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
+      </tr>
+      ${open ? `<tr class="inv-detail"><td colspan="7">${detailHtml(row)}</td></tr>` : ""}`;
+    }).join("")}</tbody>
+  </table></div>`;
+}
+
+function currentRow() {
+  return [...nextRows(), ...invoiceRows()].find((r) => r.key === openRow);
+}
+
+invoiceBody.addEventListener("focusout", () => {
+  setTimeout(() => { if (renderDeferred && !invoiceBody.contains(document.activeElement)) render(); }, 0);
+});
+
+invoiceBody.addEventListener("input", (e) => {
+  const field = e.target.dataset.field;
+  if (!field || !openRow) return;
+  const [kind, id] = openRow.split(":");
+  const store = kind === "next" ? drafts : invoiceEdits;
+  store[id] = { ...(store[id] || {}), [field]: e.target.value };
+  if (kind === "inv") {
+    // Show Save/Cancel as soon as something changes.
+    const row = currentRow();
+    const actions = invoiceBody.querySelector(".inv-actions");
+    if (row && actions) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = detailHtml(row);
+      actions.replaceWith(tmp.querySelector(".inv-actions"));
+    }
   }
 });
 
-monthsContainer.addEventListener("click", async (e) => {
-  const notesBtn = e.target.closest('[data-action="toggle-notes"]');
-  if (notesBtn) {
-    const key = notesBtn.dataset.key;
-    expandedNotesKey = expandedNotesKey === key ? null : key;
-    renderDraft();
+invoiceBody.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.dataset.field) e.target.blur();
+});
+
+invoiceBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) {
+    const tr = e.target.closest("tr.inv-row");
+    if (tr) {
+      openRow = openRow === tr.dataset.row ? null : tr.dataset.row;
+      openNotes = null;
+      render();
+    }
     return;
   }
-  if (e.target.closest('[data-action="reset-range"]')) {
-    e.preventDefault();
-    draft.rangeTouched = false;
-    draft.labelTouched = false;
-    document.getElementById("draftLabel").blur();
-    renderDraft();
+  const row = currentRow();
+  const action = btn.dataset.action;
+  if (action === "notes") {
+    openNotes = openNotes === btn.dataset.person ? null : btn.dataset.person;
+    render();
     return;
   }
-  const actionBtn = e.target.closest('[data-action="preview"], [data-action="generate"]');
-  if (!actionBtn) return;
-  await generate(actionBtn.dataset.action === "preview");
+  if (!row) return;
+  if (action === "preview" || action === "generate") return generate(row, action === "preview", btn);
+  if (action === "pdf") return downloadPdf(row.inv);
+  if (action === "cancel-edit") {
+    delete invoiceEdits[row.inv.id];
+    render();
+    return;
+  }
+  if (action === "save") return saveInvoiceEdit(row);
+  if (action === "mark-paid") return markPaid(row.inv);
+});
+
+togglePaidBtn.addEventListener("click", () => {
+  showPaid = !showPaid;
+  render();
 });
 
 // ---------- Shared invoice math ----------
@@ -620,25 +620,20 @@ async function buildPdf(data) {
   doc.save(`${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`);
 }
 
-async function generate(isPreview) {
-  const project = projects.find((p) => p.id === selectedProjectId);
-  const entries = draftEntries();
+async function generate(row, isPreview, btn) {
+  const { project, entries } = row;
   if (!project || entries.length === 0) return;
-  if (draft.from > draft.to) return showToast("The start date is after the end date.");
-  const periodLabel = draft.label.trim() || periodLabelFor(draft.from, draft.to);
+  const periodLabel = row.label.trim() || periodLabelFor(row.from, row.to);
+  const invoiceNumber = row.number.trim() || nextInvoiceNumber();
+  if (!isPreview && invoices.some((i) => i.invoiceNumber === invoiceNumber) &&
+    !confirm(`Invoice # ${invoiceNumber} has already been used. Use it again anyway?`)) return;
 
-  const buttons = [...monthsContainer.querySelectorAll('[data-action="preview"], [data-action="generate"]')];
+  const buttons = [...invoiceBody.querySelectorAll(".inv-actions button")];
   buttons.forEach((b) => { b.disabled = true; });
   try {
     const computed = computeInvoiceData(project, entries);
     const invoiceDate = new Date();
     const dueDate = lastDayOfMonth(invoiceDate);
-    const invoiceNumber = (draft.number || "").trim() || nextInvoiceNumber();
-    if (invoices.some((i) => i.invoiceNumber === invoiceNumber) && !isPreview &&
-      !confirm(`Invoice # ${invoiceNumber} has already been used. Use it again anyway?`)) {
-      buttons.forEach((b) => { b.disabled = false; });
-      return;
-    }
 
     await buildPdf({
       project, invoiceNumber, invoiceDate, dueDate,
@@ -653,8 +648,8 @@ async function generate(isPreview) {
         date: toISODate(invoiceDate),
         dueDate: toISODate(dueDate),
         periodLabel,
-        periodStart: draft.from,
-        periodEnd: draft.to,
+        periodStart: row.from,
+        periodEnd: row.to,
         taskRows: computed.taskRows,
         laborRows: computed.laborRows,
         feeTotal: computed.feeTotal,
@@ -667,7 +662,8 @@ async function generate(isPreview) {
       });
       const billRates = Object.fromEntries(entries.map((e) => [e.id, entryRate(e)]));
       await TimeEntries.markInvoiced(entries.map((e) => e.id), ref.id, billRates);
-      draft = null;
+      delete drafts[project.id];
+      openRow = `inv:${ref.id}`;
       showToast("Invoice generated.");
       syncSheet();
     } else {
@@ -677,94 +673,65 @@ async function generate(isPreview) {
     showToast("Error: " + err.message);
   } finally {
     buttons.forEach((b) => { b.disabled = false; });
-    renderDraft();
+    render();
   }
 }
 
-// ---------- Invoice history ----------
-function renderHistory() {
-  if (!selectedProjectId) {
-    historyCard.style.display = "none";
-    return;
+// Re-download a past invoice's PDF from what was saved when it was made
+// (with any edited invoice # or billing period).
+async function downloadPdf(inv) {
+  const project = projects.find((p) => p.id === inv.projectId) || { name: inv.projectName || "Project" };
+  try {
+    await buildPdf({
+      project,
+      invoiceNumber: inv.invoiceNumber,
+      invoiceDate: new Date(inv.date + "T00:00:00"),
+      dueDate: new Date((inv.dueDate || inv.date) + "T00:00:00"),
+      periodLabel: inv.periodLabel || "",
+      isPreview: false,
+      taskRows: inv.taskRows,
+      feeTotal: inv.feeTotal,
+      billedTotal: inv.billedTotal,
+      currentTotal: inv.currentTotal,
+      remainingTotal: inv.remainingTotal,
+      pctTotal: inv.pctTotal,
+      laborRows: inv.laborRows,
+      laborTotal: inv.total,
+    });
+  } catch (err) {
+    showToast("Error: " + err.message);
   }
-  historyCard.style.display = "block";
-
-  const projectInvoices = invoices
-    .filter((i) => i.projectId === selectedProjectId)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  if (projectInvoices.length === 0) {
-    historyTbody.innerHTML = "";
-    historyEmpty.style.display = "block";
-    return;
-  }
-  historyEmpty.style.display = "none";
-
-  historyTbody.innerHTML = projectInvoices.map((inv) => {
-    const statusPill = (inv.paid
-      ? `<span class="pill green">Paid</span>`
-      : `<span class="pill orange">Outstanding</span>`) +
-      (sheetSyncEnabled() && !inv.sheetSynced ? ` <span class="pill red" title="Not yet logged in the Google Sheet — click Sync Now">Not in sheet</span>` : "");
-    const mainRow = `<tr class="task-row" data-invoice-row="${inv.id}">
-      <td>${inv.periodLabel || "—"}</td>
-      <td>${inv.invoiceNumber}</td>
-      <td>${formatDate(inv.date)}</td>
-      <td>${formatCurrency(inv.total)}</td>
-      <td>${statusPill}</td>
-      <td class="row-actions">
-        ${!inv.paid ? `<button class="small" data-action="mark-paid" data-id="${inv.id}">Mark Paid</button>` : `<span class="empty">${inv.paidDate ? "Paid " + daysAgo(inv.paidDate) : ""}</span>`}
-      </td>
-    </tr>`;
-
-    if (inv.id !== expandedInvoiceId) return mainRow;
-
-    const taskLines = inv.taskBreakdown
-      ? inv.taskBreakdown.map((r) => `<div>${r.name} — ${formatCurrency(r.amount)}</div>`).join("")
-      : (inv.taskRows || []).map((r) =>
-          `<div>${r.name} — Budget ${formatCurrency(r.budget)}, Billed ${formatCurrency(r.billed)}, Current ${formatCurrency(r.current)}, Complete ${r.pct}%, Remaining ${formatCurrency(r.remaining)}</div>`
-        ).join("");
-    const laborLines = (inv.laborRows || []).map((r) =>
-      `<div>${r.name} — ${r.hours.toFixed(2)} hrs @ ${formatCurrency(r.rate)} = ${formatCurrency(r.total)}</div>`
-    ).join("");
-
-    return mainRow + `<tr>
-      <td colspan="6" class="accordion-cell">
-        <div style="font-weight:600; margin-bottom:4px;">${inv.historical ? "Work Breakdown" : "Project Summary"}</div>
-        ${taskLines || '<div class="empty">No task data saved for this invoice.</div>'}
-        <div style="font-weight:600; margin:10px 0 4px;">Labor</div>
-        ${laborLines || '<div class="empty">No labor data saved for this invoice.</div>'}
-        <div style="font-weight:600; margin-top:10px;">Total: ${formatCurrency(inv.total)}</div>
-      </td>
-    </tr>`;
-  }).join("");
 }
 
-historyTbody.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) {
-    const row = e.target.closest("tr.task-row");
-    if (row) {
-      const id = row.dataset.invoiceRow;
-      expandedInvoiceId = expandedInvoiceId === id ? null : id;
-      renderHistory();
-    }
-    return;
+async function saveInvoiceEdit(row) {
+  const inv = row.inv;
+  const invoiceNumber = row.number.trim();
+  const periodLabel = row.label.trim();
+  if (!invoiceNumber) return showToast("Enter an invoice #.");
+  if (invoiceNumber !== inv.invoiceNumber && invoices.some((i) => i.id !== inv.id && i.invoiceNumber === invoiceNumber) &&
+    !confirm(`Invoice # ${invoiceNumber} has already been used. Use it again anyway?`)) return;
+  try {
+    await Invoices.update(inv.id, { invoiceNumber, periodLabel });
+    delete invoiceEdits[inv.id];
+    showToast("Invoice updated.");
+    render();
+  } catch (err) {
+    showToast("Error: " + err.message);
   }
+}
 
-  const { action, id } = btn.dataset;
-  if (action === "mark-paid") {
-    if (!confirm("Mark this invoice as paid? This will also mark its hours as paid on the Timesheet.")) return;
-    try {
-      const linkedEntries = timeEntries.filter((entry) => entry.invoiceId === id);
-      await TimeEntries.markPaid(linkedEntries.map((entry) => entry.id));
-      await Invoices.update(id, { paid: true, paidDate: new Date().toISOString(), sheetSynced: false });
-      showToast("Invoice marked as paid.");
-      syncSheet();
-    } catch (err) {
-      showToast("Error: " + err.message);
-    }
+async function markPaid(inv) {
+  if (!confirm("Mark this invoice as paid? Its hours will show as client-paid.")) return;
+  try {
+    const linkedEntries = timeEntries.filter((entry) => entry.invoiceId === inv.id);
+    await TimeEntries.markPaid(linkedEntries.map((entry) => entry.id));
+    await Invoices.update(inv.id, { paid: true, paidDate: new Date().toISOString(), sheetSynced: false });
+    showToast("Invoice marked as paid.");
+    syncSheet();
+  } catch (err) {
+    showToast("Error: " + err.message);
   }
-});
+}
 
 // ---------- Google Sheet log ----------
 const sheetSyncBar = document.getElementById("sheetSyncBar");
@@ -832,7 +799,7 @@ async function syncSheet({ manual = false } = {}) {
   } finally {
     sheetSyncing = false;
     renderSheetSync();
-    renderHistory();
+    render();
     if (sheetSyncQueued) {
       sheetSyncQueued = false;
       syncSheet();
