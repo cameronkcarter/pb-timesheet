@@ -92,7 +92,7 @@ function render() {
 
   // Your pay that the client hasn't paid yet: not invoiced + invoiced.
   const payOf = (entries) => paidAmount(entries, { projects, people });
-  const notInvoiced = payOf(myEntries.filter((e) => !e.invoiced));
+  const notInvoiced = payOf(myEntries.filter((e) => !e.invoiced && !e.declined));
   const invoicedUnpaid = payOf(myEntries.filter((e) => e.invoiced && !e.paid));
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid);
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
@@ -215,8 +215,9 @@ function renderPay(myEntries) {
   const hoursOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
   // Not invoiced yet: one row per project.
-  const upcoming = [...new Set(billable.filter((e) => !e.invoiced).map((e) => e.projectId))].map((pid) => {
-    const entries = billable.filter((e) => !e.invoiced && e.projectId === pid);
+  const open = billable.filter((e) => !e.invoiced && !e.declined);
+  const upcoming = [...new Set(open.map((e) => e.projectId))].map((pid) => {
+    const entries = open.filter((e) => e.projectId === pid);
     return { date: "", number: "", projectId: pid, entries, status: ["Not invoiced", "pending"] };
   });
 

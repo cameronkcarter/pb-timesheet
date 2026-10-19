@@ -89,6 +89,7 @@ function statusPill(e) {
   if (e.paid) return '<span class="pill green">Paid</span>';
   if (e.invoiced) return '<span class="pill blue">Invoiced</span>';
   if (e.approved) return '<span class="pill teal">Approved</span>';
+  if (e.declined) return '<span class="pill red">Declined</span>';
   return '<span class="pill orange">Pending Approval</span>';
 }
 
@@ -168,7 +169,8 @@ function renderDayEntries(entries) {
   const rows = entries.map((e) => {
     const project = projects.find((p) => p.id === e.projectId);
     const task = tasks.find((t) => t.id === e.taskId);
-    const noteHtml = e.note ? `<div class="empty" style="padding:2px 0 0;">${esc(e.note)}</div>` : "";
+    const noteHtml = (e.note ? `<div class="empty" style="padding:2px 0 0;">${esc(e.note)}</div>` : "") +
+      (e.declined && !e.approved && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : "");
     return `<tr>
       <td><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(project.name) : "—"}</td>
       <td>${task ? esc(task.name) : "—"}${noteHtml}</td>
@@ -458,9 +460,12 @@ submitEntry.addEventListener("click", async () => {
   }
 
   const autoApprove = selectedProjectIsInternal();
-  const approval = autoApprove
-    ? { approved: true, approvedDate: new Date().toISOString() }
-    : { approved: false, approvedDate: null };
+  const approval = {
+    ...(autoApprove
+      ? { approved: true, approvedDate: new Date().toISOString() }
+      : { approved: false, approvedDate: null }),
+    declined: false, declineReason: null, // an edit resubmits a declined entry
+  };
   try {
     if (editingEntryId) {
       // Editing can move an entry to another task on the same day.

@@ -795,17 +795,20 @@ taskBlocks.addEventListener("click", async (e) => {
 
 // ---------- Pending approval ----------
 // Grouped by person, then one row per task with their notes up front.
-// Clicking a task row shows each entry (date, hours, note).
+// Clicking a task row lists each entry (date, hours, note) with Edit,
+// Decline and Approve. Declined entries go back to the person's Timesheet
+// (with the reason) and return here once they edit them.
 const pendingApprovalCard = document.getElementById("pendingApprovalCard");
 const pendingBody = document.getElementById("pendingBody");
 const pendingTotal = document.getElementById("pendingTotal");
 const approveAllBtn = document.getElementById("approveAllBtn");
 
 let openApprovalKey = null; // "<personId>|<taskId>"
+let apprEditing = null;      // { id, mode: "edit" | "decline" }
 
 function pendingEntries() {
   return timeEntries
-    .filter((e) => !e.approved && !e.invoiced)
+    .filter((e) => !e.approved && !e.invoiced && !e.declined)
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
@@ -852,6 +855,7 @@ const apprDate = (iso) => new Date(iso + "T00:00:00")
   .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 function renderPendingApproval() {
+  if (apprEditing && pendingBody.contains(document.activeElement) && document.activeElement.matches("input")) return;
   const groups = pendingGroups();
   if (groups.length === 0) {
     pendingApprovalCard.style.display = "none";
@@ -882,15 +886,41 @@ function renderPendingApproval() {
           <td class="num"><button type="button" class="small due-btn due-complete" data-action="approve-task" data-key="${esc(t.key)}">Approve</button></td>
           <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
         </tr>
-        ${open ? `<tr class="appr-detail"><td colspan="5">${t.entries.map((e) => `<div class="appr-entry">
-            <span class="appr-muted">${apprDate(e.date)}</span>
-            <span>${fmtHrs(Number(e.hours))} hrs</span>
-            <span class="${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}</span>
-            ${t.entries.length > 1 ? `<button type="button" class="link-btn" data-action="approve-entry" data-id="${e.id}">Approve</button>` : "<span></span>"}
-          </div>`).join("")}</td></tr>` : ""}`;
+        ${open ? t.entries.map(entryRowHtml).join("") : ""}`;
       }).join("")}
     </tbody>`).join("")}
   </table></div>`;
+}
+
+function entryRowHtml(e) {
+  const editing = apprEditing && apprEditing.id === e.id ? apprEditing.mode : null;
+  const date = `<td class="appr-date">${apprDate(e.date)}</td>`;
+  if (editing === "edit") {
+    return `<tr class="appr-entry editing" data-entry="${e.id}">${date}
+      <td class="num"><input type="number" class="appr-hours" min="0" step="0.25" value="${Number(e.hours)}" /></td>
+      <td><input type="text" class="appr-note-input" value="${esc(e.note || "")}" /></td>
+      <td class="num appr-actions" colspan="2">
+        <button type="button" class="link-btn" data-action="cancel-entry">Cancel</button>
+        <button type="button" class="small" data-action="save-entry" data-id="${e.id}">Save</button>
+      </td></tr>`;
+  }
+  if (editing === "decline") {
+    return `<tr class="appr-entry editing" data-entry="${e.id}">${date}
+      <td class="num">${fmtHrs(Number(e.hours))}</td>
+      <td><input type="text" class="appr-reason" placeholder="Reason (optional)" /></td>
+      <td class="num appr-actions" colspan="2">
+        <button type="button" class="link-btn" data-action="cancel-entry">Cancel</button>
+        <button type="button" class="small danger" data-action="confirm-decline" data-id="${e.id}">Decline</button>
+      </td></tr>`;
+  }
+  return `<tr class="appr-entry" data-entry="${e.id}">${date}
+    <td class="num">${fmtHrs(Number(e.hours))}</td>
+    <td class="appr-entry-note ${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}</td>
+    <td class="num appr-actions" colspan="2">
+      <button type="button" class="link-btn" data-action="edit-entry" data-id="${e.id}">Edit</button>
+      <button type="button" class="link-btn appr-decline" data-action="decline-entry" data-id="${e.id}">Decline</button>
+      <button type="button" class="link-btn appr-approve" data-action="approve-entry" data-id="${e.id}">Approve</button>
+    </td></tr>`;
 }
 
 async function approveIds(ids, message) {
@@ -914,6 +944,45 @@ pendingBody.addEventListener("click", async (e) => {
   }
   const groups = pendingGroups();
   const { action } = btn.dataset;
+  if (action === "edit-entry" || action === "decline-entry") {
+    apprEditing = { id: btn.dataset.id, mode: action === "edit-entry" ? "edit" : "decline" };
+    renderPendingApproval();
+    const input = pendingBody.querySelector(".appr-entry.editing input");
+    if (input) input.focus();
+    return;
+  }
+  if (action === "cancel-entry") {
+    apprEditing = null;
+    renderPendingApproval();
+    return;
+  }
+  if (action === "save-entry") {
+    const row = btn.closest("tr");
+    const hours = Number(row.querySelector(".appr-hours").value);
+    const note = row.querySelector(".appr-note-input").value.trim();
+    if (!(hours > 0) || hours > 24) return showToast("Enter hours between 0 and 24.");
+    try {
+      await TimeEntries.update(btn.dataset.id, { hours, note });
+      apprEditing = null;
+      renderPendingApproval();
+      showToast("Entry updated.");
+    } catch (err) {
+      showToast("Error: " + err.message);
+    }
+    return;
+  }
+  if (action === "confirm-decline") {
+    const reason = btn.closest("tr").querySelector(".appr-reason").value.trim();
+    try {
+      await TimeEntries.update(btn.dataset.id, { declined: true, declineReason: reason || null });
+      apprEditing = null;
+      renderPendingApproval();
+      showToast("Declined — sent back to their Timesheet.");
+    } catch (err) {
+      showToast("Error: " + err.message);
+    }
+    return;
+  }
   if (action === "approve-entry") return approveIds([btn.dataset.id], "Approved.");
   if (action === "approve-task") {
     const t = groups.flatMap((g) => g.tasks).find((x) => x.key === btn.dataset.key);
@@ -923,6 +992,12 @@ pendingBody.addEventListener("click", async (e) => {
     const g = groups.find((x) => x.personId === btn.dataset.id);
     if (g) return approveIds(g.entries.map((x) => x.id), `${g.name}'s hours approved.`);
   }
+});
+
+pendingBody.addEventListener("keydown", (e) => {
+  if (!e.target.matches(".appr-entry input")) return;
+  if (e.key === "Escape") { apprEditing = null; renderPendingApproval(); }
+  if (e.key === "Enter") e.target.closest("tr").querySelector("button.small")?.click();
 });
 
 approveAllBtn.addEventListener("click", async () => {

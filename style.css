@@ -2735,36 +2735,57 @@ table.inv-people {
   transform: rotate(180deg);
 }
 
-.appr-table tr.appr-detail > td {
+.appr-table tr.appr-entry td {
   background: #faf8fb;
-  padding: 6px 16px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid #eee8f2;
+}
+
+.appr-table td.appr-date {
+  padding-left: 30px;
+  color: var(--text-muted);
+}
+
+.appr-table td.appr-entry-note {
   white-space: normal;
 }
 
-.appr-entry {
-  display: grid;
-  grid-template-columns: 110px 60px 1fr auto;
-  gap: 12px;
-  align-items: baseline;
-  padding: 5px 0;
+.appr-table td.appr-actions {
+  white-space: nowrap;
+}
+
+.appr-actions .link-btn {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 12px;
+}
+
+.appr-actions .link-btn.appr-decline { color: var(--red); }
+.appr-actions .link-btn.appr-approve { color: var(--green); }
+
+.appr-actions button.small {
+  margin-left: 12px;
+}
+
+.appr-entry input {
+  margin: 0;
+  padding: 5px 8px;
   font-size: 13px;
 }
 
-.appr-entry + .appr-entry {
-  border-top: 1px solid #eee8f2;
+.appr-entry input.appr-hours {
+  width: 70px;
+  text-align: right;
 }
 
-.appr-entry .link-btn {
+.appr-entry input.appr-note-input,
+.appr-entry input.appr-reason {
+  width: 100%;
+}
+
+.declined-note {
+  margin-top: 3px;
   font-size: 12px;
   font-weight: 600;
-}
-
-@media (max-width: 640px) {
-  .appr-entry {
-    grid-template-columns: 90px 50px 1fr;
-  }
-  .appr-entry .link-btn {
-    grid-column: 3;
-    justify-self: start;
-  }
+  color: var(--red);
 }

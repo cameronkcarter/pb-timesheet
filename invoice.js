@@ -119,7 +119,7 @@ const shortDate = (iso) => new Date(String(iso).slice(0, 10) + "T00:00:00")
 // Next invoice per project: its approved, uninvoiced hours.
 function nextRows() {
   return billableProjects().map((project) => {
-    const open = timeEntries.filter((e) => e.projectId === project.id && !e.invoiced);
+    const open = timeEntries.filter((e) => e.projectId === project.id && !e.invoiced && !e.declined);
     const entries = open.filter((e) => e.approved);
     const pending = open.filter((e) => !e.approved);
     if (!open.length) return null;
