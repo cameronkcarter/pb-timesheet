@@ -3215,3 +3215,26 @@ button.person-chip::after {
   color: var(--civic-purple);
   font-weight: 800;
 }
+
+.card-expenses .hours-row {
+  border-bottom: none;
+  padding-top: 0;
+}
+
+.card-expenses .hours-row-name button.btn-expense {
+  display: flex;
+  margin-top: 6px;
+  font-size: 12px;
+  padding: 3px 10px 3px 4px;
+}
+
+.expense-summary {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-top: 2px;
+}
+
+.expense-summary strong {
+  font-size: 15px;
+  color: var(--text);
+}

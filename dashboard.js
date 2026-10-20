@@ -299,24 +299,38 @@ function myExpenses() {
   return expenses.filter((e) => e.personId === selectedPersonId && e.kind !== "sub");
 }
 
-// Under each project's tasks: your expenses there that aren't invoiced yet
-// (pending, approved, or declined — edit to resubmit), and "+ Add expense".
+// Under each project's tasks, laid out like a task row: "Expenses" with
+// "Record expenses" on the left; on the right, your amount not yet invoiced,
+// then each expense like a subtask. Invoiced ones count as completed, so they
+// only show with "Show completed subtasks".
 function cardExpensesHtml(project) {
-  const list = myExpenses().filter((e) => e.projectId === project.id && !e.invoiced)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  const all = myExpenses().filter((e) => e.projectId === project.id);
+  const sum = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
+  const open = all.filter((e) => !e.invoiced && !e.declined);
+  const invoicedSum = sum(all.filter((e) => e.invoiced));
+  const shown = all.filter((e) => showCompleted || !e.invoiced)
+    .sort((a, b) => (!!a.invoiced - !!b.invoiced) || (a.date < b.date ? 1 : -1));
+  const shortDay = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `<div class="card-expenses">
-    ${list.length ? `<div class="summary-label">Your expenses</div>
-    <div class="due-list">${list.map((e) => {
-      const [status, cls] = expenseStatus(e);
-      const editable = !e.approved;
-      return `<div class="due-item expense-item">
-        <span class="due-title">${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span>
-        <strong>${formatCurrency(e.amount)}</strong>
-        <span class="pay-status ${cls}">${status}</span>
-        ${editable ? `<button type="button" class="link-btn due-edit" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
-      </div>`;
-    }).join("")}</div>` : ""}
-    <button type="button" class="small btn-expense" data-action="add-expense" data-project-id="${project.id}">Record expenses</button>
+    <div class="hours-row hours-row-with-items">
+      <div class="hours-row-name">
+        Expenses
+        <button type="button" class="small btn-expense" data-action="add-expense" data-project-id="${project.id}">Record expenses</button>
+      </div>
+      <div>
+        <div class="expense-summary"><strong>${formatCurrency(sum(open))}</strong> not invoiced${invoicedSum ? ` <span class="appr-muted">· ${formatCurrency(invoicedSum)} invoiced</span>` : ""}</div>
+        ${shown.length ? `<div class="due-list">${shown.map((e) => {
+          const [status, cls] = expenseStatus(e);
+          return `<div class="due-item ${e.invoiced ? "done" : ""}">
+            <span class="due-mark" aria-hidden="true">${e.invoiced ? "&#10003;" : ""}</span>
+            <span class="due-title">${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span>
+            <span class="due-when">${shortDay(e.date)} &middot; ${formatCurrency(e.amount)}</span>
+            <span class="pay-status ${cls}">${status}</span>
+            ${!e.approved ? `<button type="button" class="link-btn due-edit" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
+          </div>`;
+        }).join("")}</div>` : ""}
+      </div>
+    </div>
   </div>`;
 }
 
