@@ -1,9 +1,10 @@
-// Hours to approve (on Admin): hours waiting on the projects you
-// manage — or, for admins, on projects with no project manager yet. Grouped
-// by project, then one row per person; clicking a person lists each entry
-// (date, task, hours, note) with Edit, Decline and Approve. Declined entries
-// go back to the person's Timesheet (with the reason) and return here once
-// they edit them.
+// Approvals (on Admin): hours and expenses on the projects you manage — or,
+// for admins, on projects with no project manager yet. "To approve" lists
+// what's waiting (Edit, Decline, Approve); "Approved" lists what's approved
+// but not invoiced yet (Edit, Unapprove). Grouped by project, then one row
+// per person; clicking a person lists each entry. Declined entries go back to
+// the person's Timesheet (with the reason) and return once they edit them.
+// Invoiced hours aren't shown — void the invoice to change them.
 import { TimeEntries, Expenses } from "./db.js";
 import { esc, fmtHrs, showToast, projectColor, sortProjects, formatCurrency } from "./util.js";
 import { expenseLabel, createExpenseEditor } from "./expenses.js";
@@ -33,7 +34,9 @@ export function createApprovals({ getData, sessionPersonId }) {
   const approveAllBtn = document.getElementById("approveAllBtn");
 
   const scope = document.getElementById("approvalScope");
+  const viewToggle = document.getElementById("approvalView");
   let showAll = false; // "All" projects instead of just the ones you manage
+  let view = "pending"; // "pending" (to approve) or "approved" (not invoiced yet)
   let openKey = null; // "<projectId>|<personId>"
   // Expenses are edited in the same popup used to record them.
   const expenseEditor = createExpenseEditor({
@@ -57,7 +60,8 @@ export function createApprovals({ getData, sessionPersonId }) {
   // tagged isExpense and filed under the person who paid (or who added it).
   function pendingEntries() {
     const ids = myProjectIds();
-    const waiting = (e) => !e.approved && !e.invoiced && !e.declined && ids.has(e.projectId);
+    const approved = view === "approved";
+    const waiting = (e) => !!e.approved === approved && !e.invoiced && !e.declined && ids.has(e.projectId);
     const hours = getData().timeEntries.filter(waiting);
     const exps = (getData().expenses || []).filter((e) => e.kind !== "sub" && waiting(e))
       .map((e) => ({ ...e, isExpense: true, hours: 0, personId: e.personId || e.createdByPersonId }));
@@ -109,8 +113,7 @@ export function createApprovals({ getData, sessionPersonId }) {
         <td class="appr-entry-note"><strong>${formatCurrency(e.amount)}</strong> · ${esc(expenseLabel(e, projects.find((p) => p.id === e.projectId)))}</td>
         <td class="num appr-actions" colspan="2">
           <button type="button" class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>
-          <button type="button" class="link-btn appr-decline" data-action="decline-entry" data-id="${e.id}">Decline</button>
-          <button type="button" class="link-btn appr-approve" data-action="approve-entry" data-id="${e.id}">Approve</button>
+          ${rowActions(e)}
         </td></tr>`;
     }
     const mode = editing && editing.id === e.id ? editing.mode : null;
@@ -140,9 +143,16 @@ export function createApprovals({ getData, sessionPersonId }) {
       <td class="appr-entry-note ${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}</td>
       <td class="num appr-actions" colspan="2">
         <button type="button" class="link-btn" data-action="edit-entry" data-id="${e.id}">Edit</button>
-        <button type="button" class="link-btn appr-decline" data-action="decline-entry" data-id="${e.id}">Decline</button>
-        <button type="button" class="link-btn appr-approve" data-action="approve-entry" data-id="${e.id}">Approve</button>
+        ${rowActions(e)}
       </td></tr>`;
+  }
+
+  // Decline + Approve while waiting; Unapprove once approved.
+  function rowActions(e) {
+    return view === "approved"
+      ? `<button type="button" class="link-btn appr-decline" data-action="unapprove-entry" data-id="${e.id}">Unapprove</button>`
+      : `<button type="button" class="link-btn appr-decline" data-action="decline-entry" data-id="${e.id}">Decline</button>
+         <button type="button" class="link-btn appr-approve" data-action="approve-entry" data-id="${e.id}">Approve</button>`;
   }
 
   function render() {
@@ -150,10 +160,10 @@ export function createApprovals({ getData, sessionPersonId }) {
     if (editing && body.contains(document.activeElement) && document.activeElement.matches("input")) return;
     const gs = groups();
     card.style.display = "block";
-    approveAllBtn.style.display = gs.length ? "" : "none";
+    approveAllBtn.style.display = gs.length && view === "pending" ? "" : "none";
     if (gs.length === 0) {
       total.textContent = "";
-      body.innerHTML = '<div class="empty">Nothing to approve.</div>';
+      body.innerHTML = `<div class="empty">${view === "approved" ? "No approved hours waiting to be invoiced." : "Nothing to approve."}</div>`;
       return;
     }
     const allItems = gs.flatMap((g) => g.entries);
@@ -166,7 +176,7 @@ export function createApprovals({ getData, sessionPersonId }) {
       ${gs.map((g) => `<tbody>
         <tr class="appr-group">
           <td colspan="4"><span class="pay-dot" style="--c:${g.project ? projectColor(g.project.id) : "#c9c2cf"};"></span><strong>${g.project ? esc(g.project.name) : "—"}</strong> <span class="appr-muted">${fmtHrs(g.hours)} hrs</span></td>
-          <td class="num" colspan="2">${g.people.length > 1
+          <td class="num" colspan="2">${g.people.length > 1 && view === "pending"
             ? `<button type="button" class="link-btn" data-action="approve-project" data-id="${g.projectId}">Approve all</button>` : ""}</td>
         </tr>
         ${g.people.map((r) => {
@@ -177,7 +187,7 @@ export function createApprovals({ getData, sessionPersonId }) {
             <td class="appr-task">${esc(r.name)}</td>
             <td class="num appr-subtotal ${over ? "appr-over" : ""}" ${over ? 'title="More than their assigned hours on a task"' : ""}>${fmtHrs(r.hours)}</td>
             <td class="appr-note appr-muted">${r.entries.length} ${r.entries.length === 1 ? "entry" : "entries"}${expenseSum(r.entries) ? ` · ${formatCurrency(expenseSum(r.entries))} expenses` : ""}</td>
-            <td class="num"><button type="button" class="small due-btn due-complete" data-action="approve-person" data-key="${esc(r.key)}">${r.entries.length > 1 ? `Approve all (${r.entries.length})` : "Approve"}</button></td>
+            <td class="num">${view === "pending" ? `<button type="button" class="small due-btn due-complete" data-action="approve-person" data-key="${esc(r.key)}">${r.entries.length > 1 ? `Approve all (${r.entries.length})` : "Approve"}</button>` : ""}</td>
             <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
           </tr>
           ${open ? r.entries.map(entryRowHtml).join("") : ""}`;
@@ -256,6 +266,17 @@ export function createApprovals({ getData, sessionPersonId }) {
       }
       return;
     }
+    if (action === "unapprove-entry") {
+      const item = pendingEntries().find((x) => x.id === btn.dataset.id);
+      if (!item) return;
+      try {
+        await (item.isExpense ? Expenses : TimeEntries).update(item.id, { approved: false, approvedDate: null });
+        showToast("Moved back to To approve.");
+      } catch (err) {
+        showToast("Error: " + err.message);
+      }
+      return;
+    }
     if (action === "approve-entry") {
       const item = pendingEntries().find((x) => x.id === btn.dataset.id);
       if (item) return approveItems([item], "Approved.");
@@ -275,6 +296,16 @@ export function createApprovals({ getData, sessionPersonId }) {
     if (!e.target.matches(".appr-entry input")) return;
     if (e.key === "Escape") { editing = null; render(); }
     if (e.key === "Enter") e.target.closest("tr").querySelector("button.small")?.click();
+  });
+
+  viewToggle.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    view = btn.dataset.value;
+    viewToggle.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === btn));
+    openKey = null;
+    editing = null;
+    render();
   });
 
   scope.addEventListener("click", (e) => {

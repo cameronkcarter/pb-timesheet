@@ -27,8 +27,12 @@
 
   <div class="card" id="pendingApprovalCard">
     <div class="appr-head">
-      <h2>Hours to approve <span id="pendingTotal"></span></h2>
+      <h2>Approvals <span id="pendingTotal"></span></h2>
       <div class="row-actions">
+        <div class="segmented segmented-small" id="approvalView" role="radiogroup">
+          <button type="button" data-value="pending" role="radio" class="on">To approve</button>
+          <button type="button" data-value="approved" role="radio">Approved</button>
+        </div>
         <div class="segmented segmented-small" id="approvalScope" role="radiogroup">
           <button type="button" data-value="mine" role="radio" class="on">Assigned</button>
           <button type="button" data-value="all" role="radio">All</button>

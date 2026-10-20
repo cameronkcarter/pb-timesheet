@@ -291,7 +291,7 @@ function detailHtml(row) {
       ${row.entries.length ? peopleHtml(row.key, row.entries) : ""}
       ${expenseTableHtml(expenseRowsFor(row.project, row.exps))}
       <div class="inv-actions">
-        ${waiting ? `<a class="entry-status warn inv-warn" href="admin.html#pendingApprovalCard"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See hours to approve</u></a>` : ""}
+        ${waiting ? `<a class="entry-status warn inv-warn" href="admin.html#pendingApprovalCard"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See approvals</u></a>` : ""}
         <button type="button" class="secondary" data-action="preview" ${canGenerate ? "" : "disabled"}>Preview PDF</button>
         <button type="button" data-action="generate" ${canGenerate ? "" : "disabled"}>Generate invoice</button>
       </div>`;
