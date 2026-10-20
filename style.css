@@ -2718,7 +2718,7 @@ table.appr-table {
   min-width: 760px;
 }
 
-.appr-table col.c-date { width: 92px; }
+.appr-table col.c-date { width: 128px; }
 .appr-table col.c-task { width: 28%; }
 .appr-table col.c-hours { width: 64px; }
 .appr-table col.c-actions { width: 172px; }

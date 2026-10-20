@@ -1,5 +1,5 @@
 // Approvals (on Admin): hours and expenses on the projects you manage — or,
-// for admins, on projects with no project manager yet. "To approve" lists
+// for admins, on projects with no project manager yet. "Pending" lists
 // what's waiting (Edit, Decline, Approve); "Approved" lists what's approved
 // but not invoiced yet (Edit, Unapprove). Grouped by project, then one row
 // per person; clicking a person lists each entry. Declined entries go back to
@@ -271,7 +271,7 @@ export function createApprovals({ getData, sessionPersonId }) {
       if (!item) return;
       try {
         await (item.isExpense ? Expenses : TimeEntries).update(item.id, { approved: false, approvedDate: null });
-        showToast("Moved back to To approve.");
+        showToast("Moved back to Pending.");
       } catch (err) {
         showToast("Error: " + err.message);
       }
