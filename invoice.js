@@ -307,8 +307,8 @@ function detailHtml(row) {
     ${peopleHtml(row.key, row.entries, inv.laborRows)}
     ${expenseTableHtml(inv.expenseRows || [])}
     <div class="inv-actions">
-      ${!inv.paid ? '<button type="button" class="link-btn item-delete inv-void" data-action="void">Void invoice</button>' : ""}
       ${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
+      ${!inv.paid ? '<button type="button" class="btn-void" data-action="void">Void invoice</button>' : ""}
       ${!inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : '<button type="button" class="secondary" data-action="mark-unpaid">Undo paid</button>'}
     </div>`;
 }

@@ -3247,8 +3247,14 @@ button.person-chip::after {
 
 .pay-status.void { background: #ecebee; color: var(--text-muted); text-decoration: line-through; }
 
-button.inv-void {
-  margin-right: auto;
+button.btn-void {
+  background: #fff;
+  color: var(--red);
+  border: 1px solid #e8b4ae;
+}
+
+button.btn-void:hover {
+  background: #fbe7e5;
 }
 
 .inv-table tr.void-row td {
