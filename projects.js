@@ -289,9 +289,14 @@ function renderBudget() {
 
   budgetTbody.innerHTML = rows + (internal ? "" : expenseRowsHtml(project, totals, cols));
 
-  if (addingTaskId) {
-    const hoursInput = budgetTbody.querySelector(".newAssignHours");
-    if (hoursInput) hoursInput.focus();
+  // Someone was just added: put the cursor in their hours box.
+  if (focusPersonId) {
+    const input = budgetTbody.querySelector(`.assign-row[data-person-id="${focusPersonId}"] .assignHours`);
+    if (input) {
+      focusPersonId = null;
+      input.focus();
+      input.select();
+    }
   }
 }
 
@@ -461,7 +466,8 @@ function taskPeopleHtml(task) {
 // Each person on the task gets an hours box (saves itself a moment after
 // typing), the assigned-vs-logged bar and a remove button; "+ Add person"
 // adds someone. Unassigned updates as you type.
-let addingTaskId = null;    // task whose "Add person" form is open
+let addingTaskId = null;    // task whose "Add person" chips are showing
+let focusPersonId = null;   // just added: focus their hours box once it appears
 let renderDeferred = false; // skip re-rendering while someone is editing hours
 const saveTimers = {};      // assignmentId -> pending auto-save
 const SAVE_DELAY_MS = 800;
@@ -471,7 +477,7 @@ function assignRowHtml(a, color) {
   const project = projects.find((p) => p.id === a.projectId);
   const hours = assignedHours(a);
   const logged = loggedBy(a.taskId, a.personId);
-  return `<div class="assign-row" data-assignment-id="${a.id}" data-logged="${logged}">
+  return `<div class="assign-row" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-logged="${logged}">
     <div class="assign-name">${person ? esc(person.name) : "—"}<div class="empty" style="padding:0; font-size:12px; font-weight:400;">${person ? `Bill ${formatCurrency(assignmentRate(project, person))}/hr` : ""}</div></div>
     <div class="assign-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" /> hrs <span class="saved-tick"></span></div>
     <div class="assign-bar">${hoursBarHtml(logged, hours, color)}</div>
@@ -487,16 +493,16 @@ function addPersonHtml(task) {
   if (addingTaskId !== task.id) {
     return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Add person</button>`;
   }
+  // Tap someone to add them (0 hrs); their hours box is then ready to type in.
   const project = projects.find((pr) => pr.id === task.projectId);
-  return `<div class="assign-row assign-add">
-    <div class="assign-name"><select class="newAssignPerson">
-      ${available.map((p) => `<option value="${p.id}">${esc(p.name)} (bill ${formatCurrency(assignmentRate(project, p))})</option>`).join("")}
-    </select></div>
-    <div class="assign-input"><input type="number" class="newAssignHours" min="0" step="0.5" placeholder="20" /> hrs</div>
-    <div class="row-actions">
-      <button class="small" data-action="add-assignment" data-task-id="${task.id}" data-project-id="${task.projectId}">Add</button>
-      <button class="small secondary" data-action="cancel-add">Cancel</button>
-    </div>
+  const initials = (name) => String(name).split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  return `<div class="person-picker">
+    <div class="person-chips">${available.map((p) => `<button type="button" class="person-chip" data-action="add-assignment"
+        data-person-id="${p.id}" data-task-id="${task.id}" data-project-id="${task.projectId}"
+        title="Bills ${formatCurrency(assignmentRate(project, p))}/hr">
+        <span class="person-chip-avatar">${esc(initials(p.name))}</span><span>${esc(p.name)}</span>
+      </button>`).join("")}</div>
+    <button type="button" class="link-btn" data-action="cancel-add">Done</button>
   </div>`;
 }
 
@@ -578,7 +584,6 @@ budgetTbody.addEventListener("input", (e) => {
 budgetTbody.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   if (e.target.classList.contains("assignHours")) e.target.blur();
-  if (e.target.classList.contains("newAssignHours")) budgetTbody.querySelector('[data-action="add-assignment"]')?.click();
 });
 
 budgetTbody.addEventListener("focusout", (e) => {
@@ -614,17 +619,16 @@ async function handleAssignAction(btn) {
     try { await Assignments.remove(id); } catch (err) { showToast("Error: " + err.message); }
   }
   if (action === "add-assignment") {
-    const row = btn.closest(".assign-add");
-    const personId = row.querySelector(".newAssignPerson").value;
-    const hoursValue = row.querySelector(".newAssignHours").value;
-    const hours = hoursValue === "" ? 0 : Number(hoursValue);
-    if (!personId) return showToast("Select a person.");
-    if (isNaN(hours) || hours < 0) return showToast("Enter a valid number of hours.");
+    const { personId, taskId, projectId } = btn.dataset;
+    if (assignments.some((x) => x.taskId === taskId && x.personId === personId)) return;
     addingTaskId = null;
+    focusPersonId = personId;
     try {
-      await Assignments.add({ projectId: btn.dataset.projectId, taskId: btn.dataset.taskId, personId, hours });
-      showToast("Assigned.");
-    } catch (err) { showToast("Error: " + err.message); }
+      await Assignments.add({ projectId, taskId, personId, hours: 0 });
+    } catch (err) {
+      focusPersonId = null;
+      showToast("Error: " + err.message);
+    }
   }
 }
 

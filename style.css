@@ -3185,3 +3185,42 @@ button.btn-expense:hover {
   background: #fbfaf7 !important;
   font-weight: 700;
 }
+
+/* Edit staff & hours: tap a person to add them to the task. */
+.person-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0 2px;
+}
+
+.person-picker .person-chips {
+  flex: 1;
+}
+
+button.person-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+button.person-chip:hover {
+  border-color: var(--wisteria);
+  background: #f6f0fc;
+}
+
+button.person-chip::after {
+  content: "+";
+  margin-left: 2px;
+  color: var(--civic-purple);
+  font-weight: 800;
+}
