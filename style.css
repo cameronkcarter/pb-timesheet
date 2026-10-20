@@ -2816,3 +2816,81 @@ table.appr-table {
 .backup-card h2 {
   margin: 0;
 }
+
+/* ---------- Projects tab: admin tools, totals, three-tone bars ---------- */
+.projects-admin-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.projects-admin-bar button.small {
+  margin: 0;
+}
+
+.segmented.segmented-small button {
+  padding: 5px 14px;
+  font-size: 13px;
+}
+
+.budget-header .row-actions button {
+  margin: 0;
+}
+
+button.active-toggle {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+.budget-pm {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.bar-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.bar-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.bar-legend i.invoiced { background: #9a5a16; }
+.bar-legend i.spent { background: var(--accent); }
+.bar-legend i.assigned { background: #eec293; }
+
+.budget-progress .fill.invoiced {
+  background: #9a5a16;
+}
+
+#budgetTable tr.budget-total-row td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  background: #faf8f4;
+}
+
+a.entry-status.inv-warn {
+  margin-right: auto;
+  text-decoration: none;
+}
+
+a.entry-status.inv-warn:hover {
+  border-color: #e6b878;
+}
+
+.appr-head .row-actions {
+  align-items: center;
+}

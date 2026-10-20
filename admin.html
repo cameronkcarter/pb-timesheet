@@ -28,26 +28,15 @@
   <div class="card" id="pendingApprovalCard">
     <div class="appr-head">
       <h2>Hours to approve <span id="pendingTotal"></span></h2>
-      <button id="approveAllBtn" class="small">Approve all</button>
+      <div class="row-actions">
+        <div class="segmented segmented-small" id="approvalScope" role="radiogroup">
+          <button type="button" data-value="mine" role="radio" class="on">Mine</button>
+          <button type="button" data-value="all" role="radio">All</button>
+        </div>
+        <button id="approveAllBtn" class="small">Approve all</button>
+      </div>
     </div>
     <div id="pendingBody"></div>
-  </div>
-
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h2 style="margin:0;">Projects</h2>
-      <button id="openAddProject" class="secondary small">+ Add Project</button>
-    </div>
-    <div id="projectCards" class="project-card-row" style="margin-top:16px;"></div>
-    <div id="projectCardsEmpty" class="empty" style="display:none;">No projects yet — click "+ Add Project" to create one.</div>
-
-    <div id="tasksSection" style="display:none; margin-top:24px;">
-      <hr class="divider" />
-      <h2 id="selectedProjectHeading" style="margin-bottom:12px;"></h2>
-
-      <div id="taskBlocks"></div>
-      <div id="tasksEmpty" class="empty" style="display:none;">No tasks for this project yet. Click "Edit" on the project card above to add some.</div>
-    </div>
   </div>
 
   <div class="card">
@@ -67,82 +56,6 @@
     <button id="downloadBackup" class="secondary small">Download</button>
   </div>
 </main>
-
-<div id="projectModal" class="modal-overlay" style="display:none;">
-  <div class="modal sheet-modal" role="dialog" aria-labelledby="modalProjectName">
-    <div class="sheet-head">
-      <div class="sheet-kicker" id="projectModalTitle">New project</div>
-      <input type="text" id="modalProjectName" class="title-input" placeholder="Project name" />
-      <button type="button" id="modalCloseProject" class="icon-btn sheet-close" aria-label="Close">&times;</button>
-    </div>
-
-    <div class="sheet-body">
-      <div class="field-grid">
-        <div class="field">
-          <label for="modalProjectClient">Client</label>
-          <input type="text" id="modalProjectClient" placeholder="Roy City" />
-        </div>
-        <div class="field">
-          <label for="modalProjectNumber">Project # <span class="field-optional">on invoices</span></label>
-          <input type="text" id="modalProjectNumber" placeholder="Client's reference or PO #" />
-        </div>
-      </div>
-
-      <div class="field-grid">
-        <div class="field">
-          <label for="modalProjectPm">Project manager</label>
-          <select id="modalProjectPm"></select>
-          <div class="field-hint">Approves hours on this project</div>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Billing</label>
-        <div class="segmented" id="modalProjectType" role="radiogroup">
-          <button type="button" data-value="rates" role="radio">Staff bill rates</button>
-          <button type="button" data-value="internal" role="radio">Internal</button>
-        </div>
-        <div class="field-hint" id="modalTypeHint"></div>
-      </div>
-
-      <section class="sheet-section" id="modalBillingFields">
-        <div class="section-title">Invoice to</div>
-        <div class="field-grid">
-          <div class="field">
-            <label for="modalBillToName">Contact</label>
-            <input type="text" id="modalBillToName" placeholder="Jane Smith" />
-          </div>
-          <div class="field">
-            <label for="modalBillToCompany">Company</label>
-            <input type="text" id="modalBillToCompany" placeholder="Roy City" />
-          </div>
-          <div class="field">
-            <label for="modalBillToAddress1">Street</label>
-            <input type="text" id="modalBillToAddress1" placeholder="5051 S 1900 W" />
-          </div>
-          <div class="field">
-            <label for="modalBillToAddress2">City, State ZIP</label>
-            <input type="text" id="modalBillToAddress2" placeholder="Roy, Utah 84067" />
-          </div>
-        </div>
-      </section>
-
-      <section class="sheet-section">
-        <div class="section-title">Tasks <span class="section-meta" id="modalTaskTotal"></span></div>
-        <div class="task-edit-grid task-edit-head" id="modalTaskHead">
-          <span>Task</span><span class="col-budget">Budget</span><span>Start</span><span>End</span><span></span>
-        </div>
-        <div id="modalTaskRows"></div>
-        <button type="button" id="modalAddTaskRow" class="link-btn">+ Add task</button>
-      </section>
-    </div>
-
-    <div class="sheet-foot">
-      <button type="button" id="modalCancelProject" class="secondary">Cancel</button>
-      <button type="button" id="modalSaveProject">Save project</button>
-    </div>
-  </div>
-</div>
 
 <div id="personModal" class="modal-overlay" style="display:none;">
   <div class="modal sheet-modal sheet-small" role="dialog" aria-labelledby="modalPersonName">

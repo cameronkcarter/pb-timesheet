@@ -31,6 +31,8 @@ export function createApprovals({ getData, sessionPersonId }) {
   const total = document.getElementById("pendingTotal");
   const approveAllBtn = document.getElementById("approveAllBtn");
 
+  const scope = document.getElementById("approvalScope");
+  let showAll = false; // "All" projects instead of just the ones you manage
   let openKey = null; // "<projectId>|<personId>"
   let editing = null; // { id, mode: "edit" | "decline" }
 
@@ -39,7 +41,7 @@ export function createApprovals({ getData, sessionPersonId }) {
     const { projects, people } = getData();
     const me = people.find((p) => p.id === sessionPersonId);
     return new Set(projects
-      .filter((p) => !isInternal(p) && (p.pmPersonId === sessionPersonId || (me && me.isAdmin && !p.pmPersonId)))
+      .filter((p) => !isInternal(p) && (showAll || p.pmPersonId === sessionPersonId || (me && me.isAdmin && !p.pmPersonId)))
       .map((p) => p.id));
   }
 
@@ -232,6 +234,15 @@ export function createApprovals({ getData, sessionPersonId }) {
     if (!e.target.matches(".appr-entry input")) return;
     if (e.key === "Escape") { editing = null; render(); }
     if (e.key === "Enter") e.target.closest("tr").querySelector("button.small")?.click();
+  });
+
+  scope.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    showAll = btn.dataset.value === "all";
+    scope.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === btn));
+    openKey = null;
+    render();
   });
 
   approveAllBtn.addEventListener("click", async () => {

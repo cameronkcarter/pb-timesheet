@@ -211,9 +211,9 @@ function fieldsHtml(row) {
 function detailHtml(row) {
   if (row.kind === "next") {
     return `${fieldsHtml(row)}
-      ${row.pending.length ? `<div class="inv-note">${fmtHrs(sumHours(row.pending))} hrs awaiting approval won't be included.</div>` : ""}
       ${peopleHtml(row.key, row.entries)}
       <div class="inv-actions">
+        ${row.pending.length ? `<a class="entry-status warn inv-warn" href="admin.html#pendingApprovalCard"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${fmtHrs(sumHours(row.pending))} hrs awaiting approval won't be included &middot; <u>Approve</u></a>` : ""}
         <button type="button" class="secondary" data-action="preview" ${row.entries.length ? "" : "disabled"}>Preview PDF</button>
         <button type="button" data-action="generate" ${row.entries.length ? "" : "disabled"}>Generate invoice</button>
       </div>`;

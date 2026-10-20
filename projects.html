@@ -26,6 +26,13 @@
   <h1>Projects</h1>
 
   <div class="card">
+    <div class="projects-admin-bar" id="projectsAdminBar" style="display:none;">
+      <div class="segmented segmented-small" id="projectScope" role="radiogroup">
+        <button type="button" data-value="mine" role="radio" class="on">Mine</button>
+        <button type="button" data-value="all" role="radio">All</button>
+      </div>
+      <button type="button" id="openAddProject" class="secondary small">+ Add project</button>
+    </div>
     <div id="projectCards" class="project-card-row" style="margin-top:0;"></div>
     <div id="projectCardsEmpty" class="empty" style="display:none;">No projects to show yet.</div>
   </div>
@@ -33,29 +40,33 @@
   <div id="projectDetail" style="display:none;">
     <div class="card">
       <div class="budget-header">
-        <h2 style="margin:0;">Budget</h2>
-        <div id="budgetSummary" class="budget-summary"></div>
+        <h2 style="margin:0;">Budget <span class="budget-pm" id="budgetPm"></span></h2>
+        <div class="row-actions">
+          <button id="toggleCompletedBtn" class="secondary small">Hide completed</button>
+          <button id="editAssignmentsBtn" class="secondary small" style="display:none;">Edit assignments</button>
+          <button id="editProjectBtn" class="secondary small" style="display:none;">Edit project</button>
+        </div>
       </div>
-      <div id="budgetOverallBar" style="margin-top:12px;"></div>
+      <div class="bar-legend" id="barLegend">
+        <span><i class="invoiced"></i>Invoiced</span>
+        <span><i class="spent"></i>Logged</span>
+        <span><i class="assigned"></i>Assigned</span>
+      </div>
       <table id="budgetTable" style="margin-top:18px;">
         <thead><tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th></tr></thead>
         <tbody></tbody>
       </table>
       <div id="budgetEmpty" class="empty" style="display:none;">No tasks set up for this project yet.</div>
       <div id="generalItems"></div>
-      <div class="budget-foot">
-        <div id="budgetHint" class="empty" style="padding:0;">Click a task to see who's assigned to it.</div>
-        <div class="row-actions">
-          <button id="toggleCompletedBtn" class="secondary small">Hide completed</button>
-          <button id="openAddAssignment" class="secondary small">+ Assign subtask</button>
-        </div>
-      </div>
     </div>
 
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <h2 style="margin:0;">Timeline</h2>
-        <button id="openAddEvent" class="secondary small">+ Add Event</button>
+        <div class="row-actions">
+          <button id="editTimelineBtn" class="secondary small" style="display:none;">Edit</button>
+          <button id="openAddEvent" class="secondary small">+ Add Event</button>
+        </div>
       </div>
       <div class="gantt-legend">
         <span><span class="legend-dot legend-dot-event"></span>Event</span>
@@ -69,6 +80,83 @@
 
   </div>
 </main>
+
+<div id="projectModal" class="modal-overlay" style="display:none;">
+  <div class="modal sheet-modal" role="dialog" aria-labelledby="modalProjectName">
+    <div class="sheet-head">
+      <div class="sheet-kicker" id="projectModalTitle">New project</div>
+      <input type="text" id="modalProjectName" class="title-input" placeholder="Project name" />
+      <button type="button" id="modalCloseProject" class="icon-btn sheet-close" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="sheet-body">
+      <div class="field-grid">
+        <div class="field">
+          <label for="modalProjectClient">Client</label>
+          <input type="text" id="modalProjectClient" placeholder="Roy City" />
+        </div>
+        <div class="field">
+          <label for="modalProjectNumber">Project # <span class="field-optional">on invoices</span></label>
+          <input type="text" id="modalProjectNumber" placeholder="Client's reference or PO #" />
+        </div>
+      </div>
+
+      <div class="field-grid">
+        <div class="field">
+          <label for="modalProjectPm">Project manager</label>
+          <select id="modalProjectPm"></select>
+          <div class="field-hint">Approves hours on this project</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Billing</label>
+        <div class="segmented" id="modalProjectType" role="radiogroup">
+          <button type="button" data-value="rates" role="radio">Staff bill rates</button>
+          <button type="button" data-value="internal" role="radio">Internal</button>
+        </div>
+        <div class="field-hint" id="modalTypeHint"></div>
+      </div>
+
+      <section class="sheet-section" id="modalBillingFields">
+        <div class="section-title">Invoice to</div>
+        <div class="field-grid">
+          <div class="field">
+            <label for="modalBillToName">Contact</label>
+            <input type="text" id="modalBillToName" placeholder="Jane Smith" />
+          </div>
+          <div class="field">
+            <label for="modalBillToCompany">Company</label>
+            <input type="text" id="modalBillToCompany" placeholder="Roy City" />
+          </div>
+          <div class="field">
+            <label for="modalBillToAddress1">Street</label>
+            <input type="text" id="modalBillToAddress1" placeholder="5051 S 1900 W" />
+          </div>
+          <div class="field">
+            <label for="modalBillToAddress2">City, State ZIP</label>
+            <input type="text" id="modalBillToAddress2" placeholder="Roy, Utah 84067" />
+          </div>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <div class="section-title">Tasks <span class="section-meta" id="modalTaskTotal"></span></div>
+        <div class="task-edit-grid task-edit-head" id="modalTaskHead">
+          <span>Task</span><span class="col-budget">Budget</span><span>Start</span><span>End</span><span></span>
+        </div>
+        <div id="modalTaskRows"></div>
+        <button type="button" id="modalAddTaskRow" class="link-btn">+ Add task</button>
+      </section>
+    </div>
+
+    <div class="sheet-foot">
+      <button type="button" id="modalRemoveProject" class="link-btn item-delete">Remove project</button>
+      <button type="button" id="modalCancelProject" class="secondary">Cancel</button>
+      <button type="button" id="modalSaveProject">Save project</button>
+    </div>
+  </div>
+</div>
 
 <div id="timelineModal" class="modal-overlay" style="display:none;">
   <div class="modal" style="max-width:480px;">
