@@ -2491,31 +2491,16 @@ button.google-btn:disabled {
   margin-bottom: 8px;
 }
 
-.inv-totals {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 20px;
+.inv-head h2 {
+  margin: 0;
+}
+
+.inv-head .inv-total {
   font-size: 14px;
+  font-weight: 600;
   color: var(--text-muted);
+  margin-left: 6px;
 }
-
-.inv-totals strong {
-  color: var(--text);
-  font-size: 16px;
-  margin-left: 4px;
-}
-
-.inv-totals .dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: 1px;
-}
-
-.inv-totals .dot.ready { background: var(--green); }
-.inv-totals .dot.invoiced { background: #2a5fb0; }
 
 .inv-table tr.inv-row {
   cursor: pointer;

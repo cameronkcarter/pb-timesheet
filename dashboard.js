@@ -239,7 +239,7 @@ function renderPay(myEntries) {
       projectName: inv && inv.projectName,
       entries,
       paid,
-      status: paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "paid"] : ["Awaiting client", "invoiced"],
+      status: paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "paid"] : ["Outstanding", "invoiced"],
     };
   }).sort((x, y) => (x.date < y.date ? 1 : -1));
 

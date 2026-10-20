@@ -30,7 +30,10 @@ let invoices = [];
 let adminCheckDone = false;
 
 const invoiceBody = document.getElementById("invoiceBody");
-const invoiceTotals = document.getElementById("invoiceTotals");
+const nextBody = document.getElementById("nextBody");
+const pastBody = document.getElementById("pastBody");
+const nextTotal = document.getElementById("nextTotal");
+const pastTotal = document.getElementById("pastTotal");
 const togglePaidBtn = document.getElementById("togglePaid");
 
 wireLogout("logoutLink");
@@ -69,10 +72,10 @@ function nextInvoiceNumber() {
   return `${base}-${n}`;
 }
 
-// ---------- Invoices table ----------
-// One table for every billable project: a row per project for approved hours
-// not invoiced yet (its next invoice), then past invoices, newest first. Paid
-// invoices are hidden unless asked for. Clicking a row shows each person's
+// ---------- Invoices tables ----------
+// "To invoice": a row per billable project for approved hours not invoiced
+// yet (its next invoice). "Invoices": ones already generated, newest first,
+// paid ones hidden unless asked for. Clicking a row shows each person's
 // hours (with their notes). The next invoice's # and billing period can be
 // edited until it's generated; after that they're locked.
 const drafts = {};        // projectId -> { number, label } typed over
@@ -159,7 +162,7 @@ function statusHtml(row) {
   const inv = row.inv;
   return (inv.paid
     ? `<span class="pay-status paid">Paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}</span>`
-    : '<span class="pay-status invoiced">Awaiting client</span>') +
+    : '<span class="pay-status invoiced">Outstanding</span>') +
     (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — click Sync">Not in sheet</span>' : "");
 }
 
@@ -236,43 +239,54 @@ function render() {
   const next = nextRows();
   const past = invoiceRows();
   const paidCount = past.filter((r) => r.inv.paid).length;
-  const rows = [...next, ...past.filter((r) => showPaid || !r.inv.paid)];
+  const shownPast = past.filter((r) => showPaid || !r.inv.paid);
 
   const ready = next.reduce((s, r) => s + r.amount, 0);
-  const awaiting = past.filter((r) => !r.inv.paid).reduce((s, r) => s + r.amount, 0);
-  invoiceTotals.innerHTML = `<span><i class="dot ready"></i>Ready <strong>${formatCurrency(ready)}</strong></span>
-    <span><i class="dot invoiced"></i>Awaiting client <strong>${formatCurrency(awaiting)}</strong></span>`;
+  const outstanding = past.filter((r) => !r.inv.paid).reduce((s, r) => s + r.amount, 0);
+  nextTotal.textContent = next.length ? `${formatCurrency(ready)} ready` : "";
+  pastTotal.textContent = outstanding ? `${formatCurrency(outstanding)} outstanding` : "";
   togglePaidBtn.style.display = paidCount ? "" : "none";
   togglePaidBtn.textContent = showPaid ? "Hide paid" : `Show paid (${paidCount})`;
 
-  if (!rows.length) {
-    invoiceBody.innerHTML = '<div class="empty">Nothing to invoice.</div>';
-    return;
-  }
+  const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
+  const projectCell = (row) => {
+    const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
+    return `<td class="proj"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(name)}</td>`;
+  };
 
-  invoiceBody.innerHTML = `<div class="pay-scroll"><table class="pay-table inv-table">
-    <thead><tr>
-      <th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th>
-    </tr></thead>
-    <tbody>${rows.map((row) => {
+  nextBody.innerHTML = next.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
+    <thead><tr><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>${next.map((row) => {
       const open = openRow === row.key;
       // Projects with only unapproved hours show those hours, and no amount yet.
-      const waiting = row.kind === "next" && !row.entries.length;
-      const hours = row.kind === "next" ? sumHours(waiting ? row.pending : row.entries) : row.hours;
-      const date = row.kind === "next" ? "" : row.inv.date;
-      const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
-      return `<tr class="inv-row ${open ? "open" : ""} ${row.kind === "next" ? "next" : ""}" data-row="${esc(row.key)}">
-        <td class="${date ? "" : "blank"}">${date ? shortDate(date) : "—"}</td>
-        <td class="${row.kind === "next" ? "blank" : ""}">${row.kind === "next" ? "—" : esc(row.inv.invoiceNumber)}</td>
-        <td class="proj"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(name)}</td>
-        <td class="num">${fmtHrs(hours)}</td>
+      const waiting = !row.entries.length;
+      return `<tr class="inv-row next ${open ? "open" : ""}" data-row="${esc(row.key)}">
+        ${projectCell(row)}
+        <td class="num">${fmtHrs(sumHours(waiting ? row.pending : row.entries))}</td>
         <td class="num ${waiting ? "blank" : ""}">${waiting ? "—" : `<strong>${formatCurrency(row.amount)}</strong>`}</td>
         <td>${statusHtml(row)}</td>
-        <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
+        ${chevCell(open)}
+      </tr>
+      ${open ? `<tr class="inv-detail"><td colspan="5">${detailHtml(row)}</td></tr>` : ""}`;
+    }).join("")}</tbody>
+  </table></div>` : '<div class="empty">Nothing to invoice.</div>';
+
+  pastBody.innerHTML = shownPast.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
+    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>${shownPast.map((row) => {
+      const open = openRow === row.key;
+      return `<tr class="inv-row ${open ? "open" : ""}" data-row="${esc(row.key)}">
+        <td>${shortDate(row.inv.date)}</td>
+        <td>${esc(row.inv.invoiceNumber)}</td>
+        ${projectCell(row)}
+        <td class="num">${fmtHrs(row.hours)}</td>
+        <td class="num"><strong>${formatCurrency(row.amount)}</strong></td>
+        <td>${statusHtml(row)}</td>
+        ${chevCell(open)}
       </tr>
       ${open ? `<tr class="inv-detail"><td colspan="7">${detailHtml(row)}</td></tr>` : ""}`;
     }).join("")}</tbody>
-  </table></div>`;
+  </table></div>` : `<div class="empty">${paidCount ? "All paid." : "No invoices yet."}</div>`;
 }
 
 function currentRow() {
