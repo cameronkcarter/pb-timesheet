@@ -27,7 +27,7 @@ async function signIn() {
     const { user } = await signInWithGoogle();
     const entry = await staffEntryFor(user);
     if (!entry) {
-      await signOutUser();
+      await signOutUser({ clearCache: false });
       showError(`<strong>${esc(user.email)}</strong> isn't on the staff list. Ask an admin to add it, or try another account.`);
       return;
     }
@@ -47,7 +47,7 @@ googleBtn.addEventListener("click", signIn);
 authChecked.then(async (user) => {
   const entry = user ? await staffEntryFor(user).catch(() => null) : null;
   if (entry) return enter(entry);
-  if (user) await signOutUser();
+  if (user) await signOutUser({ clearCache: false });
   clearSession();
   loading.style.display = "none";
   main.style.display = "";

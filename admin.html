@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
 <title>Admin — Place Builders</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
 <link rel="icon" type="image/png" href="brand/logo-purple.png" />
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -58,6 +60,11 @@
       <tbody></tbody>
     </table>
     <div id="peopleEmpty" class="empty" style="display:none;">No people added yet.</div>
+  </div>
+
+  <div class="card backup-card">
+    <h2>Backup</h2>
+    <button id="downloadBackup" class="secondary small">Download</button>
   </div>
 </main>
 

@@ -803,3 +803,18 @@ taskBlocks.addEventListener("click", async (e) => {
     } catch (err) { showToast("Error: " + err.message); }
   }
 });
+
+// ---------- Backup ----------
+// Downloads everything (from what this page already loaded, so no extra
+// database reads) as one JSON file to keep somewhere safe.
+document.getElementById("downloadBackup").addEventListener("click", () => {
+  const data = { exportedAt: new Date().toISOString(), people, projects, tasks, assignments, timeEntries, dueDates, invoices, staff };
+  // Firestore timestamps become ISO dates.
+  const json = JSON.stringify(data, (k, v) => (v && typeof v.toDate === "function" ? v.toDate().toISOString() : v), 2);
+  const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `place-builders-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+});

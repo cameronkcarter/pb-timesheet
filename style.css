@@ -2806,3 +2806,13 @@ table.appr-table {
 .appr-table td.appr-subtotal {
   font-weight: 700;
 }
+
+.backup-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.backup-card h2 {
+  margin: 0;
+}
