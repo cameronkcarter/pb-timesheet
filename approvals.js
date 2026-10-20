@@ -175,7 +175,7 @@ export function createApprovals({ getData, sessionPersonId }) {
         <tr class="appr-group">
           <td colspan="4"><span class="pay-dot" style="--c:${g.project ? projectColor(g.project.id) : "#c9c2cf"};"></span><strong>${g.project ? esc(g.project.name) : "—"}</strong> <span class="appr-muted">${fmtHrs(g.hours)} hrs</span></td>
           <td class="num" colspan="2">${view === "pending"
-            ? `<button type="button" class="small btn-approve-project" data-action="approve-project" data-id="${g.projectId}">Approve project (${g.entries.length})</button>` : ""}</td>
+            ? `<button type="button" class="small btn-approve-project" data-action="approve-project" data-id="${g.projectId}">Approve all (${g.entries.length})</button>` : ""}</td>
         </tr>
         ${g.people.map((r) => {
           const open = openKey === r.key;
@@ -185,7 +185,7 @@ export function createApprovals({ getData, sessionPersonId }) {
             <td class="appr-task">${esc(r.name)}</td>
             <td class="num appr-subtotal ${over ? "appr-over" : ""}" ${over ? 'title="More than their assigned hours on a task"' : ""}>${fmtHrs(r.hours)}</td>
             <td class="appr-note appr-muted">${r.entries.length} ${r.entries.length === 1 ? "entry" : "entries"}${expenseSum(r.entries) ? ` · ${formatCurrency(expenseSum(r.entries))} expenses` : ""}</td>
-            <td class="num">${view === "pending" ? `<button type="button" class="small due-btn due-complete" data-action="approve-person" data-key="${esc(r.key)}">${r.entries.length > 1 ? `Approve all (${r.entries.length})` : "Approve"}</button>` : ""}</td>
+            <td class="num">${view === "pending" ? `<button type="button" class="small due-btn due-complete" data-action="approve-person" data-key="${esc(r.key)}">${r.entries.length > 1 ? `Approve (${r.entries.length})` : "Approve"}</button>` : ""}</td>
             <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
           </tr>
           ${open ? r.entries.map(entryRowHtml).join("") : ""}`;
