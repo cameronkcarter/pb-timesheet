@@ -13,8 +13,13 @@ function clearTestSandboxData() {
   });
 }
 
+// The staging copy of the site (…/pb-timesheet-staging/) previews changes
+// before they go live. It always runs in Test Mode: a copy of the real data
+// that's never saved.
+export const IS_STAGING = window.location.pathname.includes("-staging/");
+
 export function isTestMode() {
-  return sessionStorage.getItem(TEST_ACTIVE_KEY) === "true";
+  return IS_STAGING || sessionStorage.getItem(TEST_ACTIVE_KEY) === "true";
 }
 
 // Starts a fresh test session for the given person. Test data lives only in
@@ -33,7 +38,7 @@ function exitTestSession() {
 }
 
 export function getSessionPersonId() {
-  if (isTestMode()) return sessionStorage.getItem(TEST_PERSON_KEY);
+  if (isTestMode()) return sessionStorage.getItem(TEST_PERSON_KEY) || localStorage.getItem(KEY);
   return localStorage.getItem(KEY);
 }
 
@@ -71,7 +76,7 @@ export function clearSession() {
 // that's never saved (as yourself), or back to the real thing.
 function renderTestModeToggle() {
   const logout = document.getElementById("logoutLink");
-  if (!logout || document.getElementById("testModeLink")) return;
+  if (IS_STAGING || !logout || document.getElementById("testModeLink")) return;
   const link = document.createElement("a");
   link.href = "#";
   link.id = "testModeLink";
@@ -89,9 +94,11 @@ function renderTestModeBanner() {
   if (!isTestMode() || document.getElementById("testModeBanner")) return;
   const banner = document.createElement("div");
   banner.id = "testModeBanner";
-  banner.textContent = "TEST MODE — nothing you do here is saved.";
+  banner.textContent = IS_STAGING
+    ? "STAGING — previewing changes. Nothing you do here is saved."
+    : "TEST MODE — nothing you do here is saved.";
   banner.style.cssText =
-    "background:#d98936;color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;letter-spacing:0.2px;";
+    `background:${IS_STAGING ? "#2a7f8f" : "#d98936"};color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;letter-spacing:0.2px;`;
   document.body.insertBefore(banner, document.body.firstChild);
 }
 
@@ -115,7 +122,8 @@ export function requireSession() {
   }
   renderTestModeBanner();
   renderTestModeToggle();
-  if (!isTestMode()) {
+  // Staging still needs a real sign-in (its copy of the data comes from it).
+  if (!isTestMode() || IS_STAGING) {
     authChecked.then(async (user) => {
       const entry = user ? await staffEntryFor(user).catch(() => null) : null;
       if (!entry || entry.personId !== id) {
