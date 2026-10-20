@@ -2658,8 +2658,6 @@ table.inv-people {
 }
 
 .inv-people tr.inv-overhead td {
-  font-weight: 600;
-  color: var(--text-muted);
   border-bottom: none;
 }
 
@@ -3051,11 +3049,6 @@ table.expense-list {
 
 .inv-people tbody tr:nth-child(even) td {
   background: #faf8fb;
-}
-
-.inv-people tr.inv-overhead td {
-  background: #e8f3e9 !important;
-  color: var(--green);
 }
 
 table.inv-expenses {
