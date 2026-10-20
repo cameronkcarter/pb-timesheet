@@ -299,7 +299,7 @@ function renderBudget() {
 // ---------- Expenses in the Budget table ----------
 // Under the tasks: Tasks subtotal, Project expenses, one row per
 // subconsultant, Expenses subtotal and the grand Total. Expense rows open to
-// list what was recorded, with "Record expenses" / "+ Record invoice".
+// list what was recorded, with "+ Record expense" / "+ Record invoice".
 function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = "") {
   const remaining = budget - spent;
   return `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
@@ -361,7 +361,7 @@ function expenseListHtml(g) {
   const canRecordSub = isAdmin() || isPmOf(project.id);
   const addBtn = g.sub
     ? (canRecordSub ? `<button class="link-btn" data-action="add-expense" data-kind="sub" data-sub-id="${g.sub.id}">+ Record invoice</button>` : "")
-    : `<button class="small btn-expense" data-action="add-expense" data-kind="project">Record expenses</button>`;
+    : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Record expense</button>`;
   if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">Nothing recorded yet.</div>${addBtn}`;
   const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `<table class="expense-list">
@@ -427,7 +427,7 @@ function taskPeopleHtml(task) {
   ])];
   if (personIds.length === 0) {
     return `<div class="empty">No one is assigned to this task yet.</div>
-      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Assign subtask</button>`;
+      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Add subtask</button>`;
   }
 
   const rows = personIds.map((pid) => {
@@ -447,7 +447,7 @@ function taskPeopleHtml(task) {
   return `<div class="hours-rows" style="margin-top:0;">${rows.map((r) => `<div class="hours-row hours-row-with-items">
       <div class="hours-row-name">
         ${esc(r.name)}
-        <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Assign subtask</button>
+        <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Add subtask</button>
       </div>
       <div>
         ${internal

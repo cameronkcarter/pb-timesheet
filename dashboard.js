@@ -300,7 +300,7 @@ function myExpenses() {
 }
 
 // Under each project's tasks, laid out like a task row: "Expenses" with
-// "Record expenses" on the left; on the right, your amount not yet invoiced,
+// "+ Record expense" on the left; on the right, your amount not yet invoiced,
 // then each expense like a subtask. Invoiced ones count as completed, so they
 // only show with "Show completed subtasks".
 function cardExpensesHtml(project) {
@@ -315,7 +315,7 @@ function cardExpensesHtml(project) {
     <div class="hours-row hours-row-with-items">
       <div class="hours-row-name">
         Expenses
-        <button type="button" class="small btn-expense" data-action="add-expense" data-project-id="${project.id}">Record expenses</button>
+        <button type="button" class="link-btn assign-link" data-action="add-expense" data-project-id="${project.id}">+ Record expense</button>
       </div>
       <div>
         <div class="expense-summary"><strong>${formatCurrency(sum(open))}</strong> not invoiced${invoicedSum ? ` <span class="appr-muted">· ${formatCurrency(invoicedSum)} invoiced</span>` : ""}</div>
