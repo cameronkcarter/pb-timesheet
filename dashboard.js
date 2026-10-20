@@ -246,7 +246,7 @@ function renderPay(myEntries) {
   const paidCount = invoiced.filter((r) => r.paid).length;
   const rows = [...upcoming, ...invoiced.filter((r) => showClientPaid || !r.paid)];
   const head = `<div class="pay-card-head">
-    <h2>Invoices</h2>
+    <h2>Your invoices</h2>
     ${paidCount ? `<button type="button" class="link-btn" data-action="toggle-paid">${showClientPaid ? "Hide client-paid" : `Show client-paid (${paidCount})`}</button>` : ""}
     <button type="button" class="icon-btn" data-action="close-pay" aria-label="Close">&times;</button>
   </div>`;
