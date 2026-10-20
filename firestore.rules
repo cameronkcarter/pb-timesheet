@@ -61,6 +61,24 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    // Project expenses (staff add their own; admins/PMs approve, record
+    // subconsultant invoices, invoice them and mark them reimbursed).
+    match /expenses/{id} {
+      function myOpenExpense(data) {
+        return data.personId == myPersonId()
+          && data.kind == "project"
+          && data.get("approved", false) == false
+          && data.get("invoiced", false) == false
+          && data.get("reimbursed", false) == false;
+      }
+
+      allow read: if isStaff();
+      allow create: if isAdmin() || (isStaff() && myOpenExpense(request.resource.data));
+      allow update: if isAdmin()
+        || (isStaff() && myOpenExpense(resource.data) && myOpenExpense(request.resource.data));
+      allow delete: if isAdmin() || (isStaff() && myOpenExpense(resource.data));
+    }
+
     match /timeEntries/{id} {
       // Your own entry that hasn't been invoiced.
       function mineAndOpen(data) {
