@@ -62,7 +62,9 @@ export function buildSheetPayload({ invoices, timeEntries, tasks, people, projec
         periodLabel: inv.periodLabel || "",
         projectId: inv.projectId,
         projectName: project ? project.name : inv.projectName,
-        total: inv.total,
+        // Labor only: the sheet compares against task budgets, and its overhead
+        // column is total minus staff pay, so expenses would skew both.
+        total: inv.laborTotal ?? inv.total,
         // Voided invoices are marked "VOID" (the sheet leaves them out of its reports).
         paidDate: inv.void ? "VOID" : inv.paid && inv.paidDate ? inv.paidDate.slice(0, 10) : "",
         lines: linesFromEntries(linked, { tasks, people, projects }).map((l) => ({

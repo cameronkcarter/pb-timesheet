@@ -1,11 +1,10 @@
 import { People, Projects, Tasks, TimeEntries, Invoices, Expenses } from "./db.js";
-import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
+import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
 import {
   formatCurrency, showToast, fmtHrs,
   lastDayOfMonth, formatShortMDY, toISODate, sortProjects, esc, projectColor,
 } from "./util.js";
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
-import { isTestMode } from "./session.js";
 import { billRateOf, paidAmount } from "./rates.js";
 import { expenseLabel, expenseQtyText, createExpenseEditor } from "./expenses.js";
 

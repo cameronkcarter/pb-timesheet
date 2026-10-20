@@ -124,7 +124,7 @@ if (sessionPersonId) {
 }
 
 // Projects you're on: assigned to a task, or its project manager, plus
-// internal ones (open to everyone). Admins can switch to "All".
+// internal ones (open to everyone). Admins can switch to "All projects".
 function visibleProjects() {
   if (showAll && isAdmin()) return sortProjects(projects);
   const assignedProjectIds = new Set(
@@ -252,12 +252,8 @@ function renderBudget() {
     ? `<div class="summary-label" style="margin:16px 0 4px;">Project-wide subtasks</div>${itemsListHtml(general, true)}`
     : "";
 
-  if (projectTasks.length === 0) {
-    budgetTbody.innerHTML = "";
-    budgetEmpty.style.display = "block";
-    return;
-  }
-  budgetEmpty.style.display = "none";
+  // No tasks yet: say so, but still show the expense rows below.
+  budgetEmpty.style.display = projectTasks.length ? "none" : "block";
 
   const totals = { budget: 0, spent: 0, committed: 0, invoiced: 0, unassigned: 0 };
   const rows = projectTasks.map((t, i) => {
@@ -653,7 +649,7 @@ budgetTbody.addEventListener("click", async (e) => {
   renderBudget();
 });
 
-// ---------- Admin tools: Mine/All, add/edit project, edit assignments ----------
+// ---------- Admin tools: Assigned/All, add/edit project, edit staff & hours ----------
 const projectEditor = createProjectEditor({
   getData: () => ({ people, projects, tasks, assignments, dueDates, timeEntries, invoices, expenses }),
   onSaved: (projectId) => {
@@ -698,11 +694,9 @@ document.addEventListener("click", (e) => {
   }
 });
 
-const canEdit = () => isAdmin();
-
 function renderGantt() {
   const project = projects.find((p) => p.id === selectedProjectId);
-  editTimelineBtn.style.display = project && canEdit() ? "" : "none";
+  editTimelineBtn.style.display = project && isAdmin() ? "" : "none";
   if (!project) {
     ganttChart.innerHTML = "";
     return;
@@ -761,7 +755,6 @@ function renderGantt() {
     ${ticks.map((t) => `<div class="gantt-tick" style="left:${t.x}px;">${t.label}</div>`).join("")}
   </div>`;
 
-  editTimelineBtn.style.display = canEdit() ? "" : "none";
   const projectRemaining = projectTasks.reduce((s, t) => s + (Number(t.budget || 0) - spentOnTask(t.id)), 0);
   const projectDotsHtml = projectDueDates.filter((d) => !d.taskId).map(dotHtml).join("");
   const canEditTimeline = isAdmin();

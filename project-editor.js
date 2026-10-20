@@ -1,7 +1,7 @@
 // The project popup (admins, on the Projects tab): name, client, PM, billing,
 // invoice-to details and tasks with budgets and dates. Also removes projects.
 // Markup lives in projects.html (#projectModal).
-import { Projects, Tasks, Assignments, TimeEntries, DueDates } from "./db.js";
+import { Projects, Tasks, Assignments, TimeEntries, DueDates, Expenses } from "./db.js";
 import { formatCurrency, showToast, closeOnBackdropClick, esc } from "./util.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
 
@@ -136,18 +136,20 @@ export function createProjectEditor({ getData, onSaved }) {
   }
 
   // Removes a project and everything that belongs to it (tasks, assignments,
-  // subtasks and events, logged hours). Refuses if anything was ever
+  // subtasks and events, logged hours, expenses). Refuses if anything was ever
   // invoiced, since that history is part of the invoice paper trail.
   async function remove(projectId) {
-    const { projects, tasks, assignments, dueDates, timeEntries, invoices } = getData();
+    const { projects, tasks, assignments, dueDates, timeEntries, invoices, expenses = [] } = getData();
     const project = projects.find((p) => p.id === projectId);
     if (!project) return false;
     const projectTasks = tasks.filter((t) => t.projectId === projectId);
     const projectAssignments = assignments.filter((a) => a.projectId === projectId);
     const projectDueDates = dueDates.filter((d) => d.projectId === projectId);
     const projectEntries = timeEntries.filter((e) => e.projectId === projectId);
+    const projectExpenses = expenses.filter((e) => e.projectId === projectId);
 
-    if (projectEntries.some((e) => e.invoiced) || invoices.some((i) => i.projectId === projectId)) {
+    if (projectEntries.some((e) => e.invoiced) || projectExpenses.some((e) => e.invoiced) ||
+      invoices.some((i) => i.projectId === projectId)) {
       alert(`"${project.name}" has invoiced hours, so it can't be removed — that would break the invoice history.`);
       return false;
     }
@@ -155,12 +157,14 @@ export function createProjectEditor({ getData, onSaved }) {
     const counts = [
       [projectTasks.length, "task"], [projectAssignments.length, "assignment"],
       [projectDueDates.length, "subtask/event"], [projectEntries.length, "logged time entry"],
+      [projectExpenses.length, "expense"],
     ].filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}${n === 1 ? "" : "s"}`);
     const detail = counts.length ? `\n\nThis also permanently deletes its ${counts.join(", ")}.` : "";
     if (!confirm(`Permanently remove "${project.name}"?${detail}\n\nThis can't be undone.`)) return false;
 
     try {
       for (const e of projectEntries) await TimeEntries.remove(e.id);
+      for (const e of projectExpenses) await Expenses.remove(e.id);
       for (const d of projectDueDates) await DueDates.remove(d.id);
       for (const a of projectAssignments) await Assignments.remove(a.id);
       for (const t of projectTasks) await Tasks.remove(t.id);

@@ -20,8 +20,6 @@ export function expenseQtyText(e) {
   return `${Math.round(Number(e.quantity) * 100) / 100}${unit ? " " + unit : ""} × ${formatCurrency(e.rate)}`;
 }
 
-export const expenseAmount = (e) => Number(e.amount || 0);
-
 // What an expense is, in a few words: "Travel · Site visit mileage".
 export function expenseLabel(e, project) {
   if (e.kind === "sub") {

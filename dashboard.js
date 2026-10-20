@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
-  formatCurrency, formatDate, esc, fmtHrs,
+  formatCurrency, esc, fmtHrs,
   todayISO, toISODate, getWeekStart, addDays, projectColor, hoursBarHtml, dueItemHtml, sortProjects,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";

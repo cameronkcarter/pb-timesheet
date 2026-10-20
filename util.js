@@ -13,16 +13,6 @@ export function formatDate(dateStr) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function daysAgo(dateStr) {
-  if (!dateStr) return "";
-  const then = new Date(dateStr);
-  const diffMs = Date.now() - then.getTime();
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (days <= 0) return "today";
-  if (days === 1) return "1 day ago";
-  return `${days} days ago`;
-}
-
 // Local date, not UTC — otherwise after ~6pm Mountain "today" becomes tomorrow.
 export function todayISO() {
   return toISODate(new Date());
