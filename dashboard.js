@@ -101,8 +101,8 @@ function render() {
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedUnpaid);
   const owedBack = myExpenses().filter((e) => !e.declined && !e.reimbursed).reduce((t, e) => t + Number(e.amount || 0), 0);
-  document.getElementById("statExpensesWrap").hidden = owedBack < 0.005;
   document.getElementById("statExpenses").textContent = formatCurrency(owedBack);
+  document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid + owedBack);
   renderPay(myEntries);
 
   // Your subtasks; completed ones too unless hidden.
@@ -184,10 +184,7 @@ function render() {
     return `<div class="card">
       <div class="hours-card-header">
         <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${esc(project.name)}</h2>
-        <div class="card-head-right">
-          ${budgetPct != null ? `<div class="empty" style="padding:0;">Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong></div>` : ""}
-          ${isInternal(project) ? "" : `<button class="small btn-tint-purple" data-action="add-expense" data-project-id="${project.id}">+ Add expense</button>`}
-        </div>
+        ${budgetPct != null ? `<div class="empty" style="padding:0;">Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong></div>` : ""}
       </div>
       ${totalAssigned > 0 ? `
         <div class="hours-total">
@@ -200,6 +197,7 @@ function render() {
         <div>${itemsHtml(generalItems)}</div>
       </div>` : ""}
       ${!taskRows && !generalItems.length ? '<div class="empty">No hours assigned to you on this project yet.</div>' : ""}
+      ${isInternal(project) ? "" : cardExpensesHtml(project)}
     </div>`;
   }).join("");
 }
@@ -223,30 +221,42 @@ function renderPay(myEntries) {
   const billable = myEntries.filter((e) => !isInternal(projectOf(e.projectId)));
   const hoursOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
+  // Your expenses go on the same invoices as your hours.
+  const mine = myExpenses().filter((e) => !e.declined);
+
   // Not invoiced yet: one row per project.
   const open = billable.filter((e) => !e.invoiced && !e.declined);
-  const upcoming = [...new Set(open.map((e) => e.projectId))].map((pid) => {
-    const entries = open.filter((e) => e.projectId === pid);
-    return { date: "", number: "", projectId: pid, entries, status: ["Not invoiced", "pending"] };
-  });
+  const openExp = mine.filter((e) => !e.invoiced);
+  const upcoming = [...new Set([...open, ...openExp].map((e) => e.projectId))].map((pid) => ({
+    date: "", number: "", projectId: pid,
+    entries: open.filter((e) => e.projectId === pid),
+    exps: openExp.filter((e) => e.projectId === pid),
+    status: ["Not invoiced", "pending"],
+  }));
 
   // Invoiced: one row per invoice.
   const byInvoice = new Map();
+  const keyOf = (e) => e.invoiceId || `${e.projectId}|${(e.invoicedDate || "").slice(0, 10)}`;
   billable.filter((e) => e.invoiced).forEach((e) => {
-    const k = e.invoiceId || `${e.projectId}|${(e.invoicedDate || "").slice(0, 10)}`;
-    if (!byInvoice.has(k)) byInvoice.set(k, []);
-    byInvoice.get(k).push(e);
+    if (!byInvoice.has(keyOf(e))) byInvoice.set(keyOf(e), { entries: [], exps: [] });
+    byInvoice.get(keyOf(e)).entries.push(e);
   });
-  const invoiced = [...byInvoice].map(([k, entries]) => {
+  mine.filter((e) => e.invoiced).forEach((e) => {
+    if (!byInvoice.has(keyOf(e))) byInvoice.set(keyOf(e), { entries: [], exps: [] });
+    byInvoice.get(keyOf(e)).exps.push(e);
+  });
+  const invoiced = [...byInvoice].map(([k, { entries, exps }]) => {
+    const first = entries[0] || exps[0];
     const inv = invoices.find((i) => i.id === k);
-    const paid = (inv && inv.paid) || entries.every((e) => e.paid);
+    const paid = (inv && inv.paid) || (entries.length > 0 && entries.every((e) => e.paid));
     const paidDate = (inv && inv.paidDate) || entries.find((e) => e.paidDate)?.paidDate;
     return {
-      date: (inv && inv.date) || entries[0].invoicedDate || "",
+      date: (inv && inv.date) || first.invoicedDate || "",
       number: (inv && inv.invoiceNumber) || "",
-      projectId: entries[0].projectId,
+      projectId: first.projectId,
       projectName: inv && inv.projectName,
       entries,
+      exps,
       paid,
       status: paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "paid"] : ["Outstanding", "invoiced"],
     };
@@ -259,16 +269,16 @@ function renderPay(myEntries) {
     ${paidCount ? `<button type="button" class="link-btn" data-action="toggle-paid">${showClientPaid ? "Hide client-paid" : `Show client-paid (${paidCount})`}</button>` : ""}
     <button type="button" class="icon-btn" data-action="close-pay" aria-label="Close">&times;</button>
   </div>`;
-  const expensesHtml = yourExpensesHtml();
   if (!rows.length) {
-    payPanel.innerHTML = head + `<div class="pay-empty">${paidCount ? "All paid." : "No billable hours yet."}</div>` + expensesHtml;
+    payPanel.innerHTML = head + `<div class="pay-empty">${paidCount ? "All paid." : "No billable hours yet."}</div>`;
     return;
   }
+  const expSum = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
 
   payPanel.innerHTML = head + `<div class="pay-scroll"><table class="pay-table">
     <thead><tr>
       <th class="col-num">Date</th><th class="col-num">Invoice #</th><th>Project</th>
-      <th class="num">Hours</th><th class="num">Pay</th><th>Status</th>
+      <th class="num">Hours</th><th class="num">Expenses</th><th class="num">Pay</th><th>Status</th>
     </tr></thead>
     <tbody>${rows.map((r) => {
       const project = projectOf(r.projectId);
@@ -276,41 +286,38 @@ function renderPay(myEntries) {
         <td class="col-num ${r.date ? "" : "blank"}">${r.date ? shortDate(r.date) : "—"}</td>
         <td class="col-num ${r.number ? "" : "blank"}">${r.number ? esc(r.number) : "—"}</td>
         <td class="proj"><span class="pay-dot" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : r.projectName || "Project")}</td>
-        <td class="num">${fmtHrs(hoursOf(r.entries))}</td>
-        <td class="num"><strong>${formatCurrency(paidAmount(r.entries, ctx))}</strong></td>
+        <td class="num">${r.entries.length ? fmtHrs(hoursOf(r.entries)) : "—"}</td>
+        <td class="num ${r.exps.length ? "" : "blank"}">${r.exps.length ? formatCurrency(expSum(r.exps)) : "—"}</td>
+        <td class="num"><strong>${formatCurrency(paidAmount(r.entries, ctx) + expSum(r.exps))}</strong></td>
         <td><span class="pay-status ${r.status[1]}">${esc(r.status[0])}</span></td>
       </tr>`;
     }).join("")}</tbody>
-  </table></div>` + expensesHtml;
+  </table></div>`;
 }
 
 function myExpenses() {
   return expenses.filter((e) => e.personId === selectedPersonId && e.kind !== "sub");
 }
 
-// Expenses you paid for: pending, approved, declined (edit to resubmit) and,
-// with "Show client-paid", reimbursed ones too.
-function yourExpensesHtml() {
-  const list = myExpenses().filter((e) => showClientPaid || !e.reimbursed)
+// Under each project's tasks: your expenses there that aren't invoiced yet
+// (pending, approved, or declined — edit to resubmit), and "+ Add expense".
+function cardExpensesHtml(project) {
+  const list = myExpenses().filter((e) => e.projectId === project.id && !e.invoiced)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
-  if (!list.length) return "";
-  return `<div class="pay-card-head your-expenses-head"><h2>Your expenses</h2></div>
-  <div class="pay-scroll"><table class="pay-table">
-    <thead><tr><th>Date</th><th>Project</th><th>Description</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${list.map((e) => {
-      const project = projects.find((p) => p.id === e.projectId);
+  return `<div class="card-expenses">
+    ${list.length ? `<div class="summary-label">Your expenses</div>
+    <div class="due-list">${list.map((e) => {
       const [status, cls] = expenseStatus(e);
-      const editable = !e.approved && !e.invoiced;
-      return `<tr>
-        <td>${shortDate(e.date)}</td>
-        <td class="proj"><span class="pay-dot" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : "Project")}</td>
-        <td>${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</td>
-        <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
-        <td><span class="pay-status ${cls}">${status}</span></td>
-        <td class="num">${editable ? `<button class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}</td>
-      </tr>`;
-    }).join("")}</tbody>
-  </table></div>`;
+      const editable = !e.approved;
+      return `<div class="due-item expense-item">
+        <span class="due-title">${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span>
+        <strong>${formatCurrency(e.amount)}</strong>
+        <span class="pay-status ${cls}">${status}</span>
+        ${editable ? `<button type="button" class="link-btn due-edit" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
+      </div>`;
+    }).join("")}</div>` : ""}
+    <button type="button" class="link-btn assign-link" data-action="add-expense" data-project-id="${project.id}">+ Add expense</button>
+  </div>`;
 }
 
 payToggle.addEventListener("click", () => {
@@ -323,11 +330,6 @@ payPanel.addEventListener("click", (e) => {
   if (!btn) return;
   if (btn.dataset.action === "toggle-paid") showClientPaid = !showClientPaid;
   if (btn.dataset.action === "close-pay") payOpen = false;
-  if (btn.dataset.action === "edit-expense") {
-    const e = expenses.find((x) => x.id === btn.dataset.id);
-    if (e) expenseEditor.open(e);
-    return;
-  }
   render();
 });
 
@@ -362,6 +364,11 @@ projectSummaryCards.addEventListener("click", (e) => {
   if (!btn) return;
   if (btn.dataset.action === "add-expense") {
     expenseEditor.open(null, { kind: "project", projectId: btn.dataset.projectId });
+    return;
+  }
+  if (btn.dataset.action === "edit-expense") {
+    const exp = expenses.find((x) => x.id === btn.dataset.id);
+    if (exp) expenseEditor.open(exp);
     return;
   }
   const { action, id } = btn.dataset;

@@ -9,7 +9,7 @@ import {
   billRateOf, billedAmount, assignedHours, assignmentRate, isInternal, taskBudgetUse,
 } from "./rates.js";
 import { createProjectEditor } from "./project-editor.js";
-import { createExpenseEditor, expenseLabel, expenseStatus, countsToward } from "./expenses.js";
+import { createExpenseEditor, expenseLabel, expenseStatus, expenseQtyText, countsToward } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -232,7 +232,7 @@ function renderBudget() {
   if (internal) editMode = false;
   const projectTasks = selectedProjectTasks();
   const thead = document.querySelector("#budgetTable thead");
-  const cols = editMode ? 6 : 5;
+  const cols = 5;
 
   const pm = people.find((x) => x.id === project.pmPersonId);
   budgetPm.textContent = internal ? "Internal" : pm ? `PM: ${pm.name}` : "";
@@ -245,7 +245,7 @@ function renderBudget() {
 
   thead.innerHTML = internal
     ? `<tr><th class="internal-task-col">Task</th><th colspan="4">Hours logged</th></tr>`
-    : `<tr><th>Task</th><th class="c-money">Budget</th><th class="c-money">Spent</th><th class="c-bar">Progress</th><th class="c-money">Remaining</th>${editMode ? '<th class="c-money">Unassigned</th>' : ""}</tr>`;
+    : `<tr><th>Task</th><th class="c-money">Budget</th><th class="c-money">Spent</th><th class="c-bar">Progress</th><th class="c-money">Remaining</th></tr>`;
 
   const general = editMode ? [] : projectItems({ taskId: null });
   generalItemsEl.innerHTML = general.length
@@ -277,12 +277,11 @@ function renderBudget() {
       totals.unassigned += use.unassigned;
       cells = `<td>${formatCurrency(use.budget)}</td><td>${formatCurrency(use.spent)}</td>
         <td class="progressCell">${budgetBarHtml(use.spent, use.committed, use.budget, false, invoiced)}</td>
-        <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>
-        ${editMode ? `<td class="unassignedCell">${unassignedHtml(t)}</td>` : ""}`;
+        <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>`;
     }
     const open = dueDates.filter((d) => d.taskId === t.id && isSubtask(d) && !d.completed);
     const overdue = open.some((d) => d.dueDate < todayISO());
-    const dueChip = !editMode && open.length ? `<span class="due-chip ${overdue ? "overdue" : ""}" title="Open subtasks on this task">${open.length} due</span>` : "";
+    const dueChip = open.length ? `<span class="due-chip ${overdue ? "overdue" : ""}" title="Open subtasks on this task">${open.length} due</span>` : "";
     const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><div class="task-cell" title="${esc(t.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${esc(t.name)}</span>${dueChip}</div></td>${cells}</tr>`;
     if (!expanded) return mainRow;
     return mainRow + `<tr class="task-detail" data-task-id="${t.id}"><td colspan="${cols}" class="accordion-cell">${editMode ? assignEditorHtml(t) : taskPeopleHtml(t)}</td></tr>`;
@@ -310,7 +309,6 @@ function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = 
 function expenseRowsHtml(project, taskTotals, cols) {
   const list = expenses.filter((e) => e.projectId === project.id && countsToward(e));
   const sum = (arr) => arr.reduce((t, e) => t + Number(e.amount || 0), 0);
-  const blank = editMode ? "<td></td>" : "";
 
   const groups = [
     { key: "exp:project", name: "Project expenses", budget: Number(project.expenseBudget || 0), items: list.filter((e) => e.kind !== "sub") },
@@ -329,22 +327,19 @@ function expenseRowsHtml(project, taskTotals, cols) {
     const expanded = expandedTaskId === g.key;
     const row = `<tr class="task-row expense-row ${expanded ? "expanded" : ""}" data-task-row="${g.key}">
       <td><div class="task-cell" title="${esc(g.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${g.sub ? `<span class="row-kind">Sub</span>` : ""}${esc(g.name)}</span></div></td>
-      ${moneyCells({ budget: g.budget, spent, invoiced }, blank)}</tr>`;
+      ${moneyCells({ budget: g.budget, spent, invoiced })}</tr>`;
     return expanded ? row + `<tr><td colspan="${cols}" class="accordion-cell">${expenseListHtml(g)}</td></tr>` : row;
   }).join("");
 
-  const unassignedCell = editMode
-    ? `<td>${taskTotals.unassigned < -0.005 ? `<span class="hours-over-strong">Over by ${formatCurrency(-taskTotals.unassigned)}</span>` : formatCurrency(taskTotals.unassigned)}</td>`
-    : "";
-  return `<tr class="budget-subtotal-row"><td>Tasks subtotal</td>${moneyCells(taskTotals, unassignedCell)}</tr>
+  return `<tr class="budget-subtotal-row"><td>Tasks subtotal</td>${moneyCells(taskTotals)}</tr>
     ${groupRows}
-    <tr class="budget-subtotal-row"><td>Expenses subtotal</td>${moneyCells(exp, blank)}</tr>
+    <tr class="budget-subtotal-row"><td>Expenses subtotal</td>${moneyCells(exp)}</tr>
     <tr class="budget-total-row"><td>Total</td>${moneyCells({
       budget: taskTotals.budget + exp.budget,
       spent: taskTotals.spent + exp.spent,
       committed: taskTotals.committed + exp.spent,
       invoiced: taskTotals.invoiced + exp.invoiced,
-    }, blank)}</tr>`;
+    })}</tr>`;
 }
 
 function isPmOf(projectId) {
@@ -369,7 +364,7 @@ function expenseListHtml(g) {
   if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">Nothing recorded yet.</div>${addBtn}`;
   const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `<table class="expense-list">
-    <thead><tr><th>Date</th><th>Description</th>${g.sub ? "" : "<th>Paid by</th><th class=\"num\">Qty × rate</th>"}<th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Description</th>${g.sub ? "" : "<th>Paid by</th><th class=\"num\">Quantity</th>"}<th class="num">Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>${items.map((e) => {
       const [status, cls] = expenseStatus(e);
       const payer = people.find((p) => p.id === e.personId);
@@ -377,7 +372,7 @@ function expenseListHtml(g) {
       return `<tr>
         <td>${shortDate(e.date)}</td>
         <td>${esc(g.sub ? e.description || "—" : expenseLabel(e, project))}${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</td>
-        ${g.sub ? "" : `<td>${payer ? esc(payer.name) : "Company"}</td><td class="num">${fmtHrs(Number(e.quantity || 0))} × ${formatCurrency(e.rate)}</td>`}
+        ${g.sub ? "" : `<td>${payer ? esc(payer.name) : "Company"}</td><td class="num">${expenseQtyText(e) || "—"}</td>`}
         <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
         <td><span class="pay-status ${cls}">${status}</span></td>
         <td class="num expense-actions">
@@ -511,6 +506,7 @@ function assignEditorHtml(task) {
     .sort((a, b) => (people.find((p) => p.id === a.personId)?.name || "").localeCompare(people.find((p) => p.id === b.personId)?.name || ""))
     .map((a) => assignRowHtml(a, color)).join("");
   return `<div class="assign-list">
+    <div class="assign-summary">Unassigned budget <strong class="unassignedCell">${unassignedHtml(task)}</strong></div>
     ${rows || '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
     ${addPersonHtml(task)}
   </div>`;
@@ -532,7 +528,7 @@ function liveUpdateTask(detailRow) {
   const mainRow = budgetTbody.querySelector(`tr.task-row[data-task-row="${task.id}"]`);
   if (!mainRow) return;
   const use = taskBudgetUse(task, { projects, people, assignments, timeEntries }, override);
-  const cell = mainRow.querySelector(".unassignedCell");
+  const cell = detailRow.querySelector(".unassignedCell");
   if (cell) cell.innerHTML = unassignedHtml(task, override);
   const progressCell = mainRow.querySelector(".progressCell");
   if (progressCell) progressCell.innerHTML = budgetBarHtml(use.spent, use.committed, use.budget, false, invoicedOnTask(task.id));

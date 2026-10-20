@@ -4,7 +4,21 @@
 import { Expenses } from "./db.js";
 import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO } from "./util.js";
 
-export const CATEGORIES = ["Travel", "Lodging", "Meals", "Materials", "Printing", "Other"];
+export const CATEGORIES = ["Travel", "Lodging", "Meals", "Materials", "Other"];
+
+// Categories billed per unit, with default rates (editable per expense).
+// Others are just an amount.
+export const UNIT_CATEGORIES = {
+  Travel: { label: "Miles", unit: "mi", rate: 0.7 },
+  Lodging: { label: "Nights", unit: "nights", rate: 150 },
+};
+
+// "42 mi × $0.70", or "" for amount-only expenses.
+export function expenseQtyText(e) {
+  if (e.quantity == null || e.rate == null) return "";
+  const unit = UNIT_CATEGORIES[e.category]?.unit || "";
+  return `${Math.round(Number(e.quantity) * 100) / 100}${unit ? " " + unit : ""} × ${formatCurrency(e.rate)}`;
+}
 
 export const expenseAmount = (e) => Number(e.amount || 0);
 
@@ -58,11 +72,11 @@ const MARKUP = `
           <input type="date" id="expenseDate" />
         </label>
         <label class="row-item" for="expenseQuantity" id="expenseQuantityRow">
-          <span class="row-label">Quantity</span>
+          <span class="row-label" id="expenseQuantityLabel">Quantity</span>
           <input type="number" id="expenseQuantity" min="0" step="any" placeholder="1" />
         </label>
         <label class="row-item" for="expenseRate" id="expenseRateRow">
-          <span class="row-label">Rate</span>
+          <span class="row-label" id="expenseRateLabel">Rate</span>
           <input type="number" id="expenseRate" min="0" step="0.01" placeholder="0.00" />
         </label>
         <label class="row-item" for="expenseAmount" id="expenseAmountRow">
@@ -101,6 +115,8 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
   const amount = $("expenseAmount");
   const paidBy = $("expensePaidBy");
   const cost = $("expenseCost");
+  const quantityLabel = $("expenseQuantityLabel");
+  const rateLabel = $("expenseRateLabel");
   const deleteBtn = $("expenseDelete");
   const saveBtn = $("expenseSave");
 
@@ -119,8 +135,24 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     if (selected) subField.value = selected;
   }
 
+  // Travel/Lodging: quantity × rate (miles, nights). Others: an amount.
+  function applyCategory(fromChange) {
+    if (kind !== "project") return;
+    const unit = UNIT_CATEGORIES[category.value];
+    show("expenseQuantityRow", !!unit);
+    show("expenseRateRow", !!unit);
+    show("expenseAmountRow", !unit);
+    if (unit) {
+      quantityLabel.textContent = unit.label;
+      rateLabel.textContent = `Rate / ${unit.unit === "mi" ? "mile" : "night"}`;
+      const defaults = Object.values(UNIT_CATEGORIES).map((u) => u.rate);
+      if (fromChange && (rate.value === "" || defaults.includes(Number(rate.value)))) rate.value = unit.rate;
+    }
+    updateCost();
+  }
+
   function updateCost() {
-    if (kind !== "project") { cost.textContent = ""; return; }
+    if (kind !== "project" || !UNIT_CATEGORIES[category.value]) { cost.textContent = ""; return; }
     const total = (Number(quantity.value) || 0) * (Number(rate.value) || 0);
     cost.textContent = total ? `Cost ${formatCurrency(total)}` : "";
   }
@@ -140,8 +172,8 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
 
     show("expenseSubField", kind === "sub");
     show("expenseCategoryRow", kind === "project");
-    show("expenseQuantityRow", kind === "project");
-    show("expenseRateRow", kind === "project");
+    show("expenseQuantityRow", false);
+    show("expenseRateRow", false);
     show("expenseAmountRow", kind === "sub");
     show("expensePaidByRow", kind === "project" && canPickPayer());
     if (kind === "sub") fillSubs(projectSelect.value, record ? record.subId : preset.subId);
@@ -155,9 +187,10 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     description.value = record ? record.description || "" : "";
     category.value = record?.category || CATEGORIES[0];
     date.value = record ? record.date : todayISO();
-    quantity.value = record?.quantity ?? (kind === "project" ? 1 : "");
-    rate.value = record?.rate ?? "";
-    amount.value = record && kind === "sub" ? record.amount : "";
+    quantity.value = record?.quantity ?? "";
+    rate.value = record?.rate ?? (UNIT_CATEGORIES[category.value]?.rate ?? "");
+    amount.value = record && (kind === "sub" || record.quantity == null) ? record.amount : "";
+    applyCategory(false);
     description.placeholder = kind === "sub" ? "e.g. Invoice #1042" : "e.g. Mileage to site visit";
     updateCost();
     deleteBtn.style.display = record ? "" : "none";
@@ -169,6 +202,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
   function close() { modal.style.display = "none"; }
 
   projectSelect.addEventListener("change", () => { if (kind === "sub") fillSubs(projectSelect.value); });
+  category.addEventListener("change", () => applyCategory(true));
   quantity.addEventListener("input", updateCost);
   rate.addEventListener("input", updateCost);
   $("expenseClose").addEventListener("click", close);
@@ -201,13 +235,21 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
       data = { kind, projectId, subId: subField.value, description: desc, date: date.value, amount: total };
       if (!editing) Object.assign(data, { approved: true, approvedDate: new Date().toISOString() });
     } else {
-      const q = Number(quantity.value);
-      const r = Number(rate.value);
+      const unit = UNIT_CATEGORIES[category.value];
       if (!desc) return showToast("Add a description.");
-      if (!(q > 0) || !(r > 0)) return showToast("Enter a quantity and rate.");
+      let money;
+      if (unit) {
+        const q = Number(quantity.value);
+        const r = Number(rate.value);
+        if (!(q > 0) || !(r > 0)) return showToast(`Enter the ${unit.label.toLowerCase()} and rate.`);
+        money = { quantity: q, rate: r, amount: Math.round(q * r * 100) / 100 };
+      } else {
+        const total = Number(amount.value);
+        if (!(total > 0)) return showToast("Enter the amount.");
+        money = { quantity: null, rate: null, amount: Math.round(total * 100) / 100 };
+      }
       data = {
-        kind, projectId, category: category.value, description: desc, date: date.value,
-        quantity: q, rate: r, amount: Math.round(q * r * 100) / 100,
+        kind, projectId, category: category.value, description: desc, date: date.value, ...money,
         personId: canPickPayer() ? paidBy.value || null : sessionPersonId,
       };
       // Editing a declined expense resubmits it.

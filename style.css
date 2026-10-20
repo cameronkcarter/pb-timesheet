@@ -3043,9 +3043,6 @@ table.expense-list {
   margin: 0;
 }
 
-.your-expenses-head {
-  margin-top: 16px;
-}
 
 /* Invoices: alternating rows; overhead stands out. */
 .inv-table > tbody > tr.inv-row:nth-of-type(even) td {
@@ -3063,4 +3060,77 @@ table.expense-list {
 
 table.inv-expenses {
   margin-top: 10px;
+}
+
+/* Pay box: one line each, amounts lined up on the right. */
+.stat-split.stat-lines {
+  flex-direction: column;
+  gap: 4px;
+  max-width: 280px;
+}
+
+.stat-split.stat-lines span {
+  display: flex;
+  align-items: center;
+}
+
+.stat-split.stat-lines strong {
+  margin-left: auto;
+}
+
+/* Dashboard project card: expenses below the tasks. */
+.card-expenses {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.card-expenses .due-list {
+  margin: 4px 0 6px;
+}
+
+.expense-item strong {
+  font-size: 13px;
+}
+
+.declined-note.inline {
+  display: inline;
+  margin-left: 6px;
+}
+
+/* Edit assignments: rows line up with the people view (name column 180px). */
+td.accordion-cell .assign-row {
+  grid-template-columns: 180px 130px minmax(0, 1fr) 32px;
+  gap: 20px;
+}
+
+.assign-summary {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 0 0 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.assign-summary strong {
+  color: var(--text);
+}
+
+/* Subtotals are quiet; the grand total stands out. */
+#budgetTable tr.budget-subtotal-row td {
+  font-weight: 600;
+  background: #fbfaf7;
+  color: var(--text-muted);
+  border-top: 1px solid #e3ddd3;
+}
+
+#budgetTable tr.budget-total-row td {
+  font-weight: 800;
+  font-size: 15px;
+  background: #f1e9f7;
+  color: var(--plum);
+  border-top: 2px solid var(--civic-purple);
 }
