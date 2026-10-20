@@ -2,7 +2,7 @@
 // and timeline events share one record type (DueDates) and one editor, used
 // on the Projects page and the Dashboard. The editor's markup is created here
 // so both pages get the same pop-up.
-import { DueDates } from "./db.js";
+import { DueDates, Assignments } from "./db.js";
 import { showToast, closeOnBackdropClick, esc } from "./util.js";
 
 // A subtask has people; an event (shown on the timeline) doesn't.
@@ -71,7 +71,7 @@ const MARKUP = `
   </div>
 </div>`;
 
-// getData()        -> { people, tasks, projects } (current lists)
+// getData()        -> { people, tasks, projects, assignments } (current lists)
 // projectChoices() -> projects offered in the Project dropdown
 // canManage(d)     -> may this person edit/delete record d
 export function createItemEditor({ getData, sessionPersonId, projectChoices, canManage }) {
@@ -174,10 +174,26 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
         showToast("Added.");
       }
       close();
+      await addToTask(projectId, taskId, personIds);
     } catch (err) {
       showToast("Error: " + err.message);
     }
   });
+
+  // Giving someone a subtask on a task they aren't on yet adds them to that
+  // task with 0 assigned hours (admins only; staff can't change assignments).
+  async function addToTask(projectId, taskId, personIds) {
+    const { people, projects, assignments } = getData();
+    const me = people.find((p) => p.id === sessionPersonId);
+    const project = projects.find((p) => p.id === projectId);
+    if (!taskId || !assignments || !me || !me.isAdmin || !project || project.internal) return;
+    const missing = personIds.filter((pid) => !assignments.some((a) => a.taskId === taskId && a.personId === pid));
+    try {
+      await Promise.all(missing.map((personId) => Assignments.add({ projectId, taskId, personId, hours: 0 })));
+    } catch (err) {
+      console.warn("Couldn't add to task:", err);
+    }
+  }
 
   return { open };
 }

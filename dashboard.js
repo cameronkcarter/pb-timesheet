@@ -316,7 +316,7 @@ function cardExpensesHtml(project) {
         ${editable ? `<button type="button" class="link-btn due-edit" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
       </div>`;
     }).join("")}</div>` : ""}
-    <button type="button" class="link-btn assign-link" data-action="add-expense" data-project-id="${project.id}">+ Add expense</button>
+    <button type="button" class="small btn-expense" data-action="add-expense" data-project-id="${project.id}">Record expenses</button>
   </div>`;
 }
 
@@ -340,7 +340,7 @@ function canManage(d) {
 }
 
 const itemEditor = createItemEditor({
-  getData: () => ({ people, tasks, projects }),
+  getData: () => ({ people, tasks, projects, assignments }),
   sessionPersonId: selectedPersonId,
   // Projects you're on, plus internal ones (open to all); newest first.
   projectChoices: () => sortProjects(projects.filter((p) => isInternal(p) || (

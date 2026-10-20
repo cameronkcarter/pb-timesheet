@@ -3134,3 +3134,37 @@ td.accordion-cell .assign-row {
   color: var(--plum);
   border-top: 2px solid var(--civic-purple);
 }
+
+/* Dashboard: "Record expenses" — its own look, not a subtask link. */
+button.btn-expense {
+  margin: 4px 0 0;
+  background: #fff;
+  color: var(--plum);
+  border: 1px dashed var(--wisteria);
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+button.btn-expense::before {
+  content: "$";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--parchment);
+  color: var(--plum);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+button.btn-expense:hover {
+  background: #f6f0fc;
+  border-style: solid;
+}
+
+.inv-head button.small {
+  margin: 0;
+}

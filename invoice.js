@@ -7,7 +7,7 @@ import {
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
 import { isTestMode } from "./session.js";
 import { billRateOf, paidAmount } from "./rates.js";
-import { expenseLabel } from "./expenses.js";
+import { expenseLabel, createExpenseEditor } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -35,6 +35,8 @@ const invoiceBody = document.getElementById("invoiceBody");
 const nextBody = document.getElementById("nextBody");
 const pastBody = document.getElementById("pastBody");
 const nextTotal = document.getElementById("nextTotal");
+const subBody = document.getElementById("subBody");
+const subTotal = document.getElementById("subTotal");
 const pastTotal = document.getElementById("pastTotal");
 const togglePaidBtn = document.getElementById("togglePaid");
 
@@ -298,6 +300,7 @@ function render() {
   }
   renderDeferred = false;
 
+  renderSubInvoices();
   const next = nextRows();
   const past = invoiceRows();
   const paidCount = past.filter((r) => r.inv.paid).length;
@@ -350,6 +353,59 @@ function render() {
     }).join("")}</tbody>
   </table></div>` : `<div class="empty">${paidCount ? "All paid." : "No invoices yet."}</div>`;
 }
+
+// ---------- Subconsultant invoices ----------
+// Invoices received from subconsultants: recorded here (or on the Projects
+// tab), then billed to the client on that project's next invoice.
+function renderSubInvoices() {
+  const subs = expenses.filter((e) => e.kind === "sub").sort((a, b) => (a.date < b.date ? 1 : -1));
+  const unbilled = subs.filter((e) => !e.invoiced).reduce((t, e) => t + Number(e.amount || 0), 0);
+  subTotal.textContent = unbilled ? `${formatCurrency(unbilled)} unbilled` : "";
+  if (!subs.length) {
+    subBody.innerHTML = '<div class="empty">None recorded yet.</div>';
+    return;
+  }
+  subBody.innerHTML = `<div class="pay-scroll"><table class="pay-table inv-table">
+    <thead><tr><th>Date</th><th>Project</th><th>Subconsultant</th><th>Description</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>${subs.map((e) => {
+      const project = projects.find((p) => p.id === e.projectId);
+      const sub = (project?.subconsultants || []).find((x) => x.id === e.subId);
+      const inv = e.invoiceId && invoices.find((i) => i.id === e.invoiceId);
+      return `<tr class="inv-row">
+        <td>${shortDate(e.date)}</td>
+        <td class="proj"><span class="pay-dot" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : "Project")}</td>
+        <td>${esc(sub ? sub.name : "—")}</td>
+        <td>${esc(e.description || "—")}</td>
+        <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
+        <td>${e.invoiced
+          ? `<span class="pay-status invoiced">Billed${inv ? " · " + esc(inv.invoiceNumber) : ""}</span>`
+          : '<span class="pay-status pending">Unbilled</span>'}</td>
+        <td class="num">${e.invoiced ? "" : `<button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`}</td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table></div>`;
+}
+
+const subEditor = createExpenseEditor({
+  getData: () => ({ people, projects }),
+  sessionPersonId,
+  projectChoices: () => billableProjects().filter((p) => (p.subconsultants || []).length),
+  canPickPayer: () => false,
+});
+
+document.getElementById("recordSubInvoice").addEventListener("click", () => {
+  if (!billableProjects().some((p) => (p.subconsultants || []).length)) {
+    return showToast("Add subconsultants to a project first (Projects → Edit project).");
+  }
+  subEditor.open(null, { kind: "sub" });
+});
+
+subBody.addEventListener("click", (e) => {
+  const btn = e.target.closest('[data-action="edit-sub"]');
+  if (!btn) return;
+  const rec = expenses.find((x) => x.id === btn.dataset.id);
+  if (rec) subEditor.open(rec);
+});
 
 function currentRow() {
   return [...nextRows(), ...invoiceRows()].find((r) => r.key === openRow);

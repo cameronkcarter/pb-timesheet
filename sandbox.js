@@ -44,11 +44,22 @@ function notifyAll(name) {
   });
 }
 
+// Copies the real collection once per tab. Anything added in Test Mode before
+// the copy finished is kept. If the real data can't be read (e.g. a new kind
+// of record the live security rules don't cover yet), start from what's here.
 async function seedIfNeeded(name) {
   if (sessionStorage.getItem(seededKey(name))) return;
-  await authReady;
-  const snap = await getDocs(collection(db, name));
-  writeData(name, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  let real = [];
+  try {
+    await authReady;
+    const snap = await getDocs(collection(db, name));
+    real = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.warn(`Test Mode: couldn't copy "${name}", starting empty.`, err.code || err);
+  }
+  if (sessionStorage.getItem(seededKey(name))) return; // another listener finished first
+  const added = readData(name).filter((i) => String(i.id).startsWith("test_"));
+  writeData(name, [...real.filter((r) => !added.some((a) => a.id === r.id)), ...added]);
   sessionStorage.setItem(seededKey(name), "true");
 }
 

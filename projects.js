@@ -238,7 +238,7 @@ function renderBudget() {
   budgetPm.textContent = internal ? "Internal" : pm ? `PM: ${pm.name}` : "";
   editProjectBtn.style.display = admin ? "" : "none";
   editAssignmentsBtn.style.display = admin && !internal ? "" : "none";
-  editAssignmentsBtn.textContent = editMode ? "Done editing" : "Edit assignments";
+  editAssignmentsBtn.textContent = editMode ? "Done editing" : "Edit staff & hours";
   editAssignmentsBtn.classList.toggle("active-toggle", editMode);
   toggleCompletedBtn.style.display = editMode ? "none" : "";
   barLegend.style.display = internal ? "none" : "";
@@ -888,7 +888,7 @@ async function handleDueDateAction(action, id) {
 
 // ---------- Subtask / event editor (shared with the Dashboard) ----------
 const itemEditor = createItemEditor({
-  getData: () => ({ people, tasks, projects }),
+  getData: () => ({ people, tasks, projects, assignments }),
   sessionPersonId,
   projectChoices: visibleProjects,
   canManage,
