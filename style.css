@@ -3168,3 +3168,20 @@ button.btn-expense:hover {
 .inv-head button.small {
   margin: 0;
 }
+
+/* Invoices: expenses grouped like the Projects expense list. */
+.inv-expenses th.c-date { width: 90px; }
+
+.inv-people tr.inv-group td {
+  background: #f6f2f9 !important;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.inv-people tr.inv-exp-total td {
+  background: #fbfaf7 !important;
+  font-weight: 700;
+}

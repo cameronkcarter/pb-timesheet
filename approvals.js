@@ -6,7 +6,7 @@
 // they edit them.
 import { TimeEntries, Expenses } from "./db.js";
 import { esc, fmtHrs, showToast, projectColor, sortProjects, formatCurrency } from "./util.js";
-import { expenseLabel } from "./expenses.js";
+import { expenseLabel, createExpenseEditor } from "./expenses.js";
 import { assignedHours, isInternal } from "./rates.js";
 
 const apprDate = (iso) => new Date(iso + "T00:00:00")
@@ -35,6 +35,13 @@ export function createApprovals({ getData, sessionPersonId }) {
   const scope = document.getElementById("approvalScope");
   let showAll = false; // "All" projects instead of just the ones you manage
   let openKey = null; // "<projectId>|<personId>"
+  // Expenses are edited in the same popup used to record them.
+  const expenseEditor = createExpenseEditor({
+    getData: () => ({ people: getData().people, projects: getData().projects }),
+    sessionPersonId,
+    projectChoices: () => getData().projects,
+    canPickPayer: () => true,
+  });
   let editing = null; // { id, mode: "edit" | "decline" }
 
   // Projects whose hours you approve.
@@ -101,6 +108,7 @@ export function createApprovals({ getData, sessionPersonId }) {
         <td class="num appr-muted">—</td>
         <td class="appr-entry-note"><strong>${formatCurrency(e.amount)}</strong> · ${esc(expenseLabel(e, projects.find((p) => p.id === e.projectId)))}</td>
         <td class="num appr-actions" colspan="2">
+          <button type="button" class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>
           <button type="button" class="link-btn appr-decline" data-action="decline-entry" data-id="${e.id}">Decline</button>
           <button type="button" class="link-btn appr-approve" data-action="approve-entry" data-id="${e.id}">Approve</button>
         </td></tr>`;
@@ -203,6 +211,11 @@ export function createApprovals({ getData, sessionPersonId }) {
       return;
     }
     const { action } = btn.dataset;
+    if (action === "edit-expense") {
+      const rec = (getData().expenses || []).find((x) => x.id === btn.dataset.id);
+      if (rec) expenseEditor.open(rec);
+      return;
+    }
     if (action === "edit-entry" || action === "decline-entry") {
       editing = { id: btn.dataset.id, mode: action === "edit-entry" ? "edit" : "decline" };
       render();

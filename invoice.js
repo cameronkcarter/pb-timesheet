@@ -7,7 +7,7 @@ import {
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
 import { isTestMode } from "./session.js";
 import { billRateOf, paidAmount } from "./rates.js";
-import { expenseLabel, createExpenseEditor } from "./expenses.js";
+import { expenseLabel, expenseQtyText, createExpenseEditor } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -153,24 +153,42 @@ const sumAmount = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
 function expenseRowsFor(project, exps) {
   const byDate = (a, b) => (a.date < b.date ? -1 : 1);
   const projectLines = exps.filter((e) => e.kind !== "sub").sort(byDate).map((e) => ({
-    description: expenseLabel(e, project), quantity: Number(e.quantity || 0), rate: Number(e.rate || 0), amount: Number(e.amount || 0),
+    kind: "project", date: e.date, label: expenseLabel(e, project), qtyText: expenseQtyText(e),
+    description: expenseLabel(e, project),
+    quantity: e.quantity == null ? null : Number(e.quantity),
+    rate: e.rate == null ? null : Number(e.rate),
+    amount: Number(e.amount || 0),
   }));
   const subLines = exps.filter((e) => e.kind === "sub").sort(byDate).map((e) => ({
-    description: `Subconsultant: ${expenseLabel(e, project)}`, quantity: null, rate: null, amount: Number(e.amount || 0),
+    kind: "sub", date: e.date, label: expenseLabel(e, project), qtyText: "",
+    description: `Subconsultant: ${expenseLabel(e, project)}`, quantity: null, rate: null,
+    amount: Number(e.amount || 0),
   }));
   return [...projectLines, ...subLines];
 }
 
+// Expenses on an invoice, grouped into project expenses and subconsultants
+// — same columns as the expense list on the Projects tab.
 function expenseTableHtml(rows) {
   if (!rows.length) return "";
-  return `<table class="inv-people inv-expenses">
-    <thead><tr><th>Expense</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
-    <tbody>${rows.map((r) => `<tr>
-      <td>${esc(r.description)}</td>
-      <td class="num">${r.quantity == null ? "" : fmtHrs(r.quantity)}</td>
-      <td class="num">${r.rate == null ? "" : formatCurrency(r.rate)}</td>
+  const group = (kind, title) => {
+    const list = rows.filter((r) => (r.kind || (r.description.startsWith("Subconsultant:") ? "sub" : "project")) === kind);
+    if (!list.length) return "";
+    return `<tr class="inv-group"><td colspan="4">${title}</td></tr>` + list.map((r) => `<tr>
+      <td>${r.date ? shortDate(r.date) : ""}</td>
+      <td>${esc(r.label || r.description.replace(/^Subconsultant: /, ""))}</td>
+      <td class="num">${r.qtyText || (r.quantity != null && r.rate != null ? `${fmtHrs(r.quantity)} × ${formatCurrency(r.rate)}` : "—")}</td>
       <td class="num">${formatCurrency(r.amount)}</td>
-    </tr>`).join("")}</tbody>
+    </tr>`).join("");
+  };
+  const total = rows.reduce((t, r) => t + Number(r.amount || 0), 0);
+  return `<table class="inv-people inv-expenses">
+    <thead><tr><th class="c-date">Date</th><th>Expense</th><th class="num">Quantity</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+      ${group("project", "Project expenses")}
+      ${group("sub", "Subconsultants")}
+      <tr class="inv-exp-total"><td colspan="3">Expenses total</td><td class="num">${formatCurrency(total)}</td></tr>
+    </tbody>
   </table>`;
 }
 
