@@ -167,26 +167,22 @@ function expenseRowsFor(project, exps) {
   return [...projectLines, ...subLines];
 }
 
-// Expenses on an invoice, grouped into project expenses and subconsultants
-// — same columns as the expense list on the Projects tab.
+// Expenses on an invoice: project expenses, then subconsultant invoices
+// (tagged "Sub") — same columns as the expense list on the Projects tab.
 function expenseTableHtml(rows) {
   if (!rows.length) return "";
-  const group = (kind, title) => {
-    const list = rows.filter((r) => (r.kind || (r.description.startsWith("Subconsultant:") ? "sub" : "project")) === kind);
-    if (!list.length) return "";
-    return `<tr class="inv-group"><td colspan="4">${title}</td></tr>` + list.map((r) => `<tr>
-      <td>${r.date ? shortDate(r.date) : ""}</td>
-      <td>${esc(r.label || r.description.replace(/^Subconsultant: /, ""))}</td>
-      <td class="num">${r.qtyText || (r.quantity != null && r.rate != null ? `${fmtHrs(r.quantity)} × ${formatCurrency(r.rate)}` : "—")}</td>
-      <td class="num">${formatCurrency(r.amount)}</td>
-    </tr>`).join("");
-  };
+  const isSub = (r) => (r.kind || (r.description.startsWith("Subconsultant:") ? "sub" : "project")) === "sub";
+  const ordered = [...rows.filter((r) => !isSub(r)), ...rows.filter(isSub)];
   const total = rows.reduce((t, r) => t + Number(r.amount || 0), 0);
   return `<table class="inv-people inv-expenses">
     <thead><tr><th class="c-date">Date</th><th>Expense</th><th class="num">Quantity</th><th class="num">Amount</th></tr></thead>
     <tbody>
-      ${group("project", "Project expenses")}
-      ${group("sub", "Subconsultants")}
+      ${ordered.map((r) => `<tr>
+        <td>${r.date ? shortDate(r.date) : ""}</td>
+        <td>${isSub(r) ? '<span class="row-kind">Sub</span>' : ""}${esc(r.label || r.description.replace(/^Subconsultant: /, ""))}</td>
+        <td class="num">${r.qtyText || (r.quantity != null && r.rate != null ? `${fmtHrs(r.quantity)} × ${formatCurrency(r.rate)}` : "—")}</td>
+        <td class="num">${formatCurrency(r.amount)}</td>
+      </tr>`).join("")}
       <tr class="inv-exp-total"><td colspan="3">Expenses total</td><td class="num">${formatCurrency(total)}</td></tr>
     </tbody>
   </table>`;
@@ -378,7 +374,7 @@ function render() {
 function renderSubInvoices() {
   const subs = expenses.filter((e) => e.kind === "sub").sort((a, b) => (a.date < b.date ? 1 : -1));
   const unbilled = subs.filter((e) => !e.invoiced).reduce((t, e) => t + Number(e.amount || 0), 0);
-  subTotal.textContent = unbilled ? `${formatCurrency(unbilled)} unbilled` : "";
+  subTotal.textContent = unbilled ? `${formatCurrency(unbilled)} not invoiced` : "";
   if (!subs.length) {
     subBody.innerHTML = '<div class="empty">None recorded yet.</div>';
     return;
@@ -396,8 +392,8 @@ function renderSubInvoices() {
         <td>${esc(e.description || "—")}</td>
         <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
         <td>${e.invoiced
-          ? `<span class="pay-status invoiced">Billed${inv ? " · " + esc(inv.invoiceNumber) : ""}</span>`
-          : '<span class="pay-status pending">Unbilled</span>'}</td>
+          ? `<span class="pay-status invoiced">${inv ? "On invoice " + esc(inv.invoiceNumber) : "Invoiced"}</span>`
+          : '<span class="pay-status pending">Not invoiced</span>'}</td>
         <td class="num">${e.invoiced ? "" : `<button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`}</td>
       </tr>`;
     }).join("")}</tbody>
