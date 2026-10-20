@@ -1,4 +1,4 @@
-import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, normEmail } from "./db.js";
+import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, Expenses, normEmail } from "./db.js";
 import { formatCurrency, showToast, closeOnBackdropClick, esc } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
 import { createApprovals } from "./approvals.js";
@@ -13,6 +13,7 @@ let assignments = [];
 let timeEntries = [];
 let dueDates = [];
 let invoices = [];
+let expenses = [];
 let adminCheckDone = false;
 let staff = [];
 let staffLoaded = false;
@@ -23,7 +24,7 @@ wireLogout("logoutLink");
 
 // Pending approval: hours on the projects you manage (see approvals.js).
 const approvals = createApprovals({
-  getData: () => ({ people, projects, tasks, assignments, timeEntries }),
+  getData: () => ({ people, projects, tasks, assignments, timeEntries, expenses }),
   sessionPersonId,
 });
 
@@ -47,6 +48,7 @@ if (sessionPersonId) {
   TimeEntries.listen((d) => { timeEntries = d; approvals.render(); });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; });
+  Expenses.listen((d) => { expenses = d; approvals.render(); });
 }
 
 // ---------- People (table + modal) ----------
@@ -205,7 +207,7 @@ function personById(id) {
 // Downloads everything (from what this page already loaded, so no extra
 // database reads) as one JSON file to keep somewhere safe.
 document.getElementById("downloadBackup").addEventListener("click", () => {
-  const data = { exportedAt: new Date().toISOString(), people, projects, tasks, assignments, timeEntries, dueDates, invoices, staff };
+  const data = { exportedAt: new Date().toISOString(), people, projects, tasks, assignments, timeEntries, dueDates, invoices, expenses, staff };
   // Firestore timestamps become ISO dates.
   const json = JSON.stringify(data, (k, v) => (v && typeof v.toDate === "function" ? v.toDate().toISOString() : v), 2);
   const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));

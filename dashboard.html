@@ -45,6 +45,7 @@
       <div class="stat-split">
         <span><i class="dot pending"></i>Not invoiced <strong id="statNotInvoiced">$0</strong></span>
         <span><i class="dot invoiced"></i>Invoiced <strong id="statInvoiced">$0</strong></span>
+        <span id="statExpensesWrap" hidden><i class="dot expense"></i>Expenses owed <strong id="statExpenses">$0</strong></span>
       </div>
       <button type="button" class="stat-more" id="payToggle" aria-expanded="false" aria-controls="payPanel">Your invoices <span class="chev" aria-hidden="true">&#9662;</span></button>
     </div>
@@ -54,7 +55,7 @@
 
   <div class="section-head">
     <h2 style="margin:0;">Projects</h2>
-    <button id="toggleCompletedBtn" class="secondary small">Hide completed</button>
+    <button id="toggleCompletedBtn" class="secondary small">Show completed subtasks</button>
   </div>
   <div id="projectSummaryCards"></div>
 

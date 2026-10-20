@@ -1,4 +1,4 @@
-import { People, Projects, Tasks, TimeEntries, Invoices } from "./db.js";
+import { People, Projects, Tasks, TimeEntries, Invoices, Expenses } from "./db.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
   formatCurrency, showToast, fmtHrs,
@@ -7,6 +7,7 @@ import {
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
 import { isTestMode } from "./session.js";
 import { billRateOf, paidAmount } from "./rates.js";
+import { expenseLabel } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -27,6 +28,7 @@ let projects = [];
 let tasks = [];
 let timeEntries = [];
 let invoices = [];
+let expenses = [];
 let adminCheckDone = false;
 
 const invoiceBody = document.getElementById("invoiceBody");
@@ -53,6 +55,7 @@ if (sessionPersonId) {
   Tasks.listen((d) => { tasks = d; render(); });
   TimeEntries.listen((d) => { timeEntries = d; render(); });
   Invoices.listen((d) => { invoices = d; render(); renderSheetSync(); });
+  Expenses.listen((d) => { expenses = d; render(); });
 }
 
 // Invoices charge each person's bill rate; hours already invoiced keep the
@@ -124,17 +127,69 @@ function nextRows() {
     const open = timeEntries.filter((e) => e.projectId === project.id && !e.invoiced && !e.declined);
     const entries = open.filter((e) => e.approved);
     const pending = open.filter((e) => !e.approved);
-    if (!open.length) return null;
-    const dates = (entries.length ? entries : pending).map((e) => e.date).sort();
+    const openExp = expenses.filter((e) => e.projectId === project.id && !e.invoiced && !e.declined);
+    const exps = openExp.filter((e) => e.approved);
+    const pendingExps = openExp.filter((e) => !e.approved);
+    if (!open.length && !openExp.length) return null;
+    const ready = [...entries, ...exps];
+    const dates = (ready.length ? ready : [...pending, ...pendingExps]).map((e) => e.date).sort();
     const draft = drafts[project.id] || {};
     return {
-      key: `next:${project.id}`, kind: "next", project, entries, pending,
+      key: `next:${project.id}`, kind: "next", project, entries, pending, exps, pendingExps,
       from: dates[0], to: dates[dates.length - 1],
       number: draft.number ?? nextInvoiceNumber(),
       label: draft.label ?? periodLabelFor(dates[0], dates[dates.length - 1]),
-      amount: groupByPerson(entries).reduce((s, r) => s + r.total, 0),
+      amount: groupByPerson(entries).reduce((s, r) => s + r.total, 0) + sumAmount(exps),
     };
   }).filter(Boolean);
+}
+
+const sumAmount = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
+
+// Lines for an invoice's Expenses table: each project expense, then each
+// subconsultant invoice. [{ description, quantity, rate, amount }]
+function expenseRowsFor(project, exps) {
+  const byDate = (a, b) => (a.date < b.date ? -1 : 1);
+  const projectLines = exps.filter((e) => e.kind !== "sub").sort(byDate).map((e) => ({
+    description: expenseLabel(e, project), quantity: Number(e.quantity || 0), rate: Number(e.rate || 0), amount: Number(e.amount || 0),
+  }));
+  const subLines = exps.filter((e) => e.kind === "sub").sort(byDate).map((e) => ({
+    description: `Subconsultant: ${expenseLabel(e, project)}`, quantity: null, rate: null, amount: Number(e.amount || 0),
+  }));
+  return [...projectLines, ...subLines];
+}
+
+function expenseTableHtml(rows) {
+  if (!rows.length) return "";
+  return `<table class="inv-people inv-expenses">
+    <thead><tr><th>Expense</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr>
+      <td>${esc(r.description)}</td>
+      <td class="num">${r.quantity == null ? "" : fmtHrs(r.quantity)}</td>
+      <td class="num">${r.rate == null ? "" : formatCurrency(r.rate)}</td>
+      <td class="num">${formatCurrency(r.amount)}</td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+}
+
+// The Work Summary page: what each person did, grouped by task.
+// [{ task, hours, items: [{ date, name, hours, note }] }]
+function workRowsFor(project, entries) {
+  const byTask = new Map();
+  entries.forEach((e) => {
+    if (!byTask.has(e.taskId)) byTask.set(e.taskId, []);
+    byTask.get(e.taskId).push(e);
+  });
+  return [...byTask].map(([taskId, list]) => ({
+    task: tasks.find((t) => t.id === taskId)?.name || "Task",
+    hours: sumHours(list),
+    items: list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).map((e) => ({
+      date: e.date,
+      name: people.find((p) => p.id === e.personId)?.name || "—",
+      hours: Number(e.hours || 0),
+      note: e.note || "",
+    })),
+  })).sort((a, b) => a.task.localeCompare(b.task));
 }
 
 function invoiceRows() {
@@ -155,7 +210,7 @@ function invoiceRows() {
 
 function statusHtml(row) {
   if (row.kind === "next") {
-    return row.entries.length
+    return row.entries.length || row.exps.length
       ? '<span class="pay-status paid">Ready</span>'
       : '<span class="pay-status pending">Needs approval</span>';
   }
@@ -210,18 +265,25 @@ function fieldsHtml(row) {
 
 function detailHtml(row) {
   if (row.kind === "next") {
+    const waiting = [
+      row.pending.length ? `${fmtHrs(sumHours(row.pending))} hrs` : "",
+      row.pendingExps.length ? `${formatCurrency(sumAmount(row.pendingExps))} in expenses` : "",
+    ].filter(Boolean).join(" and ");
+    const canGenerate = row.entries.length || row.exps.length;
     return `${fieldsHtml(row)}
-      ${peopleHtml(row.key, row.entries)}
+      ${row.entries.length ? peopleHtml(row.key, row.entries) : ""}
+      ${expenseTableHtml(expenseRowsFor(row.project, row.exps))}
       <div class="inv-actions">
-        ${row.pending.length ? `<a class="entry-status warn inv-warn" href="admin.html#pendingApprovalCard"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${fmtHrs(sumHours(row.pending))} hrs awaiting approval won't be included &middot; <u>Approve</u></a>` : ""}
-        <button type="button" class="secondary" data-action="preview" ${row.entries.length ? "" : "disabled"}>Preview PDF</button>
-        <button type="button" data-action="generate" ${row.entries.length ? "" : "disabled"}>Generate invoice</button>
+        ${waiting ? `<a class="entry-status warn inv-warn" href="admin.html#pendingApprovalCard"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See hours to approve</u></a>` : ""}
+        <button type="button" class="secondary" data-action="preview" ${canGenerate ? "" : "disabled"}>Preview PDF</button>
+        <button type="button" data-action="generate" ${canGenerate ? "" : "disabled"}>Generate invoice</button>
       </div>`;
   }
   const inv = row.inv;
   const canPdf = !inv.historical && inv.taskRows && inv.laborRows;
   return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}</div>` : ""}
     ${peopleHtml(row.key, row.entries, inv.laborRows)}
+    ${expenseTableHtml(inv.expenseRows || [])}
     <div class="inv-actions">
       ${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
       ${!inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : ""}
@@ -339,7 +401,7 @@ togglePaidBtn.addEventListener("click", () => {
 });
 
 // ---------- Shared invoice math ----------
-function computeInvoiceData(project, entries) {
+function computeInvoiceData(project, entries, exps = []) {
   const projectTasks = tasks.filter((t) => t.projectId === project.id);
   const allEntriesForProject = timeEntries.filter((e) => e.projectId === project.id);
 
@@ -365,18 +427,109 @@ function computeInvoiceData(project, entries) {
   const laborRows = groupByPerson(entries);
   const laborTotal = laborRows.reduce((s, r) => s + r.total, 0);
 
-  return { taskRows, feeTotal, billedTotal, currentTotal, remainingTotal, pctTotal, laborRows, laborTotal };
+  // Expenses: project expenses budget + subconsultant budgets.
+  const expBudget = Number(project.expenseBudget || 0) +
+    (project.subconsultants || []).reduce((t, sub) => t + Number(sub.budget || 0), 0);
+  const expBilled = sumAmount(expenses.filter((e) => e.projectId === project.id && e.invoiced));
+  const expCurrent = sumAmount(exps);
+  const expenseSummary = {
+    budget: expBudget, billed: expBilled, current: expCurrent,
+    remaining: expBudget - expBilled - expCurrent,
+    pct: expBudget > 0 ? Math.round(((expBilled + expCurrent) / expBudget) * 100) : 0,
+  };
+  const expenseRows = expenseRowsFor(project, exps);
+
+  return {
+    taskRows, feeTotal, billedTotal, currentTotal, remainingTotal, pctTotal, laborRows, laborTotal,
+    expenseSummary, expenseRows, expenseTotal: expCurrent, workRows: workRowsFor(project, entries),
+  };
 }
 
 // ---------- PDF generation ----------
-async function loadImageAsDataURL(url) {
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+// The logo, shrunk to print size (about 1 inch) as a compressed JPEG on
+// white. Embedding the full-size PNG made every invoice tens of megabytes.
+let logoPromise = null;
+function loadLogo() {
+  if (!logoPromise) {
+    logoPromise = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 300;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(img, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
+      };
+      img.onerror = reject;
+      img.src = "Place%20Builder%20Logo.png";
+    });
+  }
+  return logoPromise;
+}
+
+// The PDF's built-in font can't draw some characters (en/em dashes, curly
+// quotes, emoji…); swap in plain ones.
+function pdfText(text) {
+  return String(text || "")
+    .replace(/[–—]/g, "-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, "...")
+    .replace(/[^\x20-\x7E\xA0-\xFF\n]/g, "");
+}
+
+// Page 2: what was done, grouped by task — each entry's date, person, hours
+// and note — in the same purple-header style as page 1.
+async function addWorkSummaryPage(doc, data, { marginX, rightX, tableStyles, headStyles }) {
+  doc.addPage();
+  doc.setFont(undefined, "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(...PURPLE);
+  doc.text("WORK SUMMARY", marginX, 24);
+  try {
+    const logoData = await loadLogo();
+    doc.addImage(logoData, "JPEG", rightX - 26, 6, 26, 26, "pb-logo");
+  } catch (err) {
+    // logo is a nice-to-have
+  }
+  doc.setFont(undefined, "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  doc.text(pdfText(`${data.project.name}  |  ${data.periodLabel}  |  Invoice #${data.invoiceNumber}`), marginX, 31);
+
+  const body = [];
+  const groupRows = new Set();
+  data.workRows.forEach((g) => {
+    groupRows.add(body.length);
+    body.push([{ content: pdfText(`${g.task}  (${(Math.round(g.hours * 100) / 100).toFixed(2)} hrs)`), colSpan: 4 }]);
+    g.items.forEach((it) => body.push([
+      formatShortMDY(new Date(it.date + "T00:00:00")),
+      pdfText(it.name),
+      it.hours.toFixed(2),
+      pdfText(it.note) || "-",
+    ]));
+  });
+
+  doc.autoTable({
+    startY: 38,
+    theme: "grid",
+    head: [["Date", "Staff", "Hours", "Work Performed"]],
+    body,
+    styles: { ...tableStyles, valign: "top" },
+    headStyles,
+    columnStyles: {
+      0: { cellWidth: 20 },
+      1: { cellWidth: 32 },
+      2: { cellWidth: 14, halign: "right" },
+      3: { cellWidth: "auto" },
+    },
+    didParseCell: (hd) => {
+      if (hd.section === "body" && groupRows.has(hd.row.index)) {
+        hd.cell.styles.fontStyle = "bold";
+        hd.cell.styles.fillColor = [240, 232, 245];
+      }
+    },
   });
 }
 
@@ -400,8 +553,8 @@ async function buildPdf(data) {
   }
 
   try {
-    const logoData = await loadImageAsDataURL("Place%20Builder%20Logo.png");
-    doc.addImage(logoData, "PNG", rightX - 26, 6, 26, 26);
+    const logoData = await loadLogo();
+    doc.addImage(logoData, "JPEG", rightX - 26, 6, 26, 26, "pb-logo");
   } catch (err) {
     // logo is a nice-to-have; continue without it if it fails to load
   }
@@ -468,9 +621,15 @@ async function buildPdf(data) {
   ]);
   const feeTotalRowIndex = summaryBody.length;
   summaryBody.push(["Fee Total", formatCurrency(data.feeTotal), formatCurrency(data.billedTotal), formatCurrency(data.currentTotal), `${data.pctTotal}%`, formatCurrency(data.remainingTotal)]);
-  summaryBody.push(["Expense Total", "", "", "", "", ""]);
+  const exp = data.expenseSummary || { budget: 0, billed: 0, current: data.expenseTotal || 0, remaining: 0, pct: 0 };
+  const money = (v) => (v ? formatCurrency(v) : "");
+  summaryBody.push(["Expense Total", money(exp.budget), money(exp.billed), money(exp.current), exp.budget > 0 ? `${exp.pct}%` : "", money(exp.remaining)]);
   const projectTotalRowIndex = summaryBody.length;
-  summaryBody.push(["Project Total", formatCurrency(data.feeTotal), formatCurrency(data.billedTotal), formatCurrency(data.currentTotal), `${data.pctTotal}%`, formatCurrency(data.remainingTotal)]);
+  const projBudget = data.feeTotal + exp.budget;
+  const projBilled = data.billedTotal + exp.billed;
+  const projCurrent = data.currentTotal + exp.current;
+  const projPct = projBudget > 0 ? Math.round(((projBilled + projCurrent) / projBudget) * 100) : 0;
+  summaryBody.push(["Project Total", formatCurrency(projBudget), formatCurrency(projBilled), formatCurrency(projCurrent), `${projPct}%`, formatCurrency(projBudget - projBilled - projCurrent)]);
 
   const summaryLastCol = 5;
   doc.autoTable({
@@ -552,11 +711,22 @@ async function buildPdf(data) {
 
   y = doc.lastAutoTable.finalY + 8;
 
+  const expenseTotal = data.expenseTotal || 0;
+  const expenseLines = (data.expenseRows || []).map((r) => [
+    pdfText(r.description),
+    r.quantity == null ? "" : String(Math.round(r.quantity * 100) / 100),
+    r.rate == null ? "" : formatCurrency(r.rate),
+    formatCurrency(r.amount),
+  ]);
+  const expenseTotalRowIndex = expenseLines.length || 1;
   doc.autoTable({
     startY: y,
     theme: "grid",
     head: [["Expenses (Description)", "Quantity", "Cost", "Total"]],
-    body: [["", "", "", ""], ["Expense Total", "", "", "-"]],
+    body: [
+      ...(expenseLines.length ? expenseLines : [["", "", "", ""]]),
+      ["Expense Total", "", "", expenseTotal ? formatCurrency(expenseTotal) : "-"],
+    ],
     styles: tableStyles,
     headStyles,
     columnStyles: {
@@ -566,13 +736,13 @@ async function buildPdf(data) {
       3: { cellWidth: 24, halign: "right" },
     },
     didParseCell: (hd) => {
-      if (hd.section === "body" && hd.row.index === 1) {
+      if (hd.section === "body" && hd.row.index === expenseTotalRowIndex) {
         hd.cell.styles.fontStyle = "bold";
         hd.cell.styles.fillColor = [246, 246, 248];
       }
     },
     didDrawCell: (hd) => {
-      if (hd.section === "body" && hd.column.index === 3 && hd.row.index === 1) {
+      if (hd.section === "body" && hd.column.index === 3 && hd.row.index === expenseTotalRowIndex) {
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
         doc.line(marginX, hd.cell.y, rightX, hd.cell.y);
@@ -588,7 +758,7 @@ async function buildPdf(data) {
   doc.setFont(undefined, "bold");
   doc.setFontSize(11);
   doc.text("AMOUNT DUE", marginX + 2, y + 5);
-  doc.text(formatCurrency(data.laborTotal), rightX - 2, y + 5, { align: "right" });
+  doc.text(formatCurrency(data.laborTotal + expenseTotal), rightX - 2, y + 5, { align: "right" });
 
   y += 16;
   doc.setTextColor(0, 0, 0);
@@ -608,14 +778,18 @@ async function buildPdf(data) {
   doc.setTextColor(0, 0, 0);
   doc.text(`${FIRM.contactName} at ${FIRM.contactPhone} or ${FIRM.contactEmail}`, pageWidth / 2, disclaimerY + 5, { align: "center" });
 
+  if (data.workRows && data.workRows.length) {
+    await addWorkSummaryPage(doc, data, { marginX, rightX, tableStyles, headStyles });
+  }
+
   const periodKey = `${data.invoiceDate.getFullYear()}.${String(data.invoiceDate.getMonth() + 1).padStart(2, "0")}`;
   const prefix = data.isPreview ? "PREVIEW_" : "";
   doc.save(`${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`);
 }
 
 async function generate(row, isPreview, btn) {
-  const { project, entries } = row;
-  if (!project || entries.length === 0) return;
+  const { project, entries, exps } = row;
+  if (!project || (entries.length === 0 && exps.length === 0)) return;
   const periodLabel = row.label.trim() || periodLabelFor(row.from, row.to);
   const invoiceNumber = row.number.trim() || nextInvoiceNumber();
   if (!isPreview && invoices.some((i) => i.invoiceNumber === invoiceNumber) &&
@@ -624,7 +798,7 @@ async function generate(row, isPreview, btn) {
   const buttons = [...invoiceBody.querySelectorAll(".inv-actions button")];
   buttons.forEach((b) => { b.disabled = true; });
   try {
-    const computed = computeInvoiceData(project, entries);
+    const computed = computeInvoiceData(project, entries, exps);
     const invoiceDate = new Date();
     const dueDate = lastDayOfMonth(invoiceDate);
 
@@ -650,11 +824,16 @@ async function generate(row, isPreview, btn) {
         currentTotal: computed.currentTotal,
         remainingTotal: computed.remainingTotal,
         pctTotal: computed.pctTotal,
-        total: computed.laborTotal,
+        laborTotal: computed.laborTotal,
+        expenseRows: computed.expenseRows,
+        expenseSummary: computed.expenseSummary,
+        expenseTotal: computed.expenseTotal,
+        total: Math.round((computed.laborTotal + computed.expenseTotal) * 100) / 100,
         sheetSynced: false,
       });
       const billRates = Object.fromEntries(entries.map((e) => [e.id, entryRate(e)]));
-      await TimeEntries.markInvoiced(entries.map((e) => e.id), ref.id, billRates);
+      if (entries.length) await TimeEntries.markInvoiced(entries.map((e) => e.id), ref.id, billRates);
+      if (exps.length) await Expenses.markInvoiced(exps.map((e) => e.id), ref.id);
       delete drafts[project.id];
       openRow = `inv:${ref.id}`;
       showToast("Invoice generated.");
@@ -688,7 +867,11 @@ async function downloadPdf(inv) {
       remainingTotal: inv.remainingTotal,
       pctTotal: inv.pctTotal,
       laborRows: inv.laborRows,
-      laborTotal: inv.total,
+      laborTotal: inv.laborTotal ?? inv.total,
+      expenseRows: inv.expenseRows || [],
+      expenseSummary: inv.expenseSummary,
+      expenseTotal: inv.expenseTotal || 0,
+      workRows: workRowsFor(project, timeEntries.filter((e) => e.invoiceId === inv.id)),
     });
   } catch (err) {
     showToast("Error: " + err.message);

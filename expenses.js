@@ -1,0 +1,227 @@
+// Project expenses and subconsultant invoices: shared helpers and the
+// add/edit popup (used on the Dashboard and the Projects tab). Markup is
+// created here so every page gets the same popup.
+import { Expenses } from "./db.js";
+import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO } from "./util.js";
+
+export const CATEGORIES = ["Travel", "Lodging", "Meals", "Materials", "Printing", "Other"];
+
+export const expenseAmount = (e) => Number(e.amount || 0);
+
+// What an expense is, in a few words: "Travel · Site visit mileage".
+export function expenseLabel(e, project) {
+  if (e.kind === "sub") {
+    const sub = (project?.subconsultants || []).find((s) => s.id === e.subId);
+    return [sub ? sub.name : "Subconsultant", e.description].filter(Boolean).join(" · ");
+  }
+  return [e.category, e.description].filter(Boolean).join(" · ");
+}
+
+export function expenseStatus(e) {
+  if (e.reimbursed) return ["Reimbursed", "paid"];
+  if (e.invoiced) return ["Invoiced", "invoiced"];
+  if (e.approved) return ["Approved", "paid"];
+  if (e.declined) return ["Declined", "unsynced"];
+  return ["Pending approval", "pending"];
+}
+
+// Expenses that count against a project's budgets (everything but declined).
+export const countsToward = (e) => !e.declined;
+
+const MARKUP = `
+<div id="expenseModal" class="modal-overlay" style="display:none;">
+  <div class="modal sheet-modal sheet-small item-sheet" role="dialog" aria-labelledby="expenseHeading">
+    <div class="item-head">
+      <h2 id="expenseHeading">New expense</h2>
+      <button type="button" id="expenseClose" class="icon-btn" aria-label="Close">&times;</button>
+    </div>
+    <div class="sheet-body">
+      <div id="expenseSubField">
+        <label for="expenseSub" class="item-label">Subconsultant</label>
+        <select id="expenseSub" class="item-select"></select>
+      </div>
+      <label for="expenseDescription" class="item-label">Description</label>
+      <input type="text" id="expenseDescription" class="item-name" placeholder="e.g. Mileage to site visit" autocomplete="off" />
+
+      <div class="item-label">Details</div>
+      <div class="row-group">
+        <label class="row-item" for="expenseProject">
+          <span class="row-label">Project</span>
+          <select id="expenseProject"></select>
+        </label>
+        <label class="row-item" for="expenseCategory" id="expenseCategoryRow">
+          <span class="row-label">Category</span>
+          <select id="expenseCategory"></select>
+        </label>
+        <label class="row-item" for="expenseDate">
+          <span class="row-label">Date</span>
+          <input type="date" id="expenseDate" />
+        </label>
+        <label class="row-item" for="expenseQuantity" id="expenseQuantityRow">
+          <span class="row-label">Quantity</span>
+          <input type="number" id="expenseQuantity" min="0" step="any" placeholder="1" />
+        </label>
+        <label class="row-item" for="expenseRate" id="expenseRateRow">
+          <span class="row-label">Rate</span>
+          <input type="number" id="expenseRate" min="0" step="0.01" placeholder="0.00" />
+        </label>
+        <label class="row-item" for="expenseAmount" id="expenseAmountRow">
+          <span class="row-label">Amount</span>
+          <input type="number" id="expenseAmount" min="0" step="0.01" placeholder="0.00" />
+        </label>
+        <label class="row-item" for="expensePaidBy" id="expensePaidByRow">
+          <span class="row-label">Paid by</span>
+          <select id="expensePaidBy"></select>
+        </label>
+      </div>
+      <div class="expense-cost" id="expenseCost"></div>
+    </div>
+    <div class="sheet-foot">
+      <button type="button" id="expenseDelete" class="link-btn item-delete" style="display:none;">Delete</button>
+      <button type="button" id="expenseCancel" class="secondary">Cancel</button>
+      <button type="button" id="expenseSave">Save</button>
+    </div>
+  </div>
+</div>`;
+
+// getData() → { people, projects }. canPickPayer: admins/PMs can record an
+// expense paid by someone else (or the company); staff record their own.
+export function createExpenseEditor({ getData, sessionPersonId, projectChoices, canPickPayer }) {
+  document.body.insertAdjacentHTML("beforeend", MARKUP);
+  const $ = (id) => document.getElementById(id);
+  const modal = $("expenseModal");
+  const heading = $("expenseHeading");
+  const subField = $("expenseSub");
+  const description = $("expenseDescription");
+  const projectSelect = $("expenseProject");
+  const category = $("expenseCategory");
+  const date = $("expenseDate");
+  const quantity = $("expenseQuantity");
+  const rate = $("expenseRate");
+  const amount = $("expenseAmount");
+  const paidBy = $("expensePaidBy");
+  const cost = $("expenseCost");
+  const deleteBtn = $("expenseDelete");
+  const saveBtn = $("expenseSave");
+
+  let editing = null;
+  let kind = "project";
+
+  category.innerHTML = CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("");
+
+  function show(id, on) { $(id).style.display = on ? "" : "none"; }
+
+  function fillSubs(projectId, selected) {
+    const project = getData().projects.find((p) => p.id === projectId);
+    const subs = project?.subconsultants || [];
+    subField.innerHTML = subs.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("")
+      || '<option value="">Add subconsultants in Edit project</option>';
+    if (selected) subField.value = selected;
+  }
+
+  function updateCost() {
+    if (kind !== "project") { cost.textContent = ""; return; }
+    const total = (Number(quantity.value) || 0) * (Number(rate.value) || 0);
+    cost.textContent = total ? `Cost ${formatCurrency(total)}` : "";
+  }
+
+  // open(record) to edit; open(null, { kind, projectId, subId }) to add.
+  function open(record, preset = {}) {
+    const { people } = getData();
+    editing = record;
+    kind = record ? record.kind : preset.kind || "project";
+    const projectId = record ? record.projectId : preset.projectId;
+    heading.textContent = `${record ? "Edit" : "New"} ${kind === "sub" ? "subconsultant invoice" : "expense"}`;
+
+    const choices = projectChoices();
+    projectSelect.innerHTML = choices.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+    projectSelect.value = projectId || (choices[0] && choices[0].id) || "";
+    projectSelect.disabled = !!record;
+
+    show("expenseSubField", kind === "sub");
+    show("expenseCategoryRow", kind === "project");
+    show("expenseQuantityRow", kind === "project");
+    show("expenseRateRow", kind === "project");
+    show("expenseAmountRow", kind === "sub");
+    show("expensePaidByRow", kind === "project" && canPickPayer());
+    if (kind === "sub") fillSubs(projectSelect.value, record ? record.subId : preset.subId);
+
+    const active = people.filter((p) => !p.inactive || (record && p.id === record.personId))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    paidBy.innerHTML = '<option value="">Company (no reimbursement)</option>' +
+      active.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+    paidBy.value = record ? record.personId || "" : sessionPersonId;
+
+    description.value = record ? record.description || "" : "";
+    category.value = record?.category || CATEGORIES[0];
+    date.value = record ? record.date : todayISO();
+    quantity.value = record?.quantity ?? (kind === "project" ? 1 : "");
+    rate.value = record?.rate ?? "";
+    amount.value = record && kind === "sub" ? record.amount : "";
+    description.placeholder = kind === "sub" ? "e.g. Invoice #1042" : "e.g. Mileage to site visit";
+    updateCost();
+    deleteBtn.style.display = record ? "" : "none";
+    saveBtn.textContent = record ? "Save changes" : kind === "sub" ? "Add invoice" : "Add expense";
+    modal.style.display = "flex";
+    description.focus();
+  }
+
+  function close() { modal.style.display = "none"; }
+
+  projectSelect.addEventListener("change", () => { if (kind === "sub") fillSubs(projectSelect.value); });
+  quantity.addEventListener("input", updateCost);
+  rate.addEventListener("input", updateCost);
+  $("expenseClose").addEventListener("click", close);
+  $("expenseCancel").addEventListener("click", close);
+  closeOnBackdropClick(modal, close);
+  description.addEventListener("keydown", (e) => { if (e.key === "Enter") saveBtn.click(); });
+
+  deleteBtn.addEventListener("click", async () => {
+    if (!editing || !confirm("Delete this expense? This can't be undone.")) return;
+    try {
+      await Expenses.remove(editing.id);
+      close();
+      showToast("Deleted.");
+    } catch (err) {
+      showToast("Error: " + err.message);
+    }
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    const projectId = projectSelect.value;
+    const desc = description.value.trim();
+    if (!projectId) return showToast("Choose a project.");
+    if (!date.value) return showToast("Choose a date.");
+    let data;
+    if (kind === "sub") {
+      const total = Number(amount.value);
+      if (!subField.value) return showToast("Add the subconsultant to the project first (Edit project).");
+      if (!(total > 0)) return showToast("Enter the amount.");
+      // Subconsultant invoices are recorded by admins/PMs, so they're approved.
+      data = { kind, projectId, subId: subField.value, description: desc, date: date.value, amount: total };
+      if (!editing) Object.assign(data, { approved: true, approvedDate: new Date().toISOString() });
+    } else {
+      const q = Number(quantity.value);
+      const r = Number(rate.value);
+      if (!desc) return showToast("Add a description.");
+      if (!(q > 0) || !(r > 0)) return showToast("Enter a quantity and rate.");
+      data = {
+        kind, projectId, category: category.value, description: desc, date: date.value,
+        quantity: q, rate: r, amount: Math.round(q * r * 100) / 100,
+        personId: canPickPayer() ? paidBy.value || null : sessionPersonId,
+      };
+      // Editing a declined expense resubmits it.
+      if (editing && editing.declined) Object.assign(data, { declined: false, declineReason: null });
+    }
+    try {
+      if (editing) await Expenses.update(editing.id, data);
+      else await Expenses.add({ ...data, createdByPersonId: sessionPersonId });
+      close();
+      showToast(editing ? "Expense updated." : kind === "sub" ? "Invoice recorded." : "Expense added.");
+    } catch (err) {
+      showToast("Error: " + err.message);
+    }
+  });
+
+  return { open };
+}

@@ -2894,3 +2894,173 @@ a.entry-status.inv-warn:hover {
 .appr-head .row-actions {
   align-items: center;
 }
+
+/* Project popup: subconsultants */
+.section-title.sub-title {
+  margin-top: 16px;
+}
+
+.sub-row {
+  display: grid;
+  grid-template-columns: 1fr 150px 32px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.sub-row input {
+  margin: 0;
+}
+
+.expense-cost {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+  text-align: right;
+}
+
+select.item-select {
+  width: 100%;
+  margin: 0 0 4px;
+}
+
+/* Tinted buttons: purple = edit the project, amber = edit assignments. */
+button.btn-tint-purple {
+  background: #f1e9f7;
+  color: var(--civic-purple);
+  border: 1px solid #dcc8ea;
+}
+
+button.btn-tint-purple:hover {
+  background: #e6d7f2;
+}
+
+button.btn-tint-amber {
+  background: #fdf0de;
+  color: #8a4f10;
+  border: 1px solid #f3d3a6;
+}
+
+button.btn-tint-amber:hover {
+  background: #fae3c4;
+}
+
+button.btn-tint-amber.active-toggle {
+  background: #b5651d;
+  border-color: #b5651d;
+  color: #fff;
+}
+
+/* Budget table: fixed columns so long task names don't squeeze the numbers. */
+#budgetTable {
+  table-layout: fixed;
+}
+
+#budgetTable th.c-money { width: 118px; }
+#budgetTable th.c-bar { width: 170px; }
+
+.task-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-cell .task-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.task-cell .due-chip {
+  flex: none;
+}
+
+#budgetTable tr.budget-subtotal-row td {
+  font-weight: 700;
+  background: #faf8f4;
+  border-top: 1px solid #d8d2c8;
+}
+
+.row-kind {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: #efebe4;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+table.expense-list {
+  width: 100%;
+  font-size: 13px;
+  margin-bottom: 8px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.expense-list th {
+  font-size: 11px;
+  padding: 6px 10px;
+}
+
+.expense-list td {
+  padding: 6px 10px;
+}
+
+.expense-list .num {
+  text-align: right;
+}
+
+.expense-actions .link-btn {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 10px;
+}
+
+.stat-split .dot.expense { background: var(--lavender); }
+
+.stat-split span[hidden] {
+  display: none;
+}
+
+.card-head-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.card-head-right button {
+  margin: 0;
+}
+
+.your-expenses-head {
+  margin-top: 16px;
+}
+
+/* Invoices: alternating rows; overhead stands out. */
+.inv-table > tbody > tr.inv-row:nth-of-type(even) td {
+  background: #faf8f4;
+}
+
+.inv-people tbody tr:nth-child(even) td {
+  background: #faf8fb;
+}
+
+.inv-people tr.inv-overhead td {
+  background: #e8f3e9 !important;
+  color: var(--green);
+}
+
+table.inv-expenses {
+  margin-top: 10px;
+}

@@ -30,6 +30,10 @@ export function createProjectEditor({ getData, onSaved }) {
   const modalTaskHead = $("modalTaskHead");
   const modalTaskTotal = $("modalTaskTotal");
   const removeBtn = $("modalRemoveProject");
+  const expenseFields = $("modalExpenseFields");
+  const expenseBudget = $("modalExpenseBudget");
+  const subRows = $("modalSubRows");
+  const subTotal = $("modalSubTotal");
 
   let editingId = null;
   let modalType = "rates";
@@ -54,6 +58,7 @@ export function createProjectEditor({ getData, onSaved }) {
     modalTypeHint.textContent = PROJECT_TYPES[type];
     const internal = type === "internal";
     modalBillingFields.style.display = internal ? "none" : "block";
+    expenseFields.style.display = internal ? "none" : "block";
     modalTaskRows.classList.toggle("internal", internal);
     modalTaskHead.classList.toggle("internal", internal);
     updateTaskTotal();
@@ -77,6 +82,19 @@ export function createProjectEditor({ getData, onSaved }) {
       <input type="date" class="modalTaskEnd" value="${endDate || ""}" title="End (optional)" />
       <button type="button" class="icon-btn removeTaskRow" title="Remove task" aria-label="Remove task">&times;</button>
     </div>`;
+  }
+
+  function subRowHtml(sub = {}) {
+    return `<div class="sub-row" data-sub-id="${sub.id || ""}">
+      <input type="text" class="subName" placeholder="Subconsultant name" value="${esc(sub.name || "")}" />
+      <div class="money-input"><span>$</span><input type="number" class="subBudget" placeholder="Budget" min="0" step="0.01" value="${sub.budget || ""}" /></div>
+      <button type="button" class="icon-btn removeSubRow" title="Remove subconsultant" aria-label="Remove">&times;</button>
+    </div>`;
+  }
+
+  function updateSubTotal() {
+    const total = [...subRows.querySelectorAll(".subBudget")].reduce((t, i) => t + (Number(i.value) || 0), 0);
+    subTotal.textContent = total ? `${formatCurrency(total)} total` : "";
   }
 
   function open(project) {
@@ -103,6 +121,9 @@ export function createProjectEditor({ getData, onSaved }) {
     modalTaskRows.innerHTML = projectTasks.length > 0
       ? projectTasks.map((t) => taskRowHtml(t.id, t.name, t.budget, t.startDate, t.endDate)).join("")
       : taskRowHtml();
+    expenseBudget.value = project && project.expenseBudget ? project.expenseBudget : "";
+    subRows.innerHTML = (project?.subconsultants || []).map(subRowHtml).join("");
+    updateSubTotal();
     setModalType(project && project.internal ? "internal" : "rates");
     removeBtn.style.display = project ? "" : "none";
 
@@ -152,6 +173,25 @@ export function createProjectEditor({ getData, onSaved }) {
       return false;
     }
   }
+
+  $("modalAddSubRow").addEventListener("click", () => {
+    subRows.insertAdjacentHTML("beforeend", subRowHtml());
+    subRows.lastElementChild.querySelector(".subName").focus();
+  });
+  subRows.addEventListener("input", (e) => { if (e.target.classList.contains("subBudget")) updateSubTotal(); });
+  subRows.addEventListener("click", (e) => {
+    const btn = e.target.closest(".removeSubRow");
+    if (!btn) return;
+    const row = btn.closest(".sub-row");
+    const id = row.dataset.subId;
+    // Recorded invoices from a subconsultant are part of the invoice history.
+    if (id && (getData().expenses || []).some((x) => x.subId === id)) {
+      alert("This subconsultant already has invoices recorded, so it can't be removed.");
+      return;
+    }
+    row.remove();
+    updateSubTotal();
+  });
 
   modalProjectType.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
@@ -213,6 +253,14 @@ export function createProjectEditor({ getData, onSaved }) {
       internal,
       billAtPayRate: false,
       pmPersonId: modalProjectPm.value || null,
+      expenseBudget: internal ? 0 : Number(expenseBudget.value) || 0,
+      subconsultants: internal ? [] : [...subRows.querySelectorAll(".sub-row")]
+        .map((row) => ({
+          id: row.dataset.subId || `sub_${Math.random().toString(36).slice(2, 10)}`,
+          name: row.querySelector(".subName").value.trim(),
+          budget: Number(row.querySelector(".subBudget").value) || 0,
+        }))
+        .filter((sub) => sub.name),
     };
     try {
       let projectId = editingId;

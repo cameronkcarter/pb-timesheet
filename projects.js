@@ -1,4 +1,4 @@
-import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices } from "./db.js";
+import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
   todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml, sortProjects, esc,
@@ -9,6 +9,7 @@ import {
   billRateOf, billedAmount, assignedHours, assignmentRate, isInternal, taskBudgetUse,
 } from "./rates.js";
 import { createProjectEditor } from "./project-editor.js";
+import { createExpenseEditor, expenseLabel, expenseStatus, countsToward } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -19,6 +20,7 @@ let assignments = [];
 let timeEntries = [];
 let dueDates = [];
 let invoices = [];
+let expenses = [];
 let navChecked = false;
 let showAll = false;   // admins: "All" projects instead of just theirs
 let editMode = false;  // admins: edit assigned hours instead of seeing subtasks
@@ -26,7 +28,7 @@ let selectedProjectId = null;
 let projectPicked = false; // until you pick one, the first (newest) project is selected
 let expandedTaskId = null;
 let openDotId = null;
-let showCompleted = true; // completed subtasks show by default; can be hidden
+let showCompleted = false; // completed subtasks are hidden unless shown
 
 const PX_PER_DAY = 4;
 const LABEL_COL_WIDTH = 200;
@@ -118,6 +120,7 @@ if (sessionPersonId) {
   TimeEntries.listen((data) => { timeEntries = data; renderBudget(); renderGantt(); });
   DueDates.listen((data) => { dueDates = data; renderBudget(); renderGantt(); });
   Invoices.listen((data) => { invoices = data; });
+  Expenses.listen((data) => { expenses = data; renderBudget(); });
 }
 
 // Projects you're on: assigned to a task, or its project manager, plus
@@ -242,7 +245,7 @@ function renderBudget() {
 
   thead.innerHTML = internal
     ? `<tr><th class="internal-task-col">Task</th><th colspan="4">Hours logged</th></tr>`
-    : `<tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th>${editMode ? "<th>Unassigned</th>" : ""}</tr>`;
+    : `<tr><th>Task</th><th class="c-money">Budget</th><th class="c-money">Spent</th><th class="c-bar">Progress</th><th class="c-money">Remaining</th>${editMode ? '<th class="c-money">Unassigned</th>' : ""}</tr>`;
 
   const general = editMode ? [] : projectItems({ taskId: null });
   generalItemsEl.innerHTML = general.length
@@ -280,23 +283,136 @@ function renderBudget() {
     const open = dueDates.filter((d) => d.taskId === t.id && isSubtask(d) && !d.completed);
     const overdue = open.some((d) => d.dueDate < todayISO());
     const dueChip = !editMode && open.length ? `<span class="due-chip ${overdue ? "overdue" : ""}" title="Open subtasks on this task">${open.length} due</span>` : "";
-    const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><span class="task-chevron" aria-hidden="true">&#9656;</span> ${esc(t.name)}${dueChip}</td>${cells}</tr>`;
+    const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><div class="task-cell" title="${esc(t.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${esc(t.name)}</span>${dueChip}</div></td>${cells}</tr>`;
     if (!expanded) return mainRow;
     return mainRow + `<tr class="task-detail" data-task-id="${t.id}"><td colspan="${cols}" class="accordion-cell">${editMode ? assignEditorHtml(t) : taskPeopleHtml(t)}</td></tr>`;
   }).join("");
 
-  const remainingTotal = totals.budget - totals.spent;
-  const totalRow = internal ? "" : `<tr class="budget-total-row">
-    <td>Total</td><td>${formatCurrency(totals.budget)}</td><td>${formatCurrency(totals.spent)}</td>
-    <td>${budgetBarHtml(totals.spent, totals.committed, totals.budget, false, totals.invoiced)}</td>
-    <td ${remainingTotal < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remainingTotal)}</td>
-    ${editMode ? `<td>${totals.unassigned < -0.005 ? `<span class="hours-over-strong">Over by ${formatCurrency(-totals.unassigned)}</span>` : formatCurrency(totals.unassigned)}</td>` : ""}
-  </tr>`;
-  budgetTbody.innerHTML = rows + totalRow;
+  budgetTbody.innerHTML = rows + (internal ? "" : expenseRowsHtml(project, totals, cols));
 
   if (addingTaskId) {
     const hoursInput = budgetTbody.querySelector(".newAssignHours");
     if (hoursInput) hoursInput.focus();
+  }
+}
+
+// ---------- Expenses in the Budget table ----------
+// Under the tasks: Tasks subtotal, Project expenses, one row per
+// subconsultant, Expenses subtotal and the grand Total. Expense rows open to
+// list what was recorded, with "+ Add expense" / "+ Record invoice".
+function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = "") {
+  const remaining = budget - spent;
+  return `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
+    <td>${budgetBarHtml(spent, committed, budget, false, invoiced)}</td>
+    <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>${extra}`;
+}
+
+function expenseRowsHtml(project, taskTotals, cols) {
+  const list = expenses.filter((e) => e.projectId === project.id && countsToward(e));
+  const sum = (arr) => arr.reduce((t, e) => t + Number(e.amount || 0), 0);
+  const blank = editMode ? "<td></td>" : "";
+
+  const groups = [
+    { key: "exp:project", name: "Project expenses", budget: Number(project.expenseBudget || 0), items: list.filter((e) => e.kind !== "sub") },
+    ...(project.subconsultants || []).map((sub) => ({
+      key: `exp:sub:${sub.id}`, name: sub.name, sub, budget: Number(sub.budget || 0),
+      items: list.filter((e) => e.kind === "sub" && e.subId === sub.id),
+    })),
+  ];
+  const exp = { budget: 0, spent: 0, invoiced: 0 };
+  const groupRows = groups.map((g) => {
+    const spent = sum(g.items);
+    const invoiced = sum(g.items.filter((e) => e.invoiced));
+    exp.budget += g.budget;
+    exp.spent += spent;
+    exp.invoiced += invoiced;
+    const expanded = expandedTaskId === g.key;
+    const row = `<tr class="task-row expense-row ${expanded ? "expanded" : ""}" data-task-row="${g.key}">
+      <td><div class="task-cell" title="${esc(g.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${g.sub ? `<span class="row-kind">Sub</span>` : ""}${esc(g.name)}</span></div></td>
+      ${moneyCells({ budget: g.budget, spent, invoiced }, blank)}</tr>`;
+    return expanded ? row + `<tr><td colspan="${cols}" class="accordion-cell">${expenseListHtml(g)}</td></tr>` : row;
+  }).join("");
+
+  const unassignedCell = editMode
+    ? `<td>${taskTotals.unassigned < -0.005 ? `<span class="hours-over-strong">Over by ${formatCurrency(-taskTotals.unassigned)}</span>` : formatCurrency(taskTotals.unassigned)}</td>`
+    : "";
+  return `<tr class="budget-subtotal-row"><td>Tasks subtotal</td>${moneyCells(taskTotals, unassignedCell)}</tr>
+    ${groupRows}
+    <tr class="budget-subtotal-row"><td>Expenses subtotal</td>${moneyCells(exp, blank)}</tr>
+    <tr class="budget-total-row"><td>Total</td>${moneyCells({
+      budget: taskTotals.budget + exp.budget,
+      spent: taskTotals.spent + exp.spent,
+      committed: taskTotals.committed + exp.spent,
+      invoiced: taskTotals.invoiced + exp.invoiced,
+    }, blank)}</tr>`;
+}
+
+function isPmOf(projectId) {
+  const project = projects.find((p) => p.id === projectId);
+  return !!project && project.pmPersonId === sessionPersonId;
+}
+
+function canEditExpense(e) {
+  return isAdmin() || isPmOf(e.projectId) ||
+    (e.personId === sessionPersonId && !e.approved && !e.invoiced);
+}
+
+function expenseListHtml(g) {
+  const project = projects.find((p) => p.id === selectedProjectId);
+  const items = [...g.items, ...expenses.filter((e) => e.declined && e.projectId === project.id &&
+    (g.sub ? e.subId === g.sub.id : e.kind !== "sub"))]
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  const canRecordSub = isAdmin() || isPmOf(project.id);
+  const addBtn = g.sub
+    ? (canRecordSub ? `<button class="link-btn" data-action="add-expense" data-kind="sub" data-sub-id="${g.sub.id}">+ Record invoice</button>` : "")
+    : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Add expense</button>`;
+  if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">Nothing recorded yet.</div>${addBtn}`;
+  const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `<table class="expense-list">
+    <thead><tr><th>Date</th><th>Description</th>${g.sub ? "" : "<th>Paid by</th><th class=\"num\">Qty × rate</th>"}<th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>${items.map((e) => {
+      const [status, cls] = expenseStatus(e);
+      const payer = people.find((p) => p.id === e.personId);
+      const canReimburse = isAdmin() && e.personId && e.approved && !e.reimbursed;
+      return `<tr>
+        <td>${shortDate(e.date)}</td>
+        <td>${esc(g.sub ? e.description || "—" : expenseLabel(e, project))}${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</td>
+        ${g.sub ? "" : `<td>${payer ? esc(payer.name) : "Company"}</td><td class="num">${fmtHrs(Number(e.quantity || 0))} × ${formatCurrency(e.rate)}</td>`}
+        <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
+        <td><span class="pay-status ${cls}">${status}</span></td>
+        <td class="num expense-actions">
+          ${canReimburse ? `<button class="link-btn" data-action="reimburse-expense" data-id="${e.id}">Mark reimbursed</button>` : ""}
+          ${canEditExpense(e) && !e.invoiced ? `<button class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
+        </td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>${addBtn}`;
+}
+
+const expenseEditor = createExpenseEditor({
+  getData: () => ({ people, projects }),
+  sessionPersonId,
+  projectChoices: () => projects.filter((p) => p.id === selectedProjectId),
+  canPickPayer: () => isAdmin() || isPmOf(selectedProjectId),
+});
+
+async function handleExpenseAction(btn) {
+  const { action, id } = btn.dataset;
+  if (action === "add-expense") {
+    expenseEditor.open(null, { kind: btn.dataset.kind, projectId: selectedProjectId, subId: btn.dataset.subId });
+  }
+  if (action === "edit-expense") {
+    const e = expenses.find((x) => x.id === id);
+    if (e) expenseEditor.open(e);
+  }
+  if (action === "reimburse-expense") {
+    const e = expenses.find((x) => x.id === id);
+    const who = e && people.find((p) => p.id === e.personId)?.name;
+    if (!e || !confirm(`Mark ${formatCurrency(e.amount)} as reimbursed to ${who || "them"}?`)) return;
+    try {
+      await Expenses.update(id, { reimbursed: true, reimbursedDate: new Date().toISOString() });
+      showToast("Marked reimbursed.");
+    } catch (err) { showToast("Error: " + err.message); }
   }
 }
 
@@ -521,6 +637,8 @@ budgetTbody.addEventListener("click", async (e) => {
   if (btn) {
     if (["open-add", "cancel-add", "remove-assignment", "add-assignment"].includes(btn.dataset.action)) {
       await handleAssignAction(btn);
+    } else if (["add-expense", "edit-expense", "reimburse-expense"].includes(btn.dataset.action)) {
+      await handleExpenseAction(btn);
     } else {
       await handleItemAction(btn);
     }
@@ -537,7 +655,7 @@ budgetTbody.addEventListener("click", async (e) => {
 
 // ---------- Admin tools: Mine/All, add/edit project, edit assignments ----------
 const projectEditor = createProjectEditor({
-  getData: () => ({ people, projects, tasks, assignments, dueDates, timeEntries, invoices }),
+  getData: () => ({ people, projects, tasks, assignments, dueDates, timeEntries, invoices, expenses }),
   onSaved: (projectId) => {
     if (projectId) {
       selectedProjectId = projectId;
@@ -786,7 +904,7 @@ document.getElementById("openAddEvent").addEventListener("click", () =>
 const toggleCompletedBtn = document.getElementById("toggleCompletedBtn");
 toggleCompletedBtn.addEventListener("click", () => {
   showCompleted = !showCompleted;
-  toggleCompletedBtn.textContent = showCompleted ? "Hide completed" : "Show completed";
+  toggleCompletedBtn.textContent = showCompleted ? "Hide completed subtasks" : "Show completed subtasks";
   renderBudget();
 });
 

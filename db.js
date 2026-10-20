@@ -169,6 +169,33 @@ export const TimeEntries = {
   approve,
 };
 
+// Expense documents: project expenses (kind "project": category, description,
+// quantity x rate, paid by personId for reimbursement) and subconsultant
+// invoices (kind "sub": subId, description, amount). Approved like hours, then
+// invoiced; project expenses someone paid for are later marked reimbursed.
+// { projectId, kind, personId, subId, category, description, date, quantity,
+//   rate, amount, approved, approvedDate, declined, declineReason, invoiced,
+//   invoiceId, invoicedDate, reimbursed, reimbursedDate, createdByPersonId }
+export const Expenses = {
+  listen: (cb) => listenCollection("expenses", cb, "date"),
+  add: (data) => add("expenses", {
+    personId: null, subId: null, category: null, quantity: null, rate: null,
+    approved: false, approvedDate: null, declined: false, declineReason: null,
+    invoiced: false, invoiceId: null, invoicedDate: null, reimbursed: false, reimbursedDate: null,
+    ...data,
+  }),
+  update: (id, data) => update("expenses", id, data),
+  remove: (id) => remove("expenses", id),
+  approve: (ids) => {
+    const approvedDate = new Date().toISOString();
+    return Promise.all(ids.map((id) => update("expenses", id, { approved: true, approvedDate })));
+  },
+  markInvoiced: (ids, invoiceId) => {
+    const invoicedDate = new Date().toISOString();
+    return Promise.all(ids.map((id) => update("expenses", id, { invoiced: true, invoicedDate, invoiceId })));
+  },
+};
+
 // DueDate documents are subtasks (personIds non-empty) or timeline events:
 // { projectId, taskId, personIds: [], title, dueDate, createdByPersonId,
 //   completed, completedDate }

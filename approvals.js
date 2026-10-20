@@ -4,8 +4,9 @@
 // (date, task, hours, note) with Edit, Decline and Approve. Declined entries
 // go back to the person's Timesheet (with the reason) and return here once
 // they edit them.
-import { TimeEntries } from "./db.js";
-import { esc, fmtHrs, showToast, projectColor, sortProjects } from "./util.js";
+import { TimeEntries, Expenses } from "./db.js";
+import { esc, fmtHrs, showToast, projectColor, sortProjects, formatCurrency } from "./util.js";
+import { expenseLabel } from "./expenses.js";
 import { assignedHours, isInternal } from "./rates.js";
 
 const apprDate = (iso) => new Date(iso + "T00:00:00")
@@ -45,12 +46,18 @@ export function createApprovals({ getData, sessionPersonId }) {
       .map((p) => p.id));
   }
 
+  // Hours and expenses waiting for approval, in date order. Expenses are
+  // tagged isExpense and filed under the person who paid (or who added it).
   function pendingEntries() {
     const ids = myProjectIds();
-    return getData().timeEntries
-      .filter((e) => !e.approved && !e.invoiced && !e.declined && ids.has(e.projectId))
-      .sort((a, b) => (a.date < b.date ? -1 : 1));
+    const waiting = (e) => !e.approved && !e.invoiced && !e.declined && ids.has(e.projectId);
+    const hours = getData().timeEntries.filter(waiting);
+    const exps = (getData().expenses || []).filter((e) => e.kind !== "sub" && waiting(e))
+      .map((e) => ({ ...e, isExpense: true, hours: 0, personId: e.personId || e.createdByPersonId }));
+    return [...hours, ...exps].sort((a, b) => (a.date < b.date ? -1 : 1));
   }
+
+  const expenseSum = (items) => items.filter((e) => e.isExpense).reduce((t, e) => t + Number(e.amount || 0), 0);
 
   // True when this person has logged more on the task than assigned.
   function isOver(personId, taskId) {
@@ -86,7 +93,18 @@ export function createApprovals({ getData, sessionPersonId }) {
   }
 
   function entryRowHtml(e) {
-    const { tasks } = getData();
+    const { tasks, projects } = getData();
+    if (e.isExpense && !(editing && editing.id === e.id)) {
+      return `<tr class="appr-entry">
+        <td class="appr-date">${apprDate(e.date)}</td>
+        <td class="appr-task appr-muted">Expense</td>
+        <td class="num appr-muted">—</td>
+        <td class="appr-entry-note"><strong>${formatCurrency(e.amount)}</strong> · ${esc(expenseLabel(e, projects.find((p) => p.id === e.projectId)))}</td>
+        <td class="num appr-actions" colspan="2">
+          <button type="button" class="link-btn appr-decline" data-action="decline-entry" data-id="${e.id}">Decline</button>
+          <button type="button" class="link-btn appr-approve" data-action="approve-entry" data-id="${e.id}">Approve</button>
+        </td></tr>`;
+    }
     const mode = editing && editing.id === e.id ? editing.mode : null;
     const task = tasks.find((t) => t.id === e.taskId);
     const lead = `<td class="appr-date">${apprDate(e.date)}</td>
@@ -130,7 +148,9 @@ export function createApprovals({ getData, sessionPersonId }) {
       body.innerHTML = '<div class="empty">Nothing to approve.</div>';
       return;
     }
-    total.textContent = `${fmtHrs(gs.reduce((s, g) => s + g.hours, 0))} hrs`;
+    const allItems = gs.flatMap((g) => g.entries);
+    const owed = expenseSum(allItems);
+    total.textContent = `${fmtHrs(gs.reduce((s, g) => s + g.hours, 0))} hrs${owed ? ` · ${formatCurrency(owed)} expenses` : ""}`;
 
     body.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table">
       <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" /><col /><col class="c-actions" /><col class="c-chev" /></colgroup>
@@ -148,7 +168,7 @@ export function createApprovals({ getData, sessionPersonId }) {
             <td class="appr-date">${dateRange(r.entries)}</td>
             <td class="appr-task">${esc(r.name)}</td>
             <td class="num appr-subtotal ${over ? "appr-over" : ""}" ${over ? 'title="More than their assigned hours on a task"' : ""}>${fmtHrs(r.hours)}</td>
-            <td class="appr-note appr-muted">${r.entries.length} ${r.entries.length === 1 ? "entry" : "entries"}</td>
+            <td class="appr-note appr-muted">${r.entries.length} ${r.entries.length === 1 ? "entry" : "entries"}${expenseSum(r.entries) ? ` · ${formatCurrency(expenseSum(r.entries))} expenses` : ""}</td>
             <td class="num"><button type="button" class="small due-btn due-complete" data-action="approve-person" data-key="${esc(r.key)}">${r.entries.length > 1 ? `Approve all (${r.entries.length})` : "Approve"}</button></td>
             <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
           </tr>
@@ -158,9 +178,13 @@ export function createApprovals({ getData, sessionPersonId }) {
     </table></div>`;
   }
 
-  async function approveIds(ids, message) {
+  // Approves a mix of hours and expenses.
+  async function approveItems(items, message) {
     try {
-      await TimeEntries.approve(ids);
+      const hourIds = items.filter((e) => !e.isExpense).map((e) => e.id);
+      const expenseIds = items.filter((e) => e.isExpense).map((e) => e.id);
+      if (hourIds.length) await TimeEntries.approve(hourIds);
+      if (expenseIds.length) await Expenses.approve(expenseIds);
       showToast(message);
     } catch (err) {
       showToast("Error: " + err.message);
@@ -209,7 +233,8 @@ export function createApprovals({ getData, sessionPersonId }) {
     if (action === "confirm-decline") {
       const reason = btn.closest("tr").querySelector(".appr-reason").value.trim();
       try {
-        await TimeEntries.update(btn.dataset.id, { declined: true, declineReason: reason || null });
+        const item = pendingEntries().find((x) => x.id === btn.dataset.id);
+        await (item && item.isExpense ? Expenses : TimeEntries).update(btn.dataset.id, { declined: true, declineReason: reason || null });
         editing = null;
         render();
         showToast("Declined — sent back to their Timesheet.");
@@ -218,15 +243,18 @@ export function createApprovals({ getData, sessionPersonId }) {
       }
       return;
     }
-    if (action === "approve-entry") return approveIds([btn.dataset.id], "Approved.");
+    if (action === "approve-entry") {
+      const item = pendingEntries().find((x) => x.id === btn.dataset.id);
+      if (item) return approveItems([item], "Approved.");
+    }
     const gs = groups();
     if (action === "approve-person") {
       const r = gs.flatMap((g) => g.people).find((x) => x.key === btn.dataset.key);
-      if (r) return approveIds(r.entries.map((x) => x.id), `${r.name}'s hours approved.`);
+      if (r) return approveItems(r.entries, `${r.name}'s hours approved.`);
     }
     if (action === "approve-project") {
       const g = gs.find((x) => x.projectId === btn.dataset.id);
-      if (g) return approveIds(g.entries.map((x) => x.id), "Approved.");
+      if (g) return approveItems(g.entries, "Approved.");
     }
   });
 
@@ -246,10 +274,10 @@ export function createApprovals({ getData, sessionPersonId }) {
   });
 
   approveAllBtn.addEventListener("click", async () => {
-    const ids = pendingEntries().map((e) => e.id);
-    if (ids.length === 0) return;
-    if (!confirm(`Approve all ${ids.length} pending ${ids.length === 1 ? "entry" : "entries"}?`)) return;
-    approveIds(ids, "All entries approved.");
+    const items = pendingEntries();
+    if (items.length === 0) return;
+    if (!confirm(`Approve all ${items.length} pending ${items.length === 1 ? "entry" : "entries"}?`)) return;
+    approveItems(items, "All entries approved.");
   });
 
   return { render };

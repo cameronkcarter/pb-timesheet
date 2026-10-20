@@ -42,9 +42,9 @@
       <div class="budget-header">
         <h2 style="margin:0;">Budget <span class="budget-pm" id="budgetPm"></span></h2>
         <div class="row-actions">
-          <button id="toggleCompletedBtn" class="secondary small">Hide completed</button>
-          <button id="editAssignmentsBtn" class="secondary small" style="display:none;">Edit assignments</button>
-          <button id="editProjectBtn" class="secondary small" style="display:none;">Edit project</button>
+          <button id="toggleCompletedBtn" class="secondary small">Show completed subtasks</button>
+          <button id="editAssignmentsBtn" class="small btn-tint-amber" style="display:none;">Edit assignments</button>
+          <button id="editProjectBtn" class="small btn-tint-purple" style="display:none;">Edit project</button>
         </div>
       </div>
       <div class="bar-legend" id="barLegend">
@@ -64,7 +64,7 @@
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <h2 style="margin:0;">Timeline</h2>
         <div class="row-actions">
-          <button id="editTimelineBtn" class="secondary small" style="display:none;">Edit</button>
+          <button id="editTimelineBtn" class="small btn-tint-purple" style="display:none;">Edit</button>
           <button id="openAddEvent" class="secondary small">+ Add Event</button>
         </div>
       </div>
@@ -147,6 +147,19 @@
         </div>
         <div id="modalTaskRows"></div>
         <button type="button" id="modalAddTaskRow" class="link-btn">+ Add task</button>
+      </section>
+
+      <section class="sheet-section" id="modalExpenseFields">
+        <div class="section-title">Expenses</div>
+        <div class="field-grid">
+          <div class="field">
+            <label for="modalExpenseBudget">Project expenses budget</label>
+            <div class="money-input"><span>$</span><input type="number" id="modalExpenseBudget" min="0" step="0.01" placeholder="0" /></div>
+          </div>
+        </div>
+        <div class="section-title sub-title">Subconsultants <span class="section-meta" id="modalSubTotal"></span></div>
+        <div id="modalSubRows"></div>
+        <button type="button" id="modalAddSubRow" class="link-btn">+ Add subconsultant</button>
       </section>
     </div>
 

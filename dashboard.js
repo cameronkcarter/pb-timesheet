@@ -1,4 +1,4 @@
-import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices } from "./db.js";
+import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, formatDate, esc, fmtHrs,
   todayISO, toISODate, getWeekStart, addDays, projectColor, hoursBarHtml, dueItemHtml, sortProjects,
@@ -6,6 +6,7 @@ import {
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
+import { createExpenseEditor, expenseLabel, expenseStatus } from "./expenses.js";
 
 const selectedPersonId = requireSession();
 
@@ -16,10 +17,11 @@ let assignments = [];
 let timeEntries = [];
 let dueDates = [];
 let invoices = [];
+let expenses = [];
 let navChecked = false;
 let payOpen = false;            // the pay stubs panel under the stat boxes
 let showClientPaid = false;     // client-paid rows are hidden unless asked for
-let showCompleted = true; // completed subtasks show by default; can be hidden
+let showCompleted = false; // completed subtasks are hidden unless shown
 
 const projectSummaryCards = document.getElementById("projectSummaryCards");
 const toggleCompletedBtn = document.getElementById("toggleCompletedBtn");
@@ -45,6 +47,7 @@ if (selectedPersonId) {
   TimeEntries.listen((d) => { timeEntries = d; render(); });
   DueDates.listen((d) => { dueDates = d; render(); });
   Invoices.listen((d) => { invoices = d; render(); });
+  Expenses.listen((d) => { expenses = d; render(); });
 }
 
 function render() {
@@ -97,6 +100,9 @@ function render() {
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid);
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedUnpaid);
+  const owedBack = myExpenses().filter((e) => !e.declined && !e.reimbursed).reduce((t, e) => t + Number(e.amount || 0), 0);
+  document.getElementById("statExpensesWrap").hidden = owedBack < 0.005;
+  document.getElementById("statExpenses").textContent = formatCurrency(owedBack);
   renderPay(myEntries);
 
   // Your subtasks; completed ones too unless hidden.
@@ -178,7 +184,10 @@ function render() {
     return `<div class="card">
       <div class="hours-card-header">
         <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${esc(project.name)}</h2>
-        ${budgetPct != null ? `<div class="empty" style="padding:0;">Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong></div>` : ""}
+        <div class="card-head-right">
+          ${budgetPct != null ? `<div class="empty" style="padding:0;">Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong></div>` : ""}
+          ${isInternal(project) ? "" : `<button class="small btn-tint-purple" data-action="add-expense" data-project-id="${project.id}">+ Add expense</button>`}
+        </div>
       </div>
       ${totalAssigned > 0 ? `
         <div class="hours-total">
@@ -250,8 +259,9 @@ function renderPay(myEntries) {
     ${paidCount ? `<button type="button" class="link-btn" data-action="toggle-paid">${showClientPaid ? "Hide client-paid" : `Show client-paid (${paidCount})`}</button>` : ""}
     <button type="button" class="icon-btn" data-action="close-pay" aria-label="Close">&times;</button>
   </div>`;
+  const expensesHtml = yourExpensesHtml();
   if (!rows.length) {
-    payPanel.innerHTML = head + `<div class="pay-empty">${paidCount ? "All paid." : "No billable hours yet."}</div>`;
+    payPanel.innerHTML = head + `<div class="pay-empty">${paidCount ? "All paid." : "No billable hours yet."}</div>` + expensesHtml;
     return;
   }
 
@@ -271,6 +281,35 @@ function renderPay(myEntries) {
         <td><span class="pay-status ${r.status[1]}">${esc(r.status[0])}</span></td>
       </tr>`;
     }).join("")}</tbody>
+  </table></div>` + expensesHtml;
+}
+
+function myExpenses() {
+  return expenses.filter((e) => e.personId === selectedPersonId && e.kind !== "sub");
+}
+
+// Expenses you paid for: pending, approved, declined (edit to resubmit) and,
+// with "Show client-paid", reimbursed ones too.
+function yourExpensesHtml() {
+  const list = myExpenses().filter((e) => showClientPaid || !e.reimbursed)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  if (!list.length) return "";
+  return `<div class="pay-card-head your-expenses-head"><h2>Your expenses</h2></div>
+  <div class="pay-scroll"><table class="pay-table">
+    <thead><tr><th>Date</th><th>Project</th><th>Description</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>${list.map((e) => {
+      const project = projects.find((p) => p.id === e.projectId);
+      const [status, cls] = expenseStatus(e);
+      const editable = !e.approved && !e.invoiced;
+      return `<tr>
+        <td>${shortDate(e.date)}</td>
+        <td class="proj"><span class="pay-dot" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : "Project")}</td>
+        <td>${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</td>
+        <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
+        <td><span class="pay-status ${cls}">${status}</span></td>
+        <td class="num">${editable ? `<button class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}</td>
+      </tr>`;
+    }).join("")}</tbody>
   </table></div>`;
 }
 
@@ -284,6 +323,11 @@ payPanel.addEventListener("click", (e) => {
   if (!btn) return;
   if (btn.dataset.action === "toggle-paid") showClientPaid = !showClientPaid;
   if (btn.dataset.action === "close-pay") payOpen = false;
+  if (btn.dataset.action === "edit-expense") {
+    const e = expenses.find((x) => x.id === btn.dataset.id);
+    if (e) expenseEditor.open(e);
+    return;
+  }
   render();
 });
 
@@ -303,9 +347,23 @@ const itemEditor = createItemEditor({
   canManage,
 });
 
+const expenseEditor = createExpenseEditor({
+  getData: () => ({ people, projects }),
+  sessionPersonId: selectedPersonId,
+  // Billable projects you're on.
+  projectChoices: () => sortProjects(projects.filter((p) => !isInternal(p) && (
+    assignments.some((a) => a.projectId === p.id && a.personId === selectedPersonId)
+    || p.pmPersonId === selectedPersonId))),
+  canPickPayer: () => false,
+});
+
 projectSummaryCards.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
+  if (btn.dataset.action === "add-expense") {
+    expenseEditor.open(null, { kind: "project", projectId: btn.dataset.projectId });
+    return;
+  }
   const { action, id } = btn.dataset;
   const d = dueDates.find((x) => x.id === id);
   if (action === "complete-duedate") setItemCompleted(id, true);
@@ -319,7 +377,7 @@ projectSummaryCards.addEventListener("click", (e) => {
 
 toggleCompletedBtn.addEventListener("click", () => {
   showCompleted = !showCompleted;
-  toggleCompletedBtn.textContent = showCompleted ? "Hide completed" : "Show completed";
+  toggleCompletedBtn.textContent = showCompleted ? "Hide completed subtasks" : "Show completed subtasks";
   render();
 });
 
