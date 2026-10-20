@@ -302,7 +302,7 @@ function detailHtml(row) {
     ${expenseTableHtml(inv.expenseRows || [])}
     <div class="inv-actions">
       ${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
-      ${!inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : ""}
+      ${!inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : '<button type="button" class="secondary" data-action="mark-unpaid">Undo paid</button>'}
     </div>`;
 }
 
@@ -373,8 +373,11 @@ function render() {
 // tab), then billed to the client on that project's next invoice.
 function renderSubInvoices() {
   const subs = expenses.filter((e) => e.kind === "sub").sort((a, b) => (a.date < b.date ? 1 : -1));
-  const unbilled = subs.filter((e) => !e.invoiced).reduce((t, e) => t + Number(e.amount || 0), 0);
-  subTotal.textContent = unbilled ? `${formatCurrency(unbilled)} not invoiced` : "";
+  const sum = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
+  const notInvoiced = sum(subs.filter((e) => !e.invoiced));
+  const owed = sum(subs.filter((e) => !e.subPaid));
+  subTotal.textContent = [notInvoiced ? `${formatCurrency(notInvoiced)} not invoiced` : "", owed ? `${formatCurrency(owed)} owed to subs` : ""]
+    .filter(Boolean).join(" · ");
   if (!subs.length) {
     subBody.innerHTML = '<div class="empty">None recorded yet.</div>';
     return;
@@ -385,16 +388,27 @@ function renderSubInvoices() {
       const project = projects.find((p) => p.id === e.projectId);
       const sub = (project?.subconsultants || []).find((x) => x.id === e.subId);
       const inv = e.invoiceId && invoices.find((i) => i.id === e.invoiceId);
+      // Two steps: billed to the client (and the client pays us), and paid to the sub.
+      const status = e.subPaid
+        ? `<span class="pay-status paid">Paid to sub${e.subPaidDate ? " " + shortDate(e.subPaidDate) : ""}</span>`
+        : inv && inv.paid
+          ? '<span class="pay-status pending">Client paid · pay sub</span>'
+          : e.invoiced
+            ? `<span class="pay-status invoiced">${inv ? "On invoice " + esc(inv.invoiceNumber) : "Invoiced"}</span>`
+            : '<span class="pay-status pending">Not invoiced</span>';
       return `<tr class="inv-row">
         <td>${shortDate(e.date)}</td>
         <td class="proj"><span class="pay-dot" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : "Project")}</td>
         <td>${esc(sub ? sub.name : "—")}</td>
         <td>${esc(e.description || "—")}</td>
         <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
-        <td>${e.invoiced
-          ? `<span class="pay-status invoiced">${inv ? "On invoice " + esc(inv.invoiceNumber) : "Invoiced"}</span>`
-          : '<span class="pay-status pending">Not invoiced</span>'}</td>
-        <td class="num">${e.invoiced ? "" : `<button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`}</td>
+        <td>${status}</td>
+        <td class="num sub-actions">
+          ${e.subPaid
+            ? `<button type="button" class="link-btn" data-action="sub-unpaid" data-id="${e.id}">Undo</button>`
+            : `<button type="button" class="link-btn" data-action="sub-paid" data-id="${e.id}">Mark paid</button>`}
+          ${e.invoiced ? "" : `<button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`}
+        </td>
       </tr>`;
     }).join("")}</tbody>
   </table></div>`;
@@ -414,11 +428,20 @@ document.getElementById("recordSubInvoice").addEventListener("click", () => {
   subEditor.open(null, { kind: "sub" });
 });
 
-subBody.addEventListener("click", (e) => {
-  const btn = e.target.closest('[data-action="edit-sub"]');
+subBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-action]");
   if (!btn) return;
   const rec = expenses.find((x) => x.id === btn.dataset.id);
-  if (rec) subEditor.open(rec);
+  if (!rec) return;
+  if (btn.dataset.action === "edit-sub") return subEditor.open(rec);
+  const paying = btn.dataset.action === "sub-paid";
+  if (!paying && !confirm("Undo — mark this subconsultant invoice as not paid yet?")) return;
+  try {
+    await Expenses.update(rec.id, { subPaid: paying, subPaidDate: paying ? new Date().toISOString() : null });
+    showToast(paying ? "Marked paid to sub." : "Marked not paid.");
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
 });
 
 function currentRow() {
@@ -463,6 +486,7 @@ invoiceBody.addEventListener("click", async (e) => {
   if (action === "preview" || action === "generate") return generate(row, action === "preview", btn);
   if (action === "pdf") return downloadPdf(row.inv);
   if (action === "mark-paid") return markPaid(row.inv);
+  if (action === "mark-unpaid") return markUnpaid(row.inv);
 });
 
 togglePaidBtn.addEventListener("click", () => {
@@ -943,6 +967,19 @@ async function downloadPdf(inv) {
       expenseTotal: inv.expenseTotal || 0,
       workRows: workRowsFor(project, timeEntries.filter((e) => e.invoiceId === inv.id)),
     });
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
+async function markUnpaid(inv) {
+  if (!confirm("Undo paid? This invoice and its hours go back to outstanding.")) return;
+  try {
+    const linked = timeEntries.filter((entry) => entry.invoiceId === inv.id);
+    await Promise.all(linked.map((entry) => TimeEntries.update(entry.id, { paid: false, paidDate: null })));
+    await Invoices.update(inv.id, { paid: false, paidDate: null, sheetSynced: false });
+    showToast("Back to outstanding.");
+    syncSheet();
   } catch (err) {
     showToast("Error: " + err.message);
   }

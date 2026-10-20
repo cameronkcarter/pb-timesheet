@@ -175,7 +175,8 @@ export const TimeEntries = {
 // invoiced; project expenses someone paid for are later marked reimbursed.
 // { projectId, kind, personId, subId, category, description, date, quantity,
 //   rate, amount, approved, approvedDate, declined, declineReason, invoiced,
-//   invoiceId, invoicedDate, reimbursed, reimbursedDate, createdByPersonId }
+//   invoiceId, invoicedDate, reimbursed, reimbursedDate, createdByPersonId,
+//   subPaid, subPaidDate (subconsultant invoices: we've paid the sub) }
 export const Expenses = {
   listen: (cb) => listenCollection("expenses", cb, "date"),
   add: (data) => add("expenses", {

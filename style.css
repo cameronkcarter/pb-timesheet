@@ -3238,3 +3238,9 @@ button.person-chip::after {
   font-size: 15px;
   color: var(--text);
 }
+
+.sub-actions .link-btn {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 10px;
+}
