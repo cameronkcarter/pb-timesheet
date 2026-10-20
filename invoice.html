@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
 <title>Invoices — Place Builders</title>
+<link rel="icon" type="image/png" href="brand/logo-purple.png" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 <nav>
-  <a href="dashboard.html" id="navBrandLink" class="brand">Place Builders</a>
+  <a href="dashboard.html" id="navBrandLink" class="brand"><img src="brand/wordmark-white.png" alt="Place Builders" /></a>
   <a href="dashboard.html">Dashboard</a>
   <a href="timesheet.html">Timesheet</a>
   <a href="projects.html">Projects</a>
@@ -25,14 +26,14 @@
   <div id="invoiceBody">
     <div class="card inv-card">
       <div class="inv-head">
-        <h2>To invoice <span class="inv-total" id="nextTotal"></span></h2>
+        <h2>Unbilled hours <span class="inv-total" id="nextTotal"></span></h2>
       </div>
       <div id="nextBody"></div>
     </div>
 
     <div class="card inv-card">
       <div class="inv-head">
-        <h2>Invoices <span class="inv-total" id="pastTotal"></span></h2>
+        <h2>Sent invoices <span class="inv-total" id="pastTotal"></span></h2>
         <div class="sheet-sync-inline" id="sheetSyncBar" style="display:none;">
           <span class="sheet-sync-label">Google Sheet</span>
           <span id="sheetSyncStatus"></span>

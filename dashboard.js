@@ -177,7 +177,7 @@ function render() {
 
     return `<div class="card">
       <div class="hours-card-header">
-        <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${esc(project.name)}${project.client ? ` <span class="empty" style="font-weight:400;">(${esc(project.client)})</span>` : ""}</h2>
+        <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${esc(project.name)}</h2>
         ${budgetPct != null ? `<div class="empty" style="padding:0;">Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong></div>` : ""}
       </div>
       ${totalAssigned > 0 ? `

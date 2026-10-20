@@ -1,12 +1,20 @@
+/* Brand colors from the Place Builders Branding Guidelines. */
 :root {
-  --navy: #5c2670;
-  --navy-light: #7a3993;
-  --accent: #d98936;
-  --bg: #f5f6f8;
+  --ground: #261f12;
+  --plum: #452961;
+  --civic-purple: #6e3073;
+  --lavender: #a868e8;
+  --wisteria: #b68ff3;
+  --parchment: #ccb0f2;
+
+  --navy: var(--civic-purple);  /* primary: buttons, links, headings accents */
+  --navy-light: #8a46a8;
+  --accent: #d98936;            /* selected nav tab */
+  --bg: #f7f4ee;
   --card: #ffffff;
-  --border: #e0e3e8;
-  --text: #2a1c30;
-  --text-muted: #746b7a;
+  --border: #e6e0e8;
+  --text: var(--ground);
+  --text-muted: #6f6874;
   --green: #2e7d32;
   --red: #c0392b;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -23,7 +31,7 @@ body {
 }
 
 nav {
-  background: var(--navy);
+  background: var(--plum);
   display: flex;
   align-items: center;
   padding: 0 24px;
@@ -32,10 +40,20 @@ nav {
 }
 
 nav .brand {
-  color: #fff;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
   margin-right: 24px;
-  letter-spacing: 0.3px;
+  padding: 0 8px 0 0;
+}
+
+nav .brand:hover {
+  background: none;
+}
+
+nav .brand img {
+  height: 20px;
+  width: auto;
+  display: block;
 }
 
 nav a {
@@ -785,7 +803,7 @@ body.login-page {
   display: flex;
   background:
     radial-gradient(circle at 20% 15%, rgba(217, 137, 54, 0.25), transparent 45%),
-    linear-gradient(160deg, #6a2f80, #2f1139);
+    linear-gradient(160deg, var(--civic-purple), var(--plum) 60%, #2a1a3c);
   padding: 20px;
 }
 

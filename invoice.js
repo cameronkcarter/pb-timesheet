@@ -73,8 +73,8 @@ function nextInvoiceNumber() {
 }
 
 // ---------- Invoices tables ----------
-// "To invoice": a row per billable project for approved hours not invoiced
-// yet (its next invoice). "Invoices": ones already generated, newest first,
+// "Unbilled hours": a row per billable project for approved hours not invoiced
+// yet (its next invoice). "Sent invoices": ones already generated, newest first,
 // paid ones hidden unless asked for. Clicking a row shows each person's
 // hours (with their notes). The next invoice's # and billing period can be
 // edited until it's generated; after that they're locked.
