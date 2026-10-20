@@ -148,13 +148,13 @@ function upsertInvoices_(ss, invoices, extraLines) {
       const current = invSheet.getRange(row, paidCol).getValue();
       const currentStr = current instanceof Date ? isoDate_(current) : String(current || "");
       if ((inv.paidDate || "") !== currentStr) {
-        invSheet.getRange(row, paidCol).setValue(toDate_(inv.paidDate));
+        invSheet.getRange(row, paidCol).setValue(paidValue_(inv.paidDate));
         paidUpdated++;
       }
     } else {
       newInvRows.push([
         toDate_(inv.date), inv.invoiceNumber, inv.projectName, inv.periodLabel, inv.total,
-        toDate_(inv.paidDate), now, inv.invoiceId,
+        paidValue_(inv.paidDate), now, inv.invoiceId,
       ]);
       existingInv[inv.invoiceId] = -1;
     }
@@ -199,7 +199,11 @@ function writeBudgets_(ss, budgets) {
 
 function rebuildReports_(ss) {
   const invoices = readLog_(ss, LOG.invoices);
-  const lines = readLog_(ss, LOG.lines);
+  // Voided invoices stay in the log (marked VOID) but count for nothing:
+  // their hours went back to the site and will be billed on a new invoice.
+  const voidIds = {};
+  invoices.forEach((inv) => { if (String(inv["Paid Date"]) === "VOID") voidIds[inv["Invoice ID"]] = true; });
+  const lines = readLog_(ss, LOG.lines).filter((l) => !voidIds[l["Invoice ID"]]);
   const budgets = readLog_(ss, LOG.budgets);
 
   const round2 = (n) => Math.round(n * 100) / 100;
@@ -219,7 +223,10 @@ function rebuildReports_(ss) {
     hoursByInvoice[id] = (hoursByInvoice[id] || 0) + Number(l.Hours || 0);
     payByInvoice[id] = (payByInvoice[id] || 0) + payOf(l);
   });
-  const invoiceRecords = invoices.map((inv) => ({
+  const invoiceRecords = invoices.map((inv) => voidIds[inv["Invoice ID"]] ? ({
+    date: inv["Invoice Date"], number: inv["Invoice #"], project: inv.Project, period: inv["Billing Period"],
+    hours: 0, amount: 0, pay: 0, paid: "", note: "Void",
+  }) : ({
     date: inv["Invoice Date"], number: inv["Invoice #"], project: inv.Project, period: inv["Billing Period"],
     hours: hoursByInvoice[inv["Invoice ID"]] || 0, amount: Number(inv.Total || 0),
     pay: payByInvoice[inv["Invoice ID"]] || 0, paid: inv["Paid Date"], note: "",
@@ -408,6 +415,11 @@ function appendRows_(sheet, rows) {
 }
 
 // "YYYY-MM-DD" (or a full ISO timestamp) -> Date at local midnight, or "" if empty.
+// Paid Date is a date, blank, or "VOID" for a voided invoice.
+function paidValue_(str) {
+  return str === "VOID" ? "VOID" : toDate_(str);
+}
+
 function toDate_(str) {
   if (!str) return "";
   const [y, m, d] = String(str).slice(0, 10).split("-").map(Number);

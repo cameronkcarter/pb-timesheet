@@ -231,6 +231,7 @@ function statusHtml(row) {
       : '<span class="pay-status pending">Needs approval</span>';
   }
   const inv = row.inv;
+  if (inv.void) return '<span class="pay-status void">Void</span>';
   return (inv.paid
     ? `<span class="pay-status paid">Paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}</span>`
     : '<span class="pay-status invoiced">Outstanding</span>') +
@@ -297,10 +298,16 @@ function detailHtml(row) {
   }
   const inv = row.inv;
   const canPdf = !inv.historical && inv.taskRows && inv.laborRows;
+  if (inv.void) {
+    return `<div class="inv-note">${esc(inv.periodLabel || "")} &middot; Voided${inv.voidedDate ? " " + shortDate(inv.voidedDate) : ""} — its hours and expenses went back to Unbilled hours.</div>
+      ${expenseTableHtml(inv.expenseRows || [])}
+      <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}</div>`;
+  }
   return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}</div>` : ""}
     ${peopleHtml(row.key, row.entries, inv.laborRows)}
     ${expenseTableHtml(inv.expenseRows || [])}
     <div class="inv-actions">
+      ${!inv.paid ? '<button type="button" class="link-btn item-delete inv-void" data-action="void">Void invoice</button>' : ""}
       ${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
       ${!inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : '<button type="button" class="secondary" data-action="mark-unpaid">Undo paid</button>'}
     </div>`;
@@ -317,15 +324,19 @@ function render() {
   renderSubInvoices();
   const next = nextRows();
   const past = invoiceRows();
-  const paidCount = past.filter((r) => r.inv.paid).length;
-  const shownPast = past.filter((r) => showPaid || !r.inv.paid);
+  const done = (r) => r.inv.paid || r.inv.void;
+  const paidCount = past.filter(done).length;
+  const voidCount = past.filter((r) => r.inv.void).length;
+  const shownPast = past.filter((r) => showPaid || !done(r));
 
   const ready = next.reduce((s, r) => s + r.amount, 0);
-  const outstanding = past.filter((r) => !r.inv.paid).reduce((s, r) => s + r.amount, 0);
+  const outstanding = past.filter((r) => !done(r)).reduce((s, r) => s + r.amount, 0);
   nextTotal.textContent = next.length ? `${formatCurrency(ready)} ready` : "";
   pastTotal.textContent = outstanding ? `${formatCurrency(outstanding)} outstanding` : "";
   togglePaidBtn.style.display = paidCount ? "" : "none";
-  togglePaidBtn.textContent = showPaid ? "Hide paid" : `Show paid (${paidCount})`;
+  togglePaidBtn.textContent = showPaid
+    ? (voidCount ? "Hide paid & void" : "Hide paid")
+    : `Show paid${voidCount ? " & void" : ""} (${paidCount})`;
 
   const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
   const projectCell = (row) => {
@@ -354,7 +365,7 @@ function render() {
     <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>${shownPast.map((row) => {
       const open = openRow === row.key;
-      return `<tr class="inv-row ${open ? "open" : ""}" data-row="${esc(row.key)}">
+      return `<tr class="inv-row ${open ? "open" : ""} ${row.inv.void ? "void-row" : ""}" data-row="${esc(row.key)}">
         <td>${shortDate(row.inv.date)}</td>
         <td>${esc(row.inv.invoiceNumber)}</td>
         ${projectCell(row)}
@@ -365,7 +376,7 @@ function render() {
       </tr>
       ${open ? `<tr class="inv-detail"><td colspan="7">${detailHtml(row)}</td></tr>` : ""}`;
     }).join("")}</tbody>
-  </table></div>` : `<div class="empty">${paidCount ? "All paid." : "No invoices yet."}</div>`;
+  </table></div>` : `<div class="empty">${paidCount ? "Nothing outstanding." : "No invoices yet."}</div>`;
 }
 
 // ---------- Subconsultant invoices ----------
@@ -487,6 +498,7 @@ invoiceBody.addEventListener("click", async (e) => {
   if (action === "pdf") return downloadPdf(row.inv);
   if (action === "mark-paid") return markPaid(row.inv);
   if (action === "mark-unpaid") return markUnpaid(row.inv);
+  if (action === "void") return voidInvoice(row.inv);
 });
 
 togglePaidBtn.addEventListener("click", () => {
@@ -972,6 +984,25 @@ async function downloadPdf(inv) {
   }
 }
 
+// Voiding keeps the invoice (marked Void, number not reused) but sends its
+// hours, expenses and subconsultant invoices back to Unbilled hours.
+async function voidInvoice(inv) {
+  if (!confirm(`Void invoice ${inv.invoiceNumber}?\n\nIts hours and expenses go back to Unbilled hours so they can go on a new invoice. The voided invoice stays in the list for the record.`)) return;
+  try {
+    const entries = timeEntries.filter((e) => e.invoiceId === inv.id);
+    const exps = expenses.filter((e) => e.invoiceId === inv.id);
+    await Promise.all([
+      ...entries.map((e) => TimeEntries.update(e.id, { invoiced: false, invoicedDate: null, invoiceId: null, billRate: null })),
+      ...exps.map((e) => Expenses.update(e.id, { invoiced: false, invoicedDate: null, invoiceId: null })),
+    ]);
+    await Invoices.update(inv.id, { void: true, voidedDate: new Date().toISOString(), sheetSynced: false });
+    showToast(`Invoice ${inv.invoiceNumber} voided.`);
+    syncSheet();
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
 async function markUnpaid(inv) {
   if (!confirm("Undo paid? This invoice and its hours go back to outstanding.")) return;
   try {
@@ -1053,7 +1084,7 @@ async function syncSheet({ manual = false } = {}) {
     // was marked paid (or added) while the request was in flight.
     const sent = new Map(payload.invoices.map((i) => [i.invoiceId, i.paidDate]));
     const toFlag = invoices.filter((i) => !i.sheetSynced && sent.has(i.id) &&
-      sent.get(i.id) === (i.paid && i.paidDate ? i.paidDate.slice(0, 10) : ""));
+      sent.get(i.id) === (i.void ? "VOID" : i.paid && i.paidDate ? i.paidDate.slice(0, 10) : ""));
     await Promise.all(toFlag.map((i) => Invoices.update(i.id, { sheetSynced: true })));
     if (manual) {
       showToast(`Sheet synced: ${result.invoicesAdded} new invoices, ${result.linesAdded} new lines.`);

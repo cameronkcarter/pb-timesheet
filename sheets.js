@@ -63,7 +63,8 @@ export function buildSheetPayload({ invoices, timeEntries, tasks, people, projec
         projectId: inv.projectId,
         projectName: project ? project.name : inv.projectName,
         total: inv.total,
-        paidDate: inv.paid && inv.paidDate ? inv.paidDate.slice(0, 10) : "",
+        // Voided invoices are marked "VOID" (the sheet leaves them out of its reports).
+        paidDate: inv.void ? "VOID" : inv.paid && inv.paidDate ? inv.paidDate.slice(0, 10) : "",
         lines: linesFromEntries(linked, { tasks, people, projects }).map((l) => ({
           // Pay rate is only added to the key when it differs from the bill
           // rate, so lines synced before bill rates existed keep their keys.
