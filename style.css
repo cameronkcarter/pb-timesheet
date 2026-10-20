@@ -3108,3 +3108,16 @@ button.btn-void:hover {
 .appr-table tbody:first-of-type tr.appr-group td {
   padding-top: 8px;
 }
+
+button.small.btn-approve-project {
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+button.small.btn-approve-project:hover {
+  background: #256a29;
+}

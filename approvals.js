@@ -31,7 +31,6 @@ export function createApprovals({ getData, sessionPersonId }) {
   const card = document.getElementById("pendingApprovalCard");
   const body = document.getElementById("pendingBody");
   const total = document.getElementById("pendingTotal");
-  const approveAllBtn = document.getElementById("approveAllBtn");
 
   const scope = document.getElementById("approvalScope");
   const viewToggle = document.getElementById("approvalView");
@@ -160,7 +159,6 @@ export function createApprovals({ getData, sessionPersonId }) {
     if (editing && body.contains(document.activeElement) && document.activeElement.matches("input")) return;
     const gs = groups();
     card.style.display = "block";
-    approveAllBtn.style.display = gs.length && view === "pending" ? "" : "none";
     if (gs.length === 0) {
       total.textContent = "";
       body.innerHTML = `<div class="empty">${view === "approved" ? "No approved hours waiting to be invoiced." : "Nothing to approve."}</div>`;
@@ -176,8 +174,8 @@ export function createApprovals({ getData, sessionPersonId }) {
       ${gs.map((g) => `<tbody>
         <tr class="appr-group">
           <td colspan="4"><span class="pay-dot" style="--c:${g.project ? projectColor(g.project.id) : "#c9c2cf"};"></span><strong>${g.project ? esc(g.project.name) : "—"}</strong> <span class="appr-muted">${fmtHrs(g.hours)} hrs</span></td>
-          <td class="num" colspan="2">${g.people.length > 1 && view === "pending"
-            ? `<button type="button" class="link-btn" data-action="approve-project" data-id="${g.projectId}">Approve all</button>` : ""}</td>
+          <td class="num" colspan="2">${view === "pending"
+            ? `<button type="button" class="small btn-approve-project" data-action="approve-project" data-id="${g.projectId}">Approve project (${g.entries.length})</button>` : ""}</td>
         </tr>
         ${g.people.map((r) => {
           const open = openKey === r.key;
@@ -317,12 +315,6 @@ export function createApprovals({ getData, sessionPersonId }) {
     render();
   });
 
-  approveAllBtn.addEventListener("click", async () => {
-    const items = pendingEntries();
-    if (items.length === 0) return;
-    if (!confirm(`Approve all ${items.length} pending ${items.length === 1 ? "entry" : "entries"}?`)) return;
-    approveItems(items, "All entries approved.");
-  });
 
   return { render };
 }
