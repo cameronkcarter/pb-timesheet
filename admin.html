@@ -54,9 +54,25 @@
     <div id="peopleEmpty" class="empty" style="display:none;">No people added yet.</div>
   </div>
 
-  <div class="card backup-card">
-    <h2>Backup</h2>
-    <button id="downloadBackup" class="secondary small">Download</button>
+  <div class="card data-card">
+    <h2>Data</h2>
+    <div class="data-row" id="sheetRow">
+      <div>
+        <div class="data-title">Google Sheet</div>
+        <div class="data-sub" id="sheetSyncStatus"></div>
+      </div>
+      <div class="row-actions">
+        <a id="sheetOpenLink" class="button-link" target="_blank" rel="noopener" style="display:none;">Open</a>
+        <button id="sheetSyncBtn" class="small secondary">Sync</button>
+      </div>
+    </div>
+    <div class="data-row">
+      <div>
+        <div class="data-title">Backup</div>
+        <div class="data-sub">Everything, as one file</div>
+      </div>
+      <button id="downloadBackup" class="secondary small">Download</button>
+    </div>
   </div>
 </main>
 

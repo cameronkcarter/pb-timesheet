@@ -1,10 +1,11 @@
 import { People, Projects, Tasks, TimeEntries, Invoices, Expenses } from "./db.js";
-import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
+import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
   formatCurrency, showToast, fmtHrs,
   lastDayOfMonth, formatShortMDY, toISODate, sortProjects, esc, projectColor,
 } from "./util.js";
-import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
+import { sheetSyncEnabled } from "./sheets.js";
+import { createSheetSync } from "./sheet-sync.js";
 import { billRateOf, paidAmount } from "./rates.js";
 import { expenseLabel, expenseQtyText, createExpenseEditor } from "./expenses.js";
 
@@ -55,7 +56,7 @@ if (sessionPersonId) {
   Projects.listen((d) => { projects = d; render(); });
   Tasks.listen((d) => { tasks = d; render(); });
   TimeEntries.listen((d) => { timeEntries = d; render(); });
-  Invoices.listen((d) => { invoices = d; render(); renderSheetSync(); });
+  Invoices.listen((d) => { invoices = d; render(); });
   Expenses.listen((d) => { expenses = d; render(); });
 }
 
@@ -234,7 +235,7 @@ function statusHtml(row) {
   return (inv.paid
     ? `<span class="pay-status paid">Paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}</span>`
     : '<span class="pay-status invoiced">Outstanding</span>') +
-    (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — click Sync">Not in sheet</span>' : "");
+    (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — Sync is on Admin">Not in sheet</span>' : "");
 }
 
 // Each person's hours, bill rate, amount billed and pay, then the firm's
@@ -942,7 +943,7 @@ async function generate(row, isPreview, btn) {
       delete drafts[project.id];
       openRow = `inv:${ref.id}`;
       showToast("Invoice generated.");
-      syncSheet();
+      sheet.sync();
     } else {
       showToast("Preview downloaded — nothing was marked invoiced.");
     }
@@ -996,7 +997,7 @@ async function voidInvoice(inv) {
     ]);
     await Invoices.update(inv.id, { void: true, voidedDate: new Date().toISOString(), sheetSynced: false });
     showToast(`Invoice ${inv.invoiceNumber} voided.`);
-    syncSheet();
+    sheet.sync();
   } catch (err) {
     showToast("Error: " + err.message);
   }
@@ -1009,7 +1010,7 @@ async function markUnpaid(inv) {
     await Promise.all(linked.map((entry) => TimeEntries.update(entry.id, { paid: false, paidDate: null })));
     await Invoices.update(inv.id, { paid: false, paidDate: null, sheetSynced: false });
     showToast("Back to outstanding.");
-    syncSheet();
+    sheet.sync();
   } catch (err) {
     showToast("Error: " + err.message);
   }
@@ -1022,84 +1023,16 @@ async function markPaid(inv) {
     await TimeEntries.markPaid(linkedEntries.map((entry) => entry.id));
     await Invoices.update(inv.id, { paid: true, paidDate: new Date().toISOString(), sheetSynced: false });
     showToast("Invoice marked as paid.");
-    syncSheet();
+    sheet.sync();
   } catch (err) {
     showToast("Error: " + err.message);
   }
 }
 
-// ---------- Google Sheet log ----------
-const sheetSyncBar = document.getElementById("sheetSyncBar");
-const sheetSyncStatus = document.getElementById("sheetSyncStatus");
-const sheetSyncBtn = document.getElementById("sheetSyncBtn");
-const sheetOpenLink = document.getElementById("sheetOpenLink");
-
-let sheetSyncing = false;
-let sheetSyncQueued = false;
-let sheetSyncError = null;
-
-function renderSheetSync() {
-  if (!SHEET_WEBHOOK_URL) {
-    sheetSyncBar.style.display = "none";
-    return;
-  }
-  sheetSyncBar.style.display = "flex";
-  if (SHEET_URL) {
-    sheetOpenLink.href = SHEET_URL;
-    sheetOpenLink.style.display = "";
-  }
-  if (isTestMode()) {
-    sheetSyncStatus.innerHTML = '<span class="empty" style="padding:0;">Off in Test Mode</span>';
-    sheetSyncBtn.style.display = "none";
-    return;
-  }
-  sheetSyncBtn.disabled = sheetSyncing;
-  sheetSyncBtn.textContent = sheetSyncing ? "Syncing…" : "Sync Now";
-  const unsynced = invoices.filter((i) => !i.sheetSynced).length;
-  if (sheetSyncing) {
-    sheetSyncStatus.textContent = "Syncing…";
-  } else if (sheetSyncError) {
-    sheetSyncStatus.innerHTML = `<span style="color:var(--red);" title="${esc(sheetSyncError)}">Last sync failed</span>`;
-  } else if (unsynced > 0) {
-    sheetSyncStatus.innerHTML = `<span class="pill orange">${unsynced} not yet logged</span>`;
-  } else {
-    sheetSyncStatus.innerHTML = `<span class="pill green">All ${invoices.length} logged</span>`;
-  }
-}
-
-// Sends every invoice, task budget, and paid date to the sheet. The Apps
-// Script skips rows it already has, so this is safe to run any time. Calls
-// that arrive mid-sync are queued into one follow-up run so nothing is missed.
-async function syncSheet({ manual = false } = {}) {
-  if (!sheetSyncEnabled()) return;
-  if (sheetSyncing) { sheetSyncQueued = true; return; }
-  sheetSyncing = true;
-  sheetSyncError = null;
-  renderSheetSync();
-  try {
-    const payload = buildSheetPayload({ invoices, timeEntries, tasks, people, projects });
-    const result = await postToSheet(payload);
-    // Only flag invoices whose state still matches what was sent, in case one
-    // was marked paid (or added) while the request was in flight.
-    const sent = new Map(payload.invoices.map((i) => [i.invoiceId, i.paidDate]));
-    const toFlag = invoices.filter((i) => !i.sheetSynced && sent.has(i.id) &&
-      sent.get(i.id) === (i.void ? "VOID" : i.paid && i.paidDate ? i.paidDate.slice(0, 10) : ""));
-    await Promise.all(toFlag.map((i) => Invoices.update(i.id, { sheetSynced: true })));
-    if (manual) {
-      showToast(`Sheet synced: ${result.invoicesAdded} new invoices, ${result.linesAdded} new lines.`);
-    }
-  } catch (err) {
-    sheetSyncError = err.message;
-    showToast("Couldn't update the Google Sheet (nothing else was affected). Click Sync Now to retry.");
-  } finally {
-    sheetSyncing = false;
-    renderSheetSync();
-    render();
-    if (sheetSyncQueued) {
-      sheetSyncQueued = false;
-      syncSheet();
-    }
-  }
-}
-
-sheetSyncBtn.addEventListener("click", () => syncSheet({ manual: true }));
+// ---------- Google Sheet ----------
+// Synced automatically after generating, marking paid or voiding; status and
+// a manual Sync are on Admin.
+const sheet = createSheetSync({
+  getData: () => ({ invoices, timeEntries, tasks, people, projects }),
+  onChange: () => render(),
+});

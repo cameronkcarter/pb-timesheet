@@ -2,6 +2,7 @@ import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, 
 import { formatCurrency, showToast, closeOnBackdropClick, esc } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
 import { createApprovals } from "./approvals.js";
+import { createSheetSync } from "./sheet-sync.js";
 import { DEFAULT_BILL_RATE, personPayRate, personBillRate } from "./rates.js";
 
 const sessionPersonId = requireSession();
@@ -47,7 +48,7 @@ if (sessionPersonId) {
   Assignments.listen((d) => { assignments = d; approvals.render(); });
   TimeEntries.listen((d) => { timeEntries = d; approvals.render(); });
   DueDates.listen((d) => { dueDates = d; });
-  Invoices.listen((d) => { invoices = d; });
+  Invoices.listen((d) => { invoices = d; renderSheetRow(); });
   Expenses.listen((d) => { expenses = d; approvals.render(); });
 }
 
@@ -217,3 +218,36 @@ document.getElementById("downloadBackup").addEventListener("click", () => {
   link.click();
   URL.revokeObjectURL(url);
 });
+
+// ---------- Google Sheet ----------
+// Invoices sync automatically; this shows where things stand and syncs on
+// demand (e.g. after a failed sync).
+const sheet = createSheetSync({
+  getData: () => ({ invoices, timeEntries, tasks, people, projects }),
+  onChange: () => renderSheetRow(),
+});
+const sheetRow = document.getElementById("sheetRow");
+const sheetSyncStatus = document.getElementById("sheetSyncStatus");
+const sheetSyncBtn = document.getElementById("sheetSyncBtn");
+const sheetOpenLink = document.getElementById("sheetOpenLink");
+
+function renderSheetRow() {
+  const st = sheet.status();
+  sheetRow.style.display = st.configured ? "" : "none";
+  if (!st.configured) return;
+  if (st.url) {
+    sheetOpenLink.href = st.url;
+    sheetOpenLink.style.display = "";
+  }
+  sheetSyncBtn.style.display = st.testMode ? "none" : "";
+  sheetSyncBtn.disabled = st.syncing;
+  sheetSyncBtn.textContent = st.syncing ? "Syncing…" : "Sync";
+  sheetSyncStatus.innerHTML = st.testMode ? "Off in Test Mode"
+    : st.syncing ? "Syncing…"
+      : st.error ? `<span style="color:var(--red);" title="${esc(st.error)}">Last sync failed</span>`
+        : st.unsynced ? `<span style="color:#9a5a16; font-weight:600;">${st.unsynced} invoice${st.unsynced === 1 ? "" : "s"} not logged yet</span>`
+          : `All ${st.total} invoices logged`;
+}
+
+sheetSyncBtn.addEventListener("click", () => sheet.sync({ manual: true }));
+renderSheetRow();
