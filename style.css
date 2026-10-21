@@ -2652,8 +2652,9 @@ table.appr-table {
 /* ---------- Projects tab: admin tools, totals, three-tone bars ---------- */
 .projects-admin-bar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
+  gap: 8px;
   margin-bottom: 14px;
 }
 
