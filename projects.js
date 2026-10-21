@@ -443,18 +443,23 @@ function taskPeopleHtml(task) {
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
+  // Same columns as "Edit staff & hours" (name | hours box | bar | ×), so
+  // switching modes doesn't move anything: the box and × columns are empty
+  // here, and subtasks sit under the bar.
   const color = projectColor(task.projectId);
-  return `<div class="hours-rows" style="margin-top:0;">${rows.map((r) => `<div class="hours-row hours-row-with-items">
-      <div class="hours-row-name">
+  return `<div class="assign-list">${rows.map((r) => `<div class="assign-row people-row">
+      <div class="assign-name">
         ${esc(r.name)}
         <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Add subtask</button>
       </div>
-      <div>
+      <div></div>
+      <div class="assign-bar">
         ${internal
           ? `<div class="hours-logged-only">${r.logged ? `${fmtHrs(r.logged)} hrs` : "—"}</div>`
           : r.isAssigned || r.logged ? hoursBarHtml(r.logged, r.assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
         ${itemsListHtml(r.items)}
       </div>
+      <div></div>
     </div>`).join("")}</div>`;
 }
 

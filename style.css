@@ -1203,8 +1203,6 @@ button.link-btn:hover {
   .assign-row .icon-btn { grid-area: x; }
   .assign-row .assign-bar { grid-area: bar; }
 
-  .assign-row.assign-add .assign-name,
-
 }
 
 /* ---------- App-style sheet modals (Admin: project, person) ---------- */
@@ -3083,4 +3081,22 @@ button.small.btn-approve-project {
 
 button.small.btn-approve-project:hover {
   background: #256a29;
+}
+
+/* Projects: the people view uses the same columns as Edit staff & hours. */
+td.accordion-cell .assign-row {
+  align-items: start;
+}
+
+td.accordion-cell .assign-row .assign-input,
+td.accordion-cell .assign-row > .icon-btn {
+  align-self: center;
+}
+
+.assign-row .assign-name button.assign-link {
+  margin-top: 1px;
+}
+
+.assign-row.people-row .assign-bar .due-list {
+  margin-top: 8px;
 }
