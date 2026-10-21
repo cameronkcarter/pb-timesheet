@@ -56,6 +56,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // App-wide settings (last Google Sheet sync, last backup).
+    match /settings/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
     // Subtasks and timeline events.
     match /dueDates/{id} {
       allow read, write: if isStaff();

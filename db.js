@@ -124,6 +124,17 @@ export const Staff = {
 
 export const normEmail = (e) => String(e || "").trim().toLowerCase();
 
+// App-wide settings, one document ("app"):
+// { lastSheetSync, lastBackup, lastBackupBy } (ISO times; person id)
+export const Settings = {
+  listen: (cb) => listenCollection("settings", (docs) => cb(docs.find((d) => d.id === "app") || {})),
+  async set(data) {
+    if (isTestMode()) return updateTest("settings", "app", data);
+    await authReady;
+    return setDoc(doc(db, "settings", "app"), data, { merge: true });
+  },
+};
+
 // Project documents look like:
 // { name, client, projectNumber, billToName, billToCompany, billToAddress1,
 //   billToAddress2, pmPersonId (project manager: approves its hours),

@@ -1,4 +1,4 @@
-import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, Expenses, normEmail } from "./db.js";
+import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, Expenses, Settings, normEmail } from "./db.js";
 import { formatCurrency, showToast, closeOnBackdropClick, esc } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
 import { createApprovals } from "./approvals.js";
@@ -15,6 +15,7 @@ let timeEntries = [];
 let dueDates = [];
 let invoices = [];
 let expenses = [];
+let settings = {};
 let adminCheckDone = false;
 let staff = [];
 let staffLoaded = false;
@@ -49,6 +50,7 @@ if (sessionPersonId) {
   TimeEntries.listen((d) => { timeEntries = d; approvals.render(); });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; renderSheetRow(); });
+  Settings.listen((d) => { settings = d; renderSheetRow(); renderBackupRow(); });
   Expenses.listen((d) => { expenses = d; approvals.render(); });
 }
 
@@ -217,6 +219,8 @@ document.getElementById("downloadBackup").addEventListener("click", () => {
   link.download = `place-builders-backup-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
   URL.revokeObjectURL(url);
+  Settings.set({ lastBackup: new Date().toISOString(), lastBackupBy: sessionPersonId })
+    .catch((err) => console.warn("Couldn't record the backup time:", err));
 });
 
 // ---------- Google Sheet ----------
@@ -242,12 +246,26 @@ function renderSheetRow() {
   sheetSyncBtn.style.display = st.testMode ? "none" : "";
   sheetSyncBtn.disabled = st.syncing;
   sheetSyncBtn.textContent = st.syncing ? "Syncing…" : "Sync";
-  sheetSyncStatus.innerHTML = st.testMode ? "Off in Test Mode"
+  const state = st.testMode ? "Off in Test Mode"
     : st.syncing ? "Syncing…"
       : st.error ? `<span style="color:var(--red);" title="${esc(st.error)}">Last sync failed</span>`
         : st.unsynced ? `<span style="color:#9a5a16; font-weight:600;">${st.unsynced} invoice${st.unsynced === 1 ? "" : "s"} not logged yet</span>`
           : `All ${st.total} invoices logged`;
+  sheetSyncStatus.innerHTML = `${state} · Last synced ${whenText(settings.lastSheetSync)}`;
+}
+
+// "Oct 22, 3:14 PM", or "never".
+function whenText(iso) {
+  if (!iso) return "never";
+  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+const backupStatus = document.getElementById("backupStatus");
+function renderBackupRow() {
+  const who = settings.lastBackupBy && personById(settings.lastBackupBy)?.name;
+  backupStatus.textContent = `Everything, as one file · Last downloaded ${whenText(settings.lastBackup)}${who ? ` by ${who}` : ""}`;
 }
 
 sheetSyncBtn.addEventListener("click", () => sheet.sync({ manual: true }));
 renderSheetRow();
+renderBackupRow();

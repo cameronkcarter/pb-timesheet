@@ -2,7 +2,7 @@
 // task budgets and paid/void status. The Apps Script skips rows it already
 // has, so syncing is safe to run any time. Used by Invoices (automatically,
 // after generating, marking paid or voiding) and by Admin (status + Sync).
-import { Invoices } from "./db.js";
+import { Invoices, Settings } from "./db.js";
 import { showToast } from "./util.js";
 import { isTestMode } from "./session.js";
 import { sheetSyncEnabled, buildSheetPayload, postToSheet, SHEET_WEBHOOK_URL, SHEET_URL } from "./sheets.js";
@@ -32,6 +32,7 @@ export function createSheetSync({ getData, onChange = () => {} }) {
       const toFlag = getData().invoices.filter((i) => !i.sheetSynced && sent.has(i.id) &&
         sent.get(i.id) === (i.void ? "VOID" : i.paid && i.paidDate ? i.paidDate.slice(0, 10) : ""));
       await Promise.all(toFlag.map((i) => Invoices.update(i.id, { sheetSynced: true })));
+      await Settings.set({ lastSheetSync: new Date().toISOString() }).catch(() => {});
       if (manual) showToast(`Sheet synced: ${result.invoicesAdded} new invoices, ${result.linesAdded} new lines.`);
     } catch (err) {
       error = err.message;

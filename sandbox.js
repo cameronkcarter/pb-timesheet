@@ -94,6 +94,7 @@ export function updateTest(name, id, data) {
   const items = readData(name);
   const idx = items.findIndex((i) => i.id === id);
   if (idx !== -1) items[idx] = { ...items[idx], ...data };
+  else items.push({ id, ...data });
   writeData(name, items);
   notifyAll(name);
   return Promise.resolve();
