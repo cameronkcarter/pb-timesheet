@@ -26,12 +26,15 @@
   <h1>Projects</h1>
 
   <div class="card">
-    <div class="projects-admin-bar" id="projectsAdminBar" style="display:none;">
-      <div class="segmented segmented-small" id="projectScope" role="radiogroup">
-        <button type="button" data-value="mine" role="radio" class="on">Assigned projects</button>
-        <button type="button" data-value="all" role="radio">All projects</button>
+    <div class="projects-head">
+      <h2 id="projectsHeading">Your projects</h2>
+      <div class="row-actions projects-admin-bar" id="projectsAdminBar" style="display:none;">
+        <button type="button" id="openAddProject" class="small btn-tint-purple">+ Add project</button>
+        <div class="segmented segmented-small" id="projectScope" role="radiogroup">
+          <button type="button" data-value="mine" role="radio" class="on">Assigned projects</button>
+          <button type="button" data-value="all" role="radio">All projects</button>
+        </div>
       </div>
-      <button type="button" id="openAddProject" class="secondary small">+ Add project</button>
     </div>
     <div id="projectCards" class="project-card-row" style="margin-top:0;"></div>
     <div id="projectCardsEmpty" class="empty" style="display:none;">No projects to show yet.</div>

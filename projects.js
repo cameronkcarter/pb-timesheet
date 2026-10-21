@@ -143,6 +143,7 @@ function renderAll() {
 // ---------- Project picker ----------
 function renderProjectCards() {
   projectsAdminBar.style.display = isAdmin() ? "" : "none";
+  document.getElementById("projectsHeading").textContent = showAll && isAdmin() ? "All projects" : "Your projects";
   projectScope.querySelectorAll("button").forEach((b) => b.classList.toggle("on", (b.dataset.value === "all") === showAll));
   const visible = visibleProjects();
   if (visible.length === 0) {

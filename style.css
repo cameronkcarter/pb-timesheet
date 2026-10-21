@@ -2650,12 +2650,21 @@ table.appr-table {
 }
 
 /* ---------- Projects tab: admin tools, totals, three-tone bars ---------- */
-.projects-admin-bar {
+.projects-head {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 14px;
+}
+
+.projects-head h2 {
+  margin: 0;
+}
+
+.projects-admin-bar {
+  align-items: center;
 }
 
 .projects-admin-bar button.small {
