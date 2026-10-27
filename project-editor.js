@@ -2,7 +2,7 @@
 // invoice-to details and tasks with budgets and dates. Also removes projects.
 // Markup lives in projects.html (#projectModal).
 import { Projects, Tasks, Assignments, TimeEntries, DueDates, Expenses } from "./db.js";
-import { formatCurrency, showToast, closeOnBackdropClick, esc } from "./util.js";
+import { formatCurrency, showToast, closeOnBackdropClick, esc, alertDialog, confirmDialog } from "./util.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
 
 // How a project bills: each person's bill rate, or not at all (internal).
@@ -48,17 +48,21 @@ export function createProjectEditor({ getData, onSaved }) {
       .catch((err) => console.warn("Sheet budget sync failed:", err));
   }
 
+  // New projects start with no billing type: it has to be picked before
+  // saving, so nobody makes an internal project billable by accident.
   function setModalType(type) {
     modalType = type;
+    modalProjectType.classList.remove("needs-choice");
     modalProjectType.querySelectorAll("button").forEach((b) => {
       const on = b.dataset.value === type;
       b.classList.toggle("on", on);
       b.setAttribute("aria-checked", on);
     });
-    modalTypeHint.textContent = PROJECT_TYPES[type];
+    modalTypeHint.textContent = type ? PROJECT_TYPES[type] : "Choose one: billed to a client, or internal.";
+    modalTypeHint.classList.toggle("needs-choice-hint", !type);
     const internal = type === "internal";
-    modalBillingFields.style.display = internal ? "none" : "block";
-    expenseFields.style.display = internal ? "none" : "block";
+    modalBillingFields.style.display = type === "rates" ? "block" : "none";
+    expenseFields.style.display = type === "rates" ? "block" : "none";
     modalTaskRows.classList.toggle("internal", internal);
     modalTaskHead.classList.toggle("internal", internal);
     updateTaskTotal();
@@ -124,7 +128,7 @@ export function createProjectEditor({ getData, onSaved }) {
     expenseBudget.value = project && project.expenseBudget ? project.expenseBudget : "";
     subRows.innerHTML = (project?.subconsultants || []).map(subRowHtml).join("");
     updateSubTotal();
-    setModalType(project && project.internal ? "internal" : "rates");
+    setModalType(project ? (project.internal ? "internal" : "rates") : null);
     removeBtn.style.display = project ? "" : "none";
     $("modalMergeProject").style.display = project ? "" : "none";
     showMerge(false);
@@ -152,7 +156,7 @@ export function createProjectEditor({ getData, onSaved }) {
 
     if (projectEntries.some((e) => e.invoiced) || projectExpenses.some((e) => e.invoiced) ||
       invoices.some((i) => i.projectId === projectId)) {
-      alert(`"${project.name}" has invoiced hours, so it can't be removed — that would break the invoice history.`);
+      await alertDialog("Removing it would break the invoice history.", `"${project.name}" has been invoiced`);
       return false;
     }
 
@@ -162,7 +166,9 @@ export function createProjectEditor({ getData, onSaved }) {
       [projectExpenses.length, "expense"],
     ].filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}${n === 1 ? "" : "s"}`);
     const detail = counts.length ? `\n\nThis also permanently deletes its ${counts.join(", ")}.` : "";
-    if (!confirm(`Permanently remove "${project.name}"?${detail}\n\nThis can't be undone.`)) return false;
+    if (!(await confirmDialog(`${detail.trim()}
+
+This can't be undone.`.trim(), { title: `Remove "${project.name}"?`, confirmText: "Remove project", danger: true }))) return false;
 
     try {
       for (const e of projectEntries) await TimeEntries.remove(e.id);
@@ -204,12 +210,12 @@ export function createProjectEditor({ getData, onSaved }) {
     if (timeEntries.some((e) => e.projectId === project.id && e.invoiced)
       || expenses.some((e) => e.projectId === project.id && e.invoiced)
       || invoices.some((i) => i.projectId === project.id)) {
-      return alert(`"${project.name}" has been invoiced, so it can't be merged — that would break the invoice history.`);
+      return alertDialog("Merging it would break the invoice history.", `"${project.name}" has been invoiced`);
     }
     const choices = projects.filter((p) => p.id !== project.id && !!p.internal === !!project.internal)
       .sort((a, b) => a.name.localeCompare(b.name));
     if (!choices.length) {
-      return alert(`There's no other ${project.internal ? "internal" : "billed"} project to merge into.`);
+      return alertDialog("A project can only merge into another of the same kind.", `No other ${project.internal ? "internal" : "billed"} project`);
     }
     mergeTarget.innerHTML = choices.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
     showMerge(true);
@@ -223,7 +229,9 @@ export function createProjectEditor({ getData, onSaved }) {
     const target = projects.find((p) => p.id === mergeTarget.value);
     if (!source || !target) return;
     const hours = timeEntries.filter((e) => e.projectId === source.id).reduce((s, e) => s + Number(e.hours || 0), 0);
-    if (!confirm(`Move everything in "${source.name}" (${Math.round(hours * 100) / 100} hrs logged) into "${target.name}", then remove "${source.name}"?\n\nTasks with the same name are combined. This can't be undone.`)) return;
+    if (!(await confirmDialog(`Its tasks and ${Math.round(hours * 100) / 100} hrs logged move into "${target.name}", and "${source.name}" is removed. Tasks with the same name are combined.
+
+This can't be undone.`, { title: `Merge into "${target.name}"?`, confirmText: "Merge" }))) return;
 
     const btn = $("mergeConfirm");
     btn.disabled = true;
@@ -314,7 +322,7 @@ export function createProjectEditor({ getData, onSaved }) {
     const id = row.dataset.subId;
     // Recorded invoices from a subconsultant are part of the invoice history.
     if (id && (getData().expenses || []).some((x) => x.subId === id)) {
-      alert("This subconsultant already has invoices recorded, so it can't be removed.");
+      alertDialog("This subconsultant already has invoices recorded.", "Can't remove");
       return;
     }
     row.remove();
@@ -333,7 +341,7 @@ export function createProjectEditor({ getData, onSaved }) {
   modalTaskRows.addEventListener("input", (e) => {
     if (e.target.classList.contains("modalTaskBudget")) updateTaskTotal();
   });
-  modalTaskRows.addEventListener("click", (e) => {
+  modalTaskRows.addEventListener("click", async (e) => {
     const btn = e.target.closest(".removeTaskRow");
     if (!btn) return;
     const { assignments, dueDates, timeEntries } = getData();
@@ -342,11 +350,11 @@ export function createProjectEditor({ getData, onSaved }) {
     if (taskId) {
       // Hours logged on a task are part of the timesheet/invoice history.
       if (timeEntries.some((e) => e.taskId === taskId)) {
-        alert("This task already has hours logged, so it can't be removed — that would break the timesheet and invoice history.");
+        alertDialog("It has hours logged; removing it would break the timesheet and invoice history.", "Can't remove this task");
         return;
       }
       const linked = assignments.filter((a) => a.taskId === taskId).length + dueDates.filter((d) => d.taskId === taskId).length;
-      if (linked && !confirm(`Remove this task? Its ${linked} assignment${linked === 1 ? "" : "s"} and subtask${linked === 1 ? "" : "s"} will be removed too when you save.`)) return;
+      if (linked && !(await confirmDialog(`Its ${linked} assignment${linked === 1 ? "" : "s"} and subtask${linked === 1 ? "" : "s"} will be removed too when you save.`, { title: "Remove this task?", confirmText: "Remove", danger: true }))) return;
       pendingTaskDeletions.add(taskId);
     }
     row.remove();
@@ -369,6 +377,13 @@ export function createProjectEditor({ getData, onSaved }) {
     if (!name) {
       modalProjectName.focus();
       return showToast("Give the project a name.");
+    }
+    if (!modalType) {
+      modalProjectType.classList.remove("needs-choice");
+      void modalProjectType.offsetWidth; // restart the nudge animation
+      modalProjectType.classList.add("needs-choice");
+      modalProjectType.scrollIntoView({ behavior: "smooth", block: "center" });
+      return showToast("Choose Staff bill rates or Internal.");
     }
     const projectData = {
       name,

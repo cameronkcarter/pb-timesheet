@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml, sortProjects, esc,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml, sortProjects, esc, confirmDialog,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, isSubtask, setItemCompleted, deleteItem } from "./subtasks.js";
@@ -407,7 +407,7 @@ async function handleExpenseAction(btn) {
   if (action === "reimburse-expense") {
     const e = expenses.find((x) => x.id === id);
     const who = e && people.find((p) => p.id === e.personId)?.name;
-    if (!e || !confirm(`Mark ${formatCurrency(e.amount)} as reimbursed to ${who || "them"}?`)) return;
+    if (!e || !(await confirmDialog("", { title: `Mark ${formatCurrency(e.amount)} as reimbursed to ${who || "them"}?`, confirmText: "Mark reimbursed" }))) return;
     try {
       await Expenses.update(id, { reimbursed: true, reimbursedDate: new Date().toISOString() });
       showToast("Marked reimbursed.");
@@ -625,7 +625,7 @@ async function handleAssignAction(btn) {
   if (action === "remove-assignment") {
     const a = assignments.find((x) => x.id === id);
     const name = a ? people.find((p) => p.id === a.personId)?.name : null;
-    if (!confirm(`Remove ${name || "this person"} from this task?`)) return;
+    if (!(await confirmDialog("", { title: `Remove ${name || "this person"} from this task?`, confirmText: "Remove", danger: true }))) return;
     try { await Assignments.remove(id); } catch (err) { showToast("Error: " + err.message); }
   }
   if (action === "add-assignment") {

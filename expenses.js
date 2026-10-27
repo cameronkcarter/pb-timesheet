@@ -2,7 +2,7 @@
 // add/edit popup (used on the Dashboard and the Projects tab). Markup is
 // created here so every page gets the same popup.
 import { Expenses, Settings } from "./db.js";
-import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO } from "./util.js";
+import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO, confirmDialog } from "./util.js";
 
 // Expense categories are set by admins (Admin > Expense categories, saved as
 // settings/app.expenseCategories). Each is { name, unit, rate, receipt }:
@@ -271,7 +271,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
   description.addEventListener("keydown", (e) => { if (e.key === "Enter") saveBtn.click(); });
 
   deleteBtn.addEventListener("click", async () => {
-    if (!editing || !confirm("Delete this expense? This can't be undone.")) return;
+    if (!editing || !(await confirmDialog("This can't be undone.", { title: "Delete this expense?", confirmText: "Delete", danger: true }))) return;
     try {
       await Expenses.remove(editing.id);
       close();

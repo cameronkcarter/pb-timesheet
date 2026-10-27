@@ -3,7 +3,7 @@
 // on the Projects page and the Dashboard. The editor's markup is created here
 // so both pages get the same pop-up.
 import { DueDates, Assignments } from "./db.js";
-import { showToast, closeOnBackdropClick, esc } from "./util.js";
+import { showToast, closeOnBackdropClick, esc, confirmDialog } from "./util.js";
 
 // A subtask has people; an event (shown on the timeline) doesn't.
 export function isSubtask(d) {
@@ -20,7 +20,7 @@ export async function setItemCompleted(id, completed) {
 }
 
 export async function deleteItem(d) {
-  if (!d || !confirm(`Delete "${d.title}"? This can't be undone.`)) return false;
+  if (!d || !(await confirmDialog("This can't be undone.", { title: `Delete "${d.title}"?`, confirmText: "Delete", danger: true }))) return false;
   try {
     await DueDates.remove(d.id);
     showToast("Deleted.");
