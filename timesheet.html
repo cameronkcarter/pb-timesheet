@@ -29,6 +29,10 @@
   <div class="card">
     <div class="cal-header">
       <h2 style="margin:0;">Your Hours</h2>
+      <div class="segmented segmented-small" id="viewToggle" role="radiogroup" aria-label="View">
+        <button type="button" data-value="calendar" role="radio" class="on">Calendar</button>
+        <button type="button" data-value="list" role="radio">List</button>
+      </div>
       <div class="cal-nav">
         <button id="calPrev" class="secondary small" aria-label="Previous month">&lsaquo;</button>
         <span id="calMonthLabel" class="cal-month-label"></span>
@@ -36,6 +40,8 @@
         <button id="calToday" class="secondary small">Today</button>
       </div>
     </div>
+    <div id="listView" hidden></div>
+    <div id="calView">
     <div id="calLegend" class="cal-legend"></div>
     <div id="calendar" class="cal-grid"></div>
 
@@ -72,6 +78,7 @@
           </div>
         </div>
       </div>
+    </div>
     </div>
   </div>
 </main>

@@ -1,9 +1,10 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, Expenses, Settings, normEmail } from "./db.js";
 import { formatCurrency, showToast, closeOnBackdropClick, esc } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
-import { createApprovals } from "./approvals.js";
+import { createAnalytics } from "./analytics.js";
 import { createSheetSync } from "./sheet-sync.js";
 import { DEFAULT_BILL_RATE, personPayRate, personBillRate } from "./rates.js";
+import { UNIT_CATEGORIES, applyExpenseRates } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -24,10 +25,10 @@ let modalEditingPersonId = null;
 
 wireLogout("logoutLink");
 
-// Pending approval: hours on the projects you manage (see approvals.js).
-const approvals = createApprovals({
-  getData: () => ({ people, projects, tasks, assignments, timeEntries, expenses }),
-  sessionPersonId,
+// Approvals moved to the Dashboard (so project managers who aren't admins
+// can approve too); Admin has analytics instead (see analytics.js).
+const analytics = createAnalytics({
+  getData: () => ({ people, projects, tasks, timeEntries }),
 });
 
 if (sessionPersonId) {
@@ -40,19 +41,45 @@ if (sessionPersonId) {
       renderNavUserName(me);
     }
     renderPeople();
-    approvals.render();
+    analytics.render();
     syncStaff();
   });
   Staff.listen((d) => { staff = d; staffLoaded = true; syncStaff(); });
-  Projects.listen((d) => { projects = d; approvals.render(); });
-  Tasks.listen((d) => { tasks = d; approvals.render(); });
-  Assignments.listen((d) => { assignments = d; approvals.render(); });
-  TimeEntries.listen((d) => { timeEntries = d; approvals.render(); });
+  Projects.listen((d) => { projects = d; analytics.render(); });
+  Tasks.listen((d) => { tasks = d; analytics.render(); });
+  Assignments.listen((d) => { assignments = d; });
+  TimeEntries.listen((d) => { timeEntries = d; analytics.render(); });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; renderSheetRow(); });
-  Settings.listen((d) => { settings = d; renderSheetRow(); renderBackupRow(); });
-  Expenses.listen((d) => { expenses = d; approvals.render(); });
+  Settings.listen((d) => { settings = d; renderSheetRow(); renderBackupRow(); renderExpenseRates(); });
+  Expenses.listen((d) => { expenses = d; });
 }
+
+// ---------- Reimbursement rates ----------
+// Defaults filled in on new mileage/lodging expenses (each expense keeps the
+// rate it was entered with). Saved when you leave the box.
+const rateInputs = { Mileage: document.getElementById("mileageRate"), Lodging: document.getElementById("lodgingRate") };
+
+function renderExpenseRates() {
+  applyExpenseRates(settings);
+  Object.entries(rateInputs).forEach(([cat, input]) => {
+    if (document.activeElement !== input) input.value = UNIT_CATEGORIES[cat].rate;
+  });
+}
+
+Object.entries(rateInputs).forEach(([cat, input]) => {
+  input.addEventListener("change", async () => {
+    const v = Number(input.value);
+    if (!(v > 0)) { renderExpenseRates(); return showToast("Enter a rate above $0."); }
+    try {
+      await Settings.set({ [UNIT_CATEGORIES[cat].setting]: v });
+      showToast(`${cat} rate saved.`);
+    } catch (err) {
+      showToast("Error: " + err.message);
+    }
+  });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+});
 
 // ---------- People (table + modal) ----------
 const peopleTbody = document.querySelector("#peopleTable tbody");

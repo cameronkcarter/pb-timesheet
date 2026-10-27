@@ -7,6 +7,7 @@ import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js"
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
 import { createExpenseEditor, expenseLabel, expenseStatus } from "./expenses.js";
+import { createApprovals, canApprove } from "./approvals.js";
 
 const selectedPersonId = requireSession();
 
@@ -50,7 +51,48 @@ if (selectedPersonId) {
   Expenses.listen((d) => { expenses = d; render(); });
 }
 
+// ---------- Approvals ----------
+// For project managers and admins: one line saying what's waiting, opening
+// to the approvals list (see approvals.js). Starts closed so the Dashboard
+// stays short; remembers if you leave it open.
+const approvalsCard = document.getElementById("approvals");
+const approvalToggle = document.getElementById("approvalToggle");
+const approvalPanel = document.getElementById("approvalPanel");
+const approvalSummary = document.getElementById("approvalSummary");
+let approvalsOpen = location.hash === "#approvals";
+try { if (localStorage.getItem("pb_approvals_open") === "1") approvalsOpen = true; } catch (_) { /* no storage */ }
+
+const approvals = createApprovals({
+  getData: () => ({ people, projects, tasks, assignments, timeEntries, expenses }),
+  sessionPersonId: selectedPersonId,
+  onChange: (s) => {
+    approvalSummary.innerHTML = s.count
+      ? `<span class="appr-dot"></span>${[
+        s.hours ? `${fmtHrs(s.hours)} hrs` : "",
+        s.expenses ? `${formatCurrency(s.expenses)} expenses` : "",
+      ].filter(Boolean).join(" · ")} waiting from ${s.people} ${s.people === 1 ? "person" : "people"}`
+      : "Nothing waiting";
+  },
+});
+
+function renderApprovals() {
+  const me = people.find((p) => p.id === selectedPersonId);
+  approvalsCard.hidden = !canApprove(me, projects);
+  if (approvalsCard.hidden) return;
+  approvalToggle.setAttribute("aria-expanded", String(approvalsOpen));
+  approvalsCard.classList.toggle("open", approvalsOpen);
+  approvalPanel.hidden = !approvalsOpen;
+  approvals.render();
+}
+
+approvalToggle.addEventListener("click", () => {
+  approvalsOpen = !approvalsOpen;
+  try { localStorage.setItem("pb_approvals_open", approvalsOpen ? "1" : "0"); } catch (_) { /* no storage */ }
+  renderApprovals();
+});
+
 function render() {
+  renderApprovals();
   const personId = selectedPersonId;
   const person = people.find((p) => p.id === personId);
   if (!person) return;
@@ -142,9 +184,10 @@ function render() {
     const projectEntries = myEntries.filter((e) => e.projectId === projectId);
     const projectItems = myOpenItems.filter((d) => d.projectId === projectId);
     const myAssignments = assignments.filter((a) => a.personId === personId && a.projectId === projectId);
-    // Tasks you have hours on, or something due on.
+    // Tasks you're assigned to, have logged on, or have something due on.
     const taskIds = [...new Set([
       ...myAssignments.map((a) => a.taskId),
+      ...(isInternal(project) ? [] : projectEntries.map((e) => e.taskId)),
       ...projectItems.filter((d) => d.taskId).map((d) => d.taskId),
     ])];
     const projectTasks = taskIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean)

@@ -54,6 +54,28 @@
 
   <div id="payPanel" class="card pay-card" hidden></div>
 
+  <div class="card appr-card" id="approvals" hidden>
+    <button type="button" class="appr-summary" id="approvalToggle" aria-expanded="false" aria-controls="approvalPanel">
+      <span class="appr-summary-title">Approvals</span>
+      <span class="appr-summary-text" id="approvalSummary"></span>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </button>
+    <div id="approvalPanel" hidden>
+      <div class="appr-head">
+        <div class="segmented segmented-small" id="approvalView" role="radiogroup" aria-label="Show">
+          <button type="button" data-value="pending" role="radio" class="on">Pending</button>
+          <button type="button" data-value="approved" role="radio">Approved</button>
+          <button type="button" data-value="internal" role="radio">Internal</button>
+        </div>
+        <div class="segmented segmented-small" id="approvalScope" role="radiogroup" aria-label="Projects">
+          <button type="button" data-value="mine" role="radio" class="on">Mine</button>
+          <button type="button" data-value="all" role="radio">All projects</button>
+        </div>
+      </div>
+      <div id="pendingBody"></div>
+    </div>
+  </div>
+
   <div class="section-head">
     <h2 style="margin:0;">Projects</h2>
     <button id="toggleCompletedBtn" class="secondary small">Show completed subtasks</button>

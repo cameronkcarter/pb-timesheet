@@ -5,7 +5,11 @@ rules_version = '2';
 // lowercase email: { personId, isAdmin }.
 //
 // - Staff can read what the app shows them, log and edit their own hours
-//   (until invoiced, at their own pay rate), and manage subtasks.
+//   (until invoiced, at their own pay rate), manage subtasks, and add or
+//   close tasks on internal projects (e.g. one per proposal).
+// - A project's manager (its pmPersonId), admin or not, can approve, decline,
+//   edit, move between tasks and mark "Don't bill" the hours and expenses on
+//   that project, until they're invoiced.
 // - Admins can do everything else: people, projects, tasks, assignments,
 //   approvals and invoices.
 // - Anyone not on the list (or not signed in) gets nothing.
@@ -25,6 +29,13 @@ service cloud.firestore {
     function isInternal(projectId) {
       return get(/databases/$(database)/documents/projects/$(projectId)).data.get("internal", false) == true;
     }
+    function isPmOf(projectId) {
+      return isStaff()
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.get("pmPersonId", null) == myPersonId();
+    }
+    function taskIsOn(taskId, projectId) {
+      return get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId == projectId;
+    }
 
     match /staff/{staffEmail} {
       allow read: if signedIn() && (staffEmail == email() || isAdmin());
@@ -41,9 +52,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Staff can add tasks to internal projects and close/reopen them.
     match /tasks/{id} {
       allow read: if isStaff();
       allow write: if isAdmin();
+      allow create: if isStaff() && isInternal(request.resource.data.projectId)
+        && request.resource.data.createdByPersonId == myPersonId()
+        && request.resource.data.keys().hasOnly(["projectId", "name", "budget", "startDate", "endDate", "closed", "createdByPersonId", "createdAt"])
+        && request.resource.data.get("budget", 0) == 0;
+      allow update: if isStaff() && isInternal(resource.data.projectId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["closed"]);
     }
 
     match /assignments/{id} {
@@ -81,7 +99,13 @@ service cloud.firestore {
       allow read: if isStaff();
       allow create: if isAdmin() || (isStaff() && myOpenExpense(request.resource.data));
       allow update: if isAdmin()
-        || (isStaff() && myOpenExpense(resource.data) && myOpenExpense(request.resource.data));
+        || (isStaff() && myOpenExpense(resource.data) && myOpenExpense(request.resource.data))
+        // The project's manager: approve, decline or fix it before it's invoiced.
+        || (isPmOf(resource.data.projectId)
+            && resource.data.get("invoiced", false) == false
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              "approved", "approvedDate", "declined", "declineReason", "description",
+              "category", "date", "quantity", "rate", "amount", "personId"]));
       allow delete: if isAdmin() || (isStaff() && myOpenExpense(resource.data));
     }
 
@@ -103,8 +127,17 @@ service cloud.firestore {
       allow create: if isAdmin()
         || (isStaff() && okToSave(request.resource.data) && request.resource.data.rate == myRate());
       allow update: if isAdmin()
+        // Your own: can't change your pay rate or a "Don't bill" a PM set.
         || (isStaff() && mineAndOpen(resource.data) && okToSave(request.resource.data)
-            && request.resource.data.rate == resource.data.rate);
+            && request.resource.data.rate == resource.data.rate
+            && request.resource.data.get("billable", true) == resource.data.get("billable", true))
+        // The project's manager, until invoiced: approve/decline, fix hours and
+        // notes, move to another task on the same project, "Don't bill".
+        || (isPmOf(resource.data.projectId)
+            && resource.data.get("invoiced", false) == false
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              "hours", "note", "taskId", "approved", "approvedDate", "declined", "declineReason", "billable"])
+            && taskIsOn(request.resource.data.taskId, resource.data.projectId));
       allow delete: if isAdmin() || (isStaff() && mineAndOpen(resource.data));
     }
   }

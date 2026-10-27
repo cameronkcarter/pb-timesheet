@@ -26,21 +26,19 @@
 <main>
   <h1>Admin</h1>
 
-  <div class="card" id="pendingApprovalCard">
+  <div class="card">
     <div class="appr-head">
-      <h2>Approvals <span id="pendingTotal"></span></h2>
+      <h2>Analytics</h2>
       <div class="row-actions">
-        <div class="segmented segmented-small" id="approvalView" role="radiogroup">
-          <button type="button" data-value="pending" role="radio" class="on">Pending</button>
-          <button type="button" data-value="approved" role="radio">Approved</button>
-        </div>
-        <div class="segmented segmented-small" id="approvalScope" role="radiogroup">
-          <button type="button" data-value="mine" role="radio" class="on">Assigned projects</button>
-          <button type="button" data-value="all" role="radio">All projects</button>
+        <select id="analyticsProject" class="analytics-select" aria-label="Project"></select>
+        <div class="segmented segmented-small" id="analyticsRange" role="radiogroup" aria-label="Period">
+          <button type="button" data-value="3" role="radio">3 months</button>
+          <button type="button" data-value="12" role="radio" class="on">12 months</button>
+          <button type="button" data-value="all" role="radio">All time</button>
         </div>
       </div>
     </div>
-    <div id="pendingBody"></div>
+    <div id="analyticsBody"></div>
   </div>
 
   <div class="card">
@@ -53,6 +51,24 @@
       <tbody></tbody>
     </table>
     <div id="peopleEmpty" class="empty" style="display:none;">No people added yet.</div>
+  </div>
+
+  <div class="card data-card">
+    <h2>Reimbursement rates</h2>
+    <div class="data-row">
+      <div>
+        <div class="data-title">Mileage</div>
+        <div class="data-sub">Default for new mileage expenses</div>
+      </div>
+      <div class="money-input rate-input"><span>$</span><input type="number" id="mileageRate" min="0" step="0.01" /><span>/mile</span></div>
+    </div>
+    <div class="data-row">
+      <div>
+        <div class="data-title">Lodging</div>
+        <div class="data-sub">Default for new lodging expenses</div>
+      </div>
+      <div class="money-input rate-input"><span>$</span><input type="number" id="lodgingRate" min="0" step="1" /><span>/night</span></div>
+    </div>
   </div>
 
   <div class="card data-card">

@@ -1,17 +1,29 @@
 // Project expenses and subconsultant invoices: shared helpers and the
 // add/edit popup (used on the Dashboard and the Projects tab). Markup is
 // created here so every page gets the same popup.
-import { Expenses } from "./db.js";
+import { Expenses, Settings } from "./db.js";
 import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO } from "./util.js";
 
-export const CATEGORIES = ["Travel", "Lodging", "Meals", "Materials", "Other"];
+export const CATEGORIES = ["Mileage", "Transit", "Lodging", "Meals", "Materials", "Other"];
 
 // Categories billed per unit, with default rates (editable per expense).
-// Others are just an amount.
+// Others are just an amount. Admins set the default rates in Admin
+// (settings/app: mileageRate, lodgingRate); these are the fallbacks.
 export const UNIT_CATEGORIES = {
-  Travel: { label: "Miles", unit: "mi", rate: 0.7 },
-  Lodging: { label: "Nights", unit: "nights", rate: 150 },
+  Mileage: { label: "Miles", unit: "mi", per: "mile", rate: 0.7, setting: "mileageRate" },
+  Lodging: { label: "Nights", unit: "nights", per: "night", rate: 150, setting: "lodgingRate" },
 };
+const FALLBACK_RATES = Object.fromEntries(Object.entries(UNIT_CATEGORIES).map(([k, u]) => [k, u.rate]));
+
+export function applyExpenseRates(settings) {
+  Object.entries(UNIT_CATEGORIES).forEach(([k, u]) => {
+    const v = Number(settings[u.setting]);
+    u.rate = v > 0 ? v : FALLBACK_RATES[k];
+  });
+}
+
+// Everything paid for needs a receipt (emailed to the PM); mileage doesn't.
+export const needsReceipt = (category) => category !== "Mileage";
 
 // "42 mi × $0.70", or "" for amount-only expenses.
 export function expenseQtyText(e) {
@@ -20,7 +32,7 @@ export function expenseQtyText(e) {
   return `${Math.round(Number(e.quantity) * 100) / 100}${unit ? " " + unit : ""} × ${formatCurrency(e.rate)}`;
 }
 
-// What an expense is, in a few words: "Travel · Site visit mileage".
+// What an expense is, in a few words: "Mileage · Site visit".
 export function expenseLabel(e, project) {
   if (e.kind === "sub") {
     const sub = (project?.subconsultants || []).find((s) => s.id === e.subId);
@@ -87,6 +99,7 @@ const MARKUP = `
         </label>
       </div>
       <div class="expense-cost" id="expenseCost"></div>
+      <a class="expense-receipt" id="expenseReceipt" style="display:none;"></a>
     </div>
     <div class="sheet-foot">
       <button type="button" id="expenseDelete" class="link-btn item-delete" style="display:none;">Delete</button>
@@ -98,9 +111,14 @@ const MARKUP = `
 
 // getData() → { people, projects }. canPickPayer: admins/PMs can record an
 // expense paid by someone else (or the company); staff record their own.
+let editorCount = 0;
+
 export function createExpenseEditor({ getData, sessionPersonId, projectChoices, canPickPayer }) {
-  document.body.insertAdjacentHTML("beforeend", MARKUP);
-  const $ = (id) => document.getElementById(id);
+  // A page can have more than one popup (e.g. Dashboard + its Approvals), so
+  // each one's element IDs get their own prefix.
+  const pre = editorCount++ ? `e${editorCount}-` : "";
+  document.body.insertAdjacentHTML("beforeend", MARKUP.replace(/(id|for|aria-labelledby)="/g, `$1="${pre}`));
+  const $ = (id) => document.getElementById(pre + id);
   const modal = $("expenseModal");
   const heading = $("expenseHeading");
   const subField = $("expenseSub");
@@ -117,6 +135,9 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
   const rateLabel = $("expenseRateLabel");
   const deleteBtn = $("expenseDelete");
   const saveBtn = $("expenseSave");
+  const receipt = $("expenseReceipt");
+
+  Settings.listen(applyExpenseRates);
 
   let editing = null;
   let kind = "project";
@@ -133,7 +154,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     if (selected) subField.value = selected;
   }
 
-  // Travel/Lodging: quantity × rate (miles, nights). Others: an amount.
+  // Mileage/Lodging: quantity × rate (miles, nights). Others: an amount.
   function applyCategory(fromChange) {
     if (kind !== "project") return;
     const unit = UNIT_CATEGORIES[category.value];
@@ -142,11 +163,25 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     show("expenseAmountRow", !unit);
     if (unit) {
       quantityLabel.textContent = unit.label;
-      rateLabel.textContent = `Rate / ${unit.unit === "mi" ? "mile" : "night"}`;
+      rateLabel.textContent = `Rate / ${unit.per}`;
       const defaults = Object.values(UNIT_CATEGORIES).map((u) => u.rate);
       if (fromChange && (rate.value === "" || defaults.includes(Number(rate.value)))) rate.value = unit.rate;
     }
     updateCost();
+  }
+
+  // A link to email the receipt to the project's PM, subject filled in.
+  function updateReceipt() {
+    const { people, projects } = getData();
+    const project = projects.find((p) => p.id === projectSelect.value);
+    const pm = project && people.find((p) => p.id === project.pmPersonId);
+    const on = kind === "project" && !!project && needsReceipt(category.value);
+    receipt.style.display = on ? "" : "none";
+    if (!on) return;
+    const desc = description.value.trim();
+    const subject = `Receipt: ${project.name}${desc ? " – " + desc : ""}`;
+    receipt.href = `mailto:${pm && pm.email ? pm.email.trim() : ""}?subject=${encodeURIComponent(subject)}`;
+    receipt.textContent = `Email the receipt to ${pm ? pm.name : "the PM"} →`;
   }
 
   function updateCost() {
@@ -191,6 +226,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     applyCategory(false);
     description.placeholder = kind === "sub" ? "e.g. Invoice #1042" : "e.g. Mileage to site visit";
     updateCost();
+    updateReceipt();
     deleteBtn.style.display = record ? "" : "none";
     saveBtn.textContent = record ? "Save changes" : kind === "sub" ? "Add invoice" : "Add expense";
     modal.style.display = "flex";
@@ -199,8 +235,9 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
 
   function close() { modal.style.display = "none"; }
 
-  projectSelect.addEventListener("change", () => { if (kind === "sub") fillSubs(projectSelect.value); });
-  category.addEventListener("change", () => applyCategory(true));
+  projectSelect.addEventListener("change", () => { if (kind === "sub") fillSubs(projectSelect.value); updateReceipt(); });
+  category.addEventListener("change", () => { applyCategory(true); updateReceipt(); });
+  description.addEventListener("input", updateReceipt);
   quantity.addEventListener("input", updateCost);
   rate.addEventListener("input", updateCost);
   $("expenseClose").addEventListener("click", close);
@@ -257,7 +294,8 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
       if (editing) await Expenses.update(editing.id, data);
       else await Expenses.add({ ...data, createdByPersonId: sessionPersonId });
       close();
-      showToast(editing ? "Expense updated." : kind === "sub" ? "Invoice recorded." : "Expense added.");
+      showToast(editing ? "Expense updated." : kind === "sub" ? "Invoice recorded."
+        : needsReceipt(data.category) ? "Expense added. Remember to email the receipt." : "Expense added.");
     } catch (err) {
       showToast("Error: " + err.message);
     }

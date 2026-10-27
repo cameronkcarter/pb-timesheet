@@ -6,7 +6,7 @@ import {
 } from "./util.js";
 import { sheetSyncEnabled } from "./sheets.js";
 import { createSheetSync } from "./sheet-sync.js";
-import { billRateOf, paidAmount } from "./rates.js";
+import { billRateOf, paidAmount, isBillable } from "./rates.js";
 import { expenseLabel, expenseQtyText, createExpenseEditor } from "./expenses.js";
 
 const sessionPersonId = requireSession();
@@ -123,21 +123,25 @@ const sumHours = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0),
 const shortDate = (iso) => new Date(String(iso).slice(0, 10) + "T00:00:00")
   .toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-// Next invoice per project: its approved, uninvoiced hours.
+// Next invoice per project: its approved, uninvoiced hours. Approved hours
+// marked "Don't bill" (unbilled) aren't charged, but are closed out with the
+// invoice (billed at $0) so they're paid along with everyone else's.
 function nextRows() {
   return billableProjects().map((project) => {
     const open = timeEntries.filter((e) => e.projectId === project.id && !e.invoiced && !e.declined);
-    const entries = open.filter((e) => e.approved);
+    const entries = open.filter((e) => e.approved && isBillable(e));
+    const unbilled = open.filter((e) => e.approved && !isBillable(e));
     const pending = open.filter((e) => !e.approved);
     const openExp = expenses.filter((e) => e.projectId === project.id && !e.invoiced && !e.declined);
     const exps = openExp.filter((e) => e.approved);
     const pendingExps = openExp.filter((e) => !e.approved);
-    if (!open.length && !openExp.length) return null;
+    // Unbilled hours alone wait for the project's next real invoice.
+    if (!entries.length && !pending.length && !openExp.length) return null;
     const ready = [...entries, ...exps];
     const dates = (ready.length ? ready : [...pending, ...pendingExps]).map((e) => e.date).sort();
     const draft = drafts[project.id] || {};
     return {
-      key: `next:${project.id}`, kind: "next", project, entries, pending, exps, pendingExps,
+      key: `next:${project.id}`, kind: "next", project, entries, unbilled, pending, exps, pendingExps,
       from: dates[0], to: dates[dates.length - 1],
       number: draft.number ?? nextInvoiceNumber(),
       label: draft.label ?? periodLabelFor(dates[0], dates[dates.length - 1]),
@@ -212,9 +216,10 @@ function invoiceRows() {
   return [...invoices]
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .map((inv) => {
-      const entries = timeEntries.filter((e) => e.invoiceId === inv.id);
+      const linked = timeEntries.filter((e) => e.invoiceId === inv.id);
+      const entries = linked.filter(isBillable);
       return {
-        key: `inv:${inv.id}`, kind: "inv", inv, entries,
+        key: `inv:${inv.id}`, kind: "inv", inv, entries, unbilled: linked.filter((e) => !isBillable(e)),
         project: projects.find((p) => p.id === inv.projectId),
         number: inv.invoiceNumber,
         label: inv.periodLabel || "",
@@ -273,6 +278,15 @@ function peopleHtml(rowKey, entries, fallbackRows) {
   </table>`;
 }
 
+// "Also closes out 3 hrs not billed (Ann, Ben) · $240 pay" — hours a PM
+// marked "Don't bill" that ride along with the invoice at $0.
+function unbilledNoteHtml(unbilled, lead) {
+  if (!unbilled || !unbilled.length) return "";
+  const names = [...new Set(unbilled.map((e) => people.find((p) => p.id === e.personId)?.name).filter(Boolean))];
+  return `<div class="inv-note inv-unbilled">${lead} ${fmtHrs(sumHours(unbilled))} hrs not billed (${esc(names.join(", "))})
+    · ${formatCurrency(paidAmount(unbilled, { projects, people }))} pay, not charged to the client</div>`;
+}
+
 function fieldsHtml(row) {
   return `<div class="inv-fields">
     <label>Invoice #<input type="text" data-field="number" value="${esc(row.number)}" /></label>
@@ -289,9 +303,10 @@ function detailHtml(row) {
     const canGenerate = row.entries.length || row.exps.length;
     return `${fieldsHtml(row)}
       ${row.entries.length ? peopleHtml(row.key, row.entries) : ""}
+      ${unbilledNoteHtml(row.unbilled, "Also closes out")}
       ${expenseTableHtml(expenseRowsFor(row.project, row.exps))}
       <div class="inv-actions">
-        ${waiting ? `<a class="entry-status warn inv-warn" href="admin.html#pendingApprovalCard"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See approvals</u></a>` : ""}
+        ${waiting ? `<a class="entry-status warn inv-warn" href="dashboard.html#approvals"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See approvals</u></a>` : ""}
         <button type="button" class="secondary" data-action="preview" ${canGenerate ? "" : "disabled"}>Preview PDF</button>
         <button type="button" data-action="generate" ${canGenerate ? "" : "disabled"}>Generate invoice</button>
       </div>`;
@@ -305,6 +320,7 @@ function detailHtml(row) {
   }
   return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}</div>` : ""}
     ${peopleHtml(row.key, row.entries, inv.laborRows)}
+    ${unbilledNoteHtml(row.unbilled, "Closed out")}
     ${expenseTableHtml(inv.expenseRows || [])}
     <div class="inv-actions">
       ${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
@@ -937,8 +953,9 @@ async function generate(row, isPreview, btn) {
         total: Math.round((computed.laborTotal + computed.expenseTotal) * 100) / 100,
         sheetSynced: false,
       });
-      const billRates = Object.fromEntries(entries.map((e) => [e.id, entryRate(e)]));
-      if (entries.length) await TimeEntries.markInvoiced(entries.map((e) => e.id), ref.id, billRates);
+      const closing = [...entries, ...row.unbilled];
+      const billRates = Object.fromEntries(closing.map((e) => [e.id, entryRate(e)]));
+      if (closing.length) await TimeEntries.markInvoiced(closing.map((e) => e.id), ref.id, billRates);
       if (exps.length) await Expenses.markInvoiced(exps.map((e) => e.id), ref.id);
       delete drafts[project.id];
       openRow = `inv:${ref.id}`;
@@ -977,7 +994,7 @@ async function downloadPdf(inv) {
       expenseRows: inv.expenseRows || [],
       expenseSummary: inv.expenseSummary,
       expenseTotal: inv.expenseTotal || 0,
-      workRows: workRowsFor(project, timeEntries.filter((e) => e.invoiceId === inv.id)),
+      workRows: workRowsFor(project, timeEntries.filter((e) => e.invoiceId === inv.id && isBillable(e))),
     });
   } catch (err) {
     showToast("Error: " + err.message);
