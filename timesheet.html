@@ -34,8 +34,14 @@
         <span id="calMonthLabel" class="cal-month-label"></span>
         <button id="calNext" class="secondary small" aria-label="Next month">&rsaquo;</button>
         <button id="calToday" class="secondary small">Today</button>
+        <div class="segmented segmented-small" id="viewToggle" role="radiogroup" aria-label="View">
+          <button type="button" data-value="calendar" role="radio" class="on">Calendar</button>
+          <button type="button" data-value="list" role="radio">List</button>
+        </div>
       </div>
     </div>
+    <div id="listView" hidden></div>
+    <div id="calView">
     <div id="calLegend" class="cal-legend"></div>
     <div id="calendar" class="cal-grid"></div>
 
@@ -72,6 +78,7 @@
           </div>
         </div>
       </div>
+    </div>
     </div>
   </div>
 </main>

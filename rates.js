@@ -10,7 +10,8 @@
 //
 // Projects either bill at each person's bill rate, or are internal
 // (project.internal: not billed or paid, e.g. Proposals & Pursuits; only
-// hours are tracked).
+// hours are tracked). On billable projects, single entries can be marked
+// not billed (see isBillable).
 //
 // Assignments are hours per person per task (assignment.hours).
 
@@ -43,9 +44,14 @@ export function payRateOf(entry, { projects, people }) {
   return entry.rate != null ? Number(entry.rate) : personPayRate(findPerson(entry.personId, people));
 }
 
+// Hours a PM marked "Don't bill" (entry.billable === false): still paid, never
+// charged to the client, and they don't spend the task's budget. Entries
+// without the field are billable.
+export const isBillable = (entry) => entry.billable !== false;
+
 export function billRateOf(entry, { projects, people }) {
   const project = findProject(entry.projectId, projects);
-  if (isInternal(project)) return 0;
+  if (isInternal(project) || !isBillable(entry)) return 0;
   // Invoiced hours keep the rate they were billed at. Hours invoiced before
   // bill rates existed were billed at the person's pay rate.
   if (entry.invoiced) return entry.billRate != null ? Number(entry.billRate) : payRateOf(entry, { projects, people });

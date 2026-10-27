@@ -123,9 +123,18 @@ export function sortProjects(list) {
 // people act on), with logged and assigned alongside. The whole bar is the
 // assignment, filled in the project color as hours are logged. Logging past
 // the assignment is allowed (more hours are often added later), so it shows
-// in amber, not as an error.
+// in amber, not as an error. Hours on a task with nothing assigned aren't
+// "over" anything: they just show what's logged.
 export function hoursBarHtml(logged, assigned, color, large = false) {
-  const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : (logged > 0 ? 100 : 0);
+  if (assigned <= 0 && logged > 0) {
+    return `<div class="hours-bar-wrap">
+      <div class="hours-captions">
+        <span class="hours-left">${fmtHrs(logged)} hrs logged</span>
+        <span>No hours assigned</span>
+      </div>
+    </div>`;
+  }
+  const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 0;
   const over = logged - assigned > 0.005;
   const headline = assigned <= 0 && logged <= 0
     ? "No hours assigned"
@@ -143,6 +152,22 @@ export function hoursBarHtml(logged, assigned, color, large = false) {
 
 export function fmtHrs(n) {
   return (Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+// "Tue, Oct 14" for a time entry's date.
+export const entryDate = (iso) => new Date(iso + "T00:00:00")
+  .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+// "Oct 14", "Oct 14 – 16" or "Sep 30 – Oct 2" for a set of entries.
+export function dateRange(entries) {
+  const dates = entries.map((e) => e.date).sort();
+  const fmt = (iso, opts) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", opts);
+  const a = dates[0];
+  const b = dates[dates.length - 1];
+  if (a === b) return fmt(a, { month: "short", day: "numeric" });
+  return a.slice(0, 7) === b.slice(0, 7)
+    ? `${fmt(a, { month: "short", day: "numeric" })} – ${fmt(b, { day: "numeric" })}`
+    : `${fmt(a, { month: "short", day: "numeric" })} – ${fmt(b, { month: "short", day: "numeric" })}`;
 }
 
 // Close a modal when its dark backdrop is clicked — but only if the click

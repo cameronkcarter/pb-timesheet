@@ -1,9 +1,10 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, Expenses, Settings, normEmail } from "./db.js";
 import { formatCurrency, showToast, closeOnBackdropClick, esc } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
-import { createApprovals } from "./approvals.js";
+import { createAnalytics } from "./analytics.js";
 import { createSheetSync } from "./sheet-sync.js";
 import { DEFAULT_BILL_RATE, personPayRate, personBillRate } from "./rates.js";
+import { expenseCategories, applyExpenseSettings } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -24,10 +25,10 @@ let modalEditingPersonId = null;
 
 wireLogout("logoutLink");
 
-// Pending approval: hours on the projects you manage (see approvals.js).
-const approvals = createApprovals({
-  getData: () => ({ people, projects, tasks, assignments, timeEntries, expenses }),
-  sessionPersonId,
+// Approvals moved to the Dashboard (so project managers who aren't admins
+// can approve too); Admin has analytics instead (see analytics.js).
+const analytics = createAnalytics({
+  getData: () => ({ people, projects, tasks, timeEntries }),
 });
 
 if (sessionPersonId) {
@@ -40,19 +41,106 @@ if (sessionPersonId) {
       renderNavUserName(me);
     }
     renderPeople();
-    approvals.render();
+    analytics.render();
     syncStaff();
   });
   Staff.listen((d) => { staff = d; staffLoaded = true; syncStaff(); });
-  Projects.listen((d) => { projects = d; approvals.render(); });
-  Tasks.listen((d) => { tasks = d; approvals.render(); });
-  Assignments.listen((d) => { assignments = d; approvals.render(); });
-  TimeEntries.listen((d) => { timeEntries = d; approvals.render(); });
+  Projects.listen((d) => { projects = d; analytics.render(); });
+  Tasks.listen((d) => { tasks = d; analytics.render(); });
+  Assignments.listen((d) => { assignments = d; });
+  TimeEntries.listen((d) => { timeEntries = d; analytics.render(); });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; renderSheetRow(); });
-  Settings.listen((d) => { settings = d; renderSheetRow(); renderBackupRow(); });
-  Expenses.listen((d) => { expenses = d; approvals.render(); });
+  Settings.listen((d) => { settings = d; renderSheetRow(); renderBackupRow(); renderCategories(); });
+  Expenses.listen((d) => { expenses = d; });
 }
+
+// ---------- Expense categories ----------
+// The categories staff pick from when recording an expense (see expenses.js):
+// name, an optional default rate per unit (e.g. $0.70 / mile — entered as a
+// quantity; no unit means an amount), and whether to prompt for a receipt. Each change saves the whole list; a new row saves once it has a
+// name. Past expenses keep the category they were recorded with.
+const categoryRows = document.getElementById("categoryRows");
+let unsavedCategory = false; // a just-added row with no name yet
+
+function renderCategories() {
+  applyExpenseSettings(settings);
+  if (categoryRows.contains(document.activeElement)) return;
+  const list = expenseCategories();
+  const rowHtml = (c) => `<div class="cat-grid cat-row">
+      <input type="text" class="cat-name" value="${esc(c.name)}" placeholder="Category name" aria-label="Name" />
+      <div class="money-input ${c.unit ? "" : "disabled"}"><span>$</span><input type="number" class="cat-rate" min="0" step="0.01"
+        value="${c.unit && c.rate != null ? c.rate : ""}" ${c.unit ? "" : "disabled"} aria-label="Default rate" /></div>
+      <div class="cat-per"><span>/</span><input type="text" class="cat-unit" value="${esc(c.unit || "")}" placeholder="none" aria-label="Unit" /></div>
+      <label class="cat-receipt"><input type="checkbox" class="cat-receipt-box" ${c.receipt ? "checked" : ""} aria-label="Ask for a receipt" /></label>
+      <button type="button" class="icon-btn cat-remove" title="Remove category" aria-label="Remove category">&times;</button>
+    </div>`;
+  categoryRows.innerHTML = list.map(rowHtml).join("")
+    + (unsavedCategory ? rowHtml({ name: "", unit: "", rate: null, receipt: true }) : "");
+}
+
+function readCategories() {
+  return [...categoryRows.querySelectorAll(".cat-row")].map((row) => {
+    const unit = row.querySelector(".cat-unit").value.trim().toLowerCase();
+    const rate = Number(row.querySelector(".cat-rate").value);
+    return {
+      name: row.querySelector(".cat-name").value.trim(),
+      unit,
+      rate: unit && rate > 0 ? rate : null,
+      receipt: row.querySelector(".cat-receipt-box").checked,
+    };
+  });
+}
+
+async function saveCategories(list, message = "Saved.") {
+  const named = list.filter((c) => c.name);
+  const names = named.map((c) => c.name.toLowerCase());
+  if (names.some((n, i) => names.indexOf(n) !== i)) return showToast("Two categories have the same name.");
+  if (!named.length) return showToast("Keep at least one category.");
+  unsavedCategory = list.length > named.length;
+  try {
+    await Settings.set({ expenseCategories: named });
+    showToast(message);
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
+// Typing a unit turns the rate box on (clearing it turns it off).
+categoryRows.addEventListener("input", (e) => {
+  if (!e.target.classList.contains("cat-unit")) return;
+  const row = e.target.closest(".cat-row");
+  const on = !!e.target.value.trim();
+  row.querySelector(".cat-rate").disabled = !on;
+  row.querySelector(".money-input").classList.toggle("disabled", !on);
+});
+
+categoryRows.addEventListener("change", (e) => {
+  const list = readCategories();
+  if (list.some((c) => c.unit && !c.rate) && e.target.classList.contains("cat-rate")) return showToast("Enter a default rate above $0.");
+  saveCategories(list);
+});
+
+categoryRows.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("input")) e.target.blur(); });
+
+// Saving re-renders once focus leaves the list.
+categoryRows.addEventListener("focusout", () => setTimeout(() => { if (!categoryRows.contains(document.activeElement)) renderCategories(); }, 0));
+
+categoryRows.addEventListener("click", (e) => {
+  const btn = e.target.closest(".cat-remove");
+  if (!btn) return;
+  const row = btn.closest(".cat-row");
+  const name = row.querySelector(".cat-name").value.trim();
+  row.remove();
+  if (!name) { unsavedCategory = false; renderCategories(); return; }
+  saveCategories(readCategories(), `Removed "${name}". Past expenses keep it.`);
+});
+
+document.getElementById("addCategory").addEventListener("click", () => {
+  unsavedCategory = true;
+  renderCategories();
+  categoryRows.querySelector(".cat-row:last-child .cat-name").focus();
+});
 
 // ---------- People (table + modal) ----------
 const peopleTbody = document.querySelector("#peopleTable tbody");

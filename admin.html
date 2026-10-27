@@ -26,21 +26,28 @@
 <main>
   <h1>Admin</h1>
 
-  <div class="card" id="pendingApprovalCard">
+  <div class="card">
     <div class="appr-head">
-      <h2>Approvals <span id="pendingTotal"></span></h2>
+      <h2>Analytics</h2>
       <div class="row-actions">
-        <div class="segmented segmented-small" id="approvalView" role="radiogroup">
-          <button type="button" data-value="pending" role="radio" class="on">Pending</button>
-          <button type="button" data-value="approved" role="radio">Approved</button>
-        </div>
-        <div class="segmented segmented-small" id="approvalScope" role="radiogroup">
-          <button type="button" data-value="mine" role="radio" class="on">Assigned projects</button>
-          <button type="button" data-value="all" role="radio">All projects</button>
+        <select id="analyticsProject" class="analytics-select" aria-label="Project"></select>
+        <div class="segmented segmented-small" id="analyticsRange" role="radiogroup" aria-label="Period">
+          <button type="button" data-value="3" role="radio">3 months</button>
+          <button type="button" data-value="12" role="radio" class="on">12 months</button>
+          <button type="button" data-value="all" role="radio">All time</button>
         </div>
       </div>
     </div>
-    <div id="pendingBody"></div>
+    <div id="analyticsBody"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Expense categories</h2>
+      <button id="addCategory" class="secondary small">+ Add category</button>
+    </div>
+    <div class="cat-grid cat-head"><span>Name</span><span>Default rate</span><span>Unit</span><span>Receipt</span><span></span></div>
+    <div id="categoryRows"></div>
   </div>
 
   <div class="card">

@@ -195,9 +195,10 @@ function invoicedOnTask(taskId) {
   return billedAmount(timeEntries.filter((e) => e.taskId === taskId && e.invoiced), ctx());
 }
 
+// Closed tasks (internal projects, e.g. a finished proposal) sort last.
 function selectedProjectTasks() {
   return tasks.filter((t) => t.projectId === selectedProjectId)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => (!!a.closed - !!b.closed) || a.name.localeCompare(b.name));
 }
 
 function loggedHours(entries) {
@@ -279,7 +280,8 @@ function renderBudget() {
     const open = dueDates.filter((d) => d.taskId === t.id && isSubtask(d) && !d.completed);
     const overdue = open.some((d) => d.dueDate < todayISO());
     const dueChip = open.length ? `<span class="due-chip ${overdue ? "overdue" : ""}" title="Open subtasks on this task">${open.length} due</span>` : "";
-    const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${t.id}"><td><div class="task-cell" title="${esc(t.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${esc(t.name)}</span>${dueChip}</div></td>${cells}</tr>`;
+    const closedPill = t.closed ? '<span class="pill">Closed</span>' : "";
+    const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""} ${t.closed ? "task-closed" : ""}" data-task-row="${t.id}"><td><div class="task-cell" title="${esc(t.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${esc(t.name)}</span>${closedPill}${dueChip}</div></td>${cells}</tr>`;
     if (!expanded) return mainRow;
     return mainRow + `<tr class="task-detail" data-task-id="${t.id}"><td colspan="${cols}" class="accordion-cell">${editMode ? assignEditorHtml(t) : taskPeopleHtml(t)}</td></tr>`;
   }).join("");
@@ -420,6 +422,12 @@ function taskPeopleHtml(task) {
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
   const taskItems = projectItems({ taskId: task.id });
+  // Anyone can close an internal task (e.g. a proposal that's been submitted)
+  // so it drops off the Timesheet's task list; its hours stay.
+  const closeBar = internal
+    ? `<div class="task-close-bar"><span class="appr-muted">${task.closed ? "Closed — hidden from the Timesheet." : "Done with this one?"}</span>
+        <button class="link-btn" data-action="${task.closed ? "reopen-task" : "close-task"}" data-task-id="${task.id}">${task.closed ? "Reopen task" : "Close task"}</button></div>`
+    : "";
   const personIds = [...new Set([
     ...(internal ? people.filter((x) => !x.inactive).map((x) => x.id) : []),
     ...taskAssignments.map((a) => a.personId),
@@ -448,7 +456,7 @@ function taskPeopleHtml(task) {
   // switching modes doesn't move anything: the box and × columns are empty
   // here, and subtasks sit under the bar.
   const color = projectColor(task.projectId);
-  return `<div class="assign-list">${rows.map((r) => `<div class="assign-row people-row">
+  return `${closeBar}<div class="assign-list">${rows.map((r) => `<div class="assign-row people-row">
       <div class="assign-name">
         ${esc(r.name)}
         <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Add subtask</button>
@@ -641,6 +649,14 @@ budgetTbody.addEventListener("click", async (e) => {
       await handleAssignAction(btn);
     } else if (["add-expense", "edit-expense", "reimburse-expense"].includes(btn.dataset.action)) {
       await handleExpenseAction(btn);
+    } else if (["close-task", "reopen-task"].includes(btn.dataset.action)) {
+      const closed = btn.dataset.action === "close-task";
+      try {
+        await Tasks.update(btn.dataset.taskId, { closed });
+        showToast(closed ? "Task closed. Its hours are kept." : "Task reopened.");
+      } catch (err) {
+        showToast("Error: " + err.message);
+      }
     } else {
       await handleItemAction(btn);
     }

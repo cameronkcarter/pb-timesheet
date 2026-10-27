@@ -3112,3 +3112,539 @@ td.accordion-cell .assign-row > .icon-btn {
   font-size: 13px;
   color: var(--text-muted);
 }
+
+/* ---------- Expense popup: email the receipt ---------- */
+.expense-receipt {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+  text-align: right;
+  text-decoration: none;
+}
+
+.expense-receipt:hover { text-decoration: underline; }
+
+/* ---------- Dashboard: Approvals (one line until opened) ---------- */
+.card.appr-card {
+  padding: 0;
+}
+
+.appr-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 14px 20px;
+  background: transparent;
+  color: var(--text);
+  border-radius: 10px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.appr-summary:hover { background: #faf8fb; }
+
+.appr-summary-title {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.appr-summary-text {
+  flex: 1;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.appr-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 8px;
+  vertical-align: 1px;
+}
+
+.appr-card.open .appr-summary .chev { transform: rotate(180deg); }
+
+.appr-card #approvalPanel {
+  padding: 0 20px 16px;
+}
+
+.appr-card .appr-head {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.pill.not-billed {
+  background: #fbefe2;
+  color: #9a5a16;
+  margin-right: 4px;
+}
+
+.appr-entry select.appr-task-select {
+  width: 100%;
+  margin: 0;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
+.appr-table tr.appr-closed td { opacity: 0.6; }
+
+/* ---------- Timesheet: task cards ---------- */
+.task-card .task-of {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.task-card-bar {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: #efeaf2;
+  overflow: hidden;
+}
+
+.task-card-bar div {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--navy);
+}
+
+.task-card:not(.active) .task-card-bar div { background: #b9a3c4; }
+.task-card-bar.over div,
+.task-card:not(.active) .task-card-bar.over div { background: #d9934a; }
+
+.task-card.unassigned:not(.active) {
+  border-style: dashed;
+}
+
+button.task-card-more {
+  margin: 0;
+  background: transparent;
+  color: var(--navy);
+  border: 1px dashed var(--border);
+  font-weight: 600;
+  font-size: 14px;
+  min-height: 80px;
+}
+
+button.task-card-more:hover { background: #faf8fb; }
+
+.task-card-new {
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-card-new input {
+  margin: 0;
+}
+
+.task-card-new .row-actions {
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.task-card-new button { margin: 0; }
+
+/* ---------- Timesheet: List view ---------- */
+#listView {
+  margin-top: 14px;
+}
+
+.list-total {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.list-table .appr-task .pill {
+  font-size: 11px;
+  padding: 1px 7px;
+}
+
+/* ---------- Projects: closing internal tasks ---------- */
+.task-row.task-closed .task-name { color: var(--text-muted); }
+.task-cell .pill { margin-left: 8px; background: #f1eef4; color: var(--text-muted); }
+
+.task-close-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 10px;
+  font-size: 13px;
+}
+
+.task-close-bar .link-btn { margin: 0; }
+
+/* ---------- Invoices ---------- */
+.inv-note.inv-unbilled { color: #9a5a16; }
+
+/* ---------- Admin: expense categories ---------- */
+.cat-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 120px 130px 64px 32px;
+  gap: 10px;
+  align-items: center;
+}
+
+.cat-head {
+  margin-top: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  padding-bottom: 6px;
+}
+
+.cat-head span:nth-child(4) { text-align: center; }
+
+.cat-row {
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.cat-row input[type="text"],
+.cat-row .money-input input {
+  margin: 0;
+  width: 100%;
+}
+
+.cat-row .money-input.disabled { opacity: 0.45; }
+
+/* "/ mile": the unit the default rate is per. */
+.cat-per {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.cat-per input { margin: 0; width: 100%; }
+
+.cat-receipt {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+.cat-receipt input { margin: 0; width: 16px; height: 16px; }
+
+@media (max-width: 600px) {
+  .cat-grid { grid-template-columns: minmax(0, 1fr) 80px 86px 40px 28px; gap: 6px; }
+}
+
+/* ---------- Admin: analytics ---------- */
+select.analytics-select {
+  margin: 0;
+  width: auto;
+  max-width: 240px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
+.a-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin: 8px 0 14px;
+}
+
+.a-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.a-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.chart-legend i,
+.chart-tip i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.a-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 28px;
+}
+
+@media (max-width: 800px) {
+  .a-charts { grid-template-columns: minmax(0, 1fr); }
+}
+
+.a-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.m-chart {
+  display: flex;
+  gap: 6px;
+  height: 180px;
+}
+
+.m-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-bottom: 18px;
+  text-align: right;
+  min-width: 24px;
+}
+
+.m-cols {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.m-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  cursor: default;
+}
+
+.m-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  max-width: 28px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.m-stack .seg:last-child { border-radius: 4px 4px 0 0; }
+
+.m-col:hover .m-stack { opacity: 0.85; }
+
+.m-label {
+  height: 18px;
+  line-height: 18px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.p-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.p-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 90px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.p-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.p-track {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+}
+
+.p-track .seg:last-child { border-radius: 0 4px 4px 0; }
+
+.p-value {
+  text-align: right;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.p-row:hover .p-track { opacity: 0.85; }
+
+.chart-tip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(40, 20, 50, 0.15);
+  padding: 8px 10px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 140px;
+}
+
+.chart-tip[hidden] { display: none; }
+
+.chart-tip span { display: flex; align-items: center; color: var(--text-muted); }
+.chart-tip b { margin-left: auto; padding-left: 12px; color: var(--text); }
+.chart-tip .tip-total { border-top: 1px solid var(--border); padding-top: 3px; margin-top: 2px; }
+
+/* Room for Edit · Don't bill · Decline · Approve. */
+.appr-card .appr-table col.c-actions { width: 244px; }
+
+/* Analytics header wraps on narrow screens; month labels thin out. */
+.appr-head:has(#analyticsRange) { flex-wrap: wrap; }
+.segmented.segmented-small button { white-space: nowrap; }
+
+@media (max-width: 600px) {
+  .m-col:nth-child(even) .m-label { visibility: hidden; }
+  .p-row { grid-template-columns: 90px minmax(0, 1fr) 76px; }
+}
+.appr-head .row-actions { flex-wrap: wrap; }
+#analyticsRange { flex-wrap: nowrap; }
+
+/* Calendar / List sits after Today; wraps under the month on narrow screens. */
+.cal-nav { flex-wrap: wrap; justify-content: flex-end; }
+.cal-nav #viewToggle { margin-left: 6px; }
+
+/* ---------- Approvals: entry actions ---------- */
+/* Edit (quiet link) · "Don't bill" (amber chip, the unusual case) ·
+   Decline | Approve (one split button). */
+.appr-btns {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.appr-btns button { margin: 0; }
+
+.appr-actions .appr-btns .link-btn.appr-edit {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.appr-actions .appr-btns .link-btn.appr-edit:hover { color: var(--navy); }
+
+button.bill-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px dashed #d9934a;
+  background: transparent;
+  color: #9a5a16;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+button.bill-chip:hover { background: #fdf5ec; }
+
+button.bill-chip.on {
+  border-style: solid;
+  background: #fbefe2;
+}
+
+button.bill-chip.on:hover { background: #f6e1c9; }
+
+.appr-split {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.appr-split button {
+  border-radius: 0;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.appr-split .split-decline {
+  background: #fff;
+  color: var(--red);
+  border-right: 1px solid var(--border);
+}
+
+.appr-split .split-decline:hover { background: #fdecea; }
+
+.appr-split .split-approve {
+  background: var(--green);
+  color: #fff;
+}
+
+.appr-split .split-approve:hover { background: #256a29; }
+
+button.appr-unapprove {
+  padding: 4px 11px;
+  font-size: 12px;
+  background: #fff;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+button.appr-unapprove:hover { color: var(--red); background: #fff; }
+
+.appr-card .appr-table col.c-actions { width: 290px; }
+
+/* ---------- Nav on phones: links wrap under the logo ---------- */
+@media (max-width: 700px) {
+  nav {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px 10px;
+    row-gap: 4px;
+  }
+  nav .brand {
+    flex: 1 0 100%;
+    margin: 0;
+    padding: 6px 4px 4px;
+  }
+  nav a {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .nav-user-name { display: none; }
+}
+.appr-card .appr-table col.c-task { width: 20%; }
+.appr-card .appr-table col.c-date { width: 112px; }
+
+/* Phones: each category's name gets its own line above rate · unit · receipt. */
+@media (max-width: 600px) {
+  .cat-grid { grid-template-columns: 96px minmax(0, 1fr) 44px 28px; gap: 6px; }
+  .cat-row .cat-name { grid-column: 1 / -1; }
+  .cat-head span:first-child { display: none; }
+}

@@ -1,26 +1,47 @@
 // Project expenses and subconsultant invoices: shared helpers and the
 // add/edit popup (used on the Dashboard and the Projects tab). Markup is
 // created here so every page gets the same popup.
-import { Expenses } from "./db.js";
+import { Expenses, Settings } from "./db.js";
 import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO } from "./util.js";
 
-export const CATEGORIES = ["Travel", "Lodging", "Meals", "Materials", "Other"];
+// Expense categories are set by admins (Admin > Expense categories, saved as
+// settings/app.expenseCategories). Each is { name, unit, rate, receipt }:
+//   unit    — "mile", "night"…: entered as a quantity × rate (rate is the
+//             default, editable per expense). Blank: entered as an amount.
+//   receipt — prompt to email the receipt to the project's PM.
+// Expenses store the category's name (and unit), so renaming or removing a
+// category never changes past expenses.
+export const DEFAULT_CATEGORIES = [
+  { name: "Mileage", unit: "mile", rate: 0.7, receipt: false },
+  { name: "Transit", unit: "", rate: null, receipt: true },
+  { name: "Lodging", unit: "night", rate: 150, receipt: true },
+  { name: "Meals", unit: "", rate: null, receipt: true },
+  { name: "Materials", unit: "", rate: null, receipt: true },
+  { name: "Other", unit: "", rate: null, receipt: true },
+];
 
-// Categories billed per unit, with default rates (editable per expense).
-// Others are just an amount.
-export const UNIT_CATEGORIES = {
-  Travel: { label: "Miles", unit: "mi", rate: 0.7 },
-  Lodging: { label: "Nights", unit: "nights", rate: 150 },
-};
+let categories = DEFAULT_CATEGORIES;
 
-// "42 mi × $0.70", or "" for amount-only expenses.
-export function expenseQtyText(e) {
-  if (e.quantity == null || e.rate == null) return "";
-  const unit = UNIT_CATEGORIES[e.category]?.unit || "";
-  return `${Math.round(Number(e.quantity) * 100) / 100}${unit ? " " + unit : ""} × ${formatCurrency(e.rate)}`;
+export function applyExpenseSettings(settings) {
+  const list = (settings.expenseCategories || []).filter((c) => c && c.name);
+  categories = list.length ? list : DEFAULT_CATEGORIES;
 }
 
-// What an expense is, in a few words: "Travel · Site visit mileage".
+export const expenseCategories = () => categories;
+export const categoryInfo = (name) => categories.find((c) => c.name === name) || null;
+const unitOf = (name) => categoryInfo(name)?.unit || "";
+
+// "mile" → "miles" (for 0 or more than 1).
+export const plural = (unit, n = 2) => (unit && Number(n) !== 1 && !unit.endsWith("s") ? `${unit}s` : unit);
+
+// "42 miles × $0.70", or "" for amount-only expenses.
+export function expenseQtyText(e) {
+  if (e.quantity == null || e.rate == null) return "";
+  const unit = e.unit || unitOf(e.category);
+  return `${Math.round(Number(e.quantity) * 100) / 100}${unit ? " " + plural(unit, e.quantity) : ""} × ${formatCurrency(e.rate)}`;
+}
+
+// What an expense is, in a few words: "Mileage · Site visit".
 export function expenseLabel(e, project) {
   if (e.kind === "sub") {
     const sub = (project?.subconsultants || []).find((s) => s.id === e.subId);
@@ -87,6 +108,7 @@ const MARKUP = `
         </label>
       </div>
       <div class="expense-cost" id="expenseCost"></div>
+      <a class="expense-receipt" id="expenseReceipt" style="display:none;"></a>
     </div>
     <div class="sheet-foot">
       <button type="button" id="expenseDelete" class="link-btn item-delete" style="display:none;">Delete</button>
@@ -98,9 +120,14 @@ const MARKUP = `
 
 // getData() → { people, projects }. canPickPayer: admins/PMs can record an
 // expense paid by someone else (or the company); staff record their own.
+let editorCount = 0;
+
 export function createExpenseEditor({ getData, sessionPersonId, projectChoices, canPickPayer }) {
-  document.body.insertAdjacentHTML("beforeend", MARKUP);
-  const $ = (id) => document.getElementById(id);
+  // A page can have more than one popup (e.g. Dashboard + its Approvals), so
+  // each one's element IDs get their own prefix.
+  const pre = editorCount++ ? `e${editorCount}-` : "";
+  document.body.insertAdjacentHTML("beforeend", MARKUP.replace(/(id|for|aria-labelledby)="/g, `$1="${pre}`));
+  const $ = (id) => document.getElementById(pre + id);
   const modal = $("expenseModal");
   const heading = $("expenseHeading");
   const subField = $("expenseSub");
@@ -117,11 +144,26 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
   const rateLabel = $("expenseRateLabel");
   const deleteBtn = $("expenseDelete");
   const saveBtn = $("expenseSave");
+  const receipt = $("expenseReceipt");
+
+  Settings.listen(applyExpenseSettings);
 
   let editing = null;
   let kind = "project";
 
-  category.innerHTML = CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("");
+  // The category's settings; an expense whose category was since removed
+  // keeps working as it was entered.
+  function info(name) {
+    const found = categoryInfo(name);
+    if (found || !editing || editing.category !== name) return found;
+    return { name, unit: editing.unit || (editing.quantity != null ? "unit" : ""), rate: editing.rate, receipt: false };
+  }
+
+  function fillCategories(current) {
+    const names = expenseCategories().map((c) => c.name);
+    if (current && !names.includes(current)) names.push(current);
+    category.innerHTML = names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  }
 
   function show(id, on) { $(id).style.display = on ? "" : "none"; }
 
@@ -133,24 +175,41 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     if (selected) subField.value = selected;
   }
 
-  // Travel/Lodging: quantity × rate (miles, nights). Others: an amount.
+  // Categories with a unit: quantity × rate (miles, nights…). Others: an amount.
   function applyCategory(fromChange) {
     if (kind !== "project") return;
-    const unit = UNIT_CATEGORIES[category.value];
+    const c = info(category.value);
+    const unit = c && c.unit;
     show("expenseQuantityRow", !!unit);
     show("expenseRateRow", !!unit);
     show("expenseAmountRow", !unit);
     if (unit) {
-      quantityLabel.textContent = unit.label;
-      rateLabel.textContent = `Rate / ${unit.unit === "mi" ? "mile" : "night"}`;
-      const defaults = Object.values(UNIT_CATEGORIES).map((u) => u.rate);
-      if (fromChange && (rate.value === "" || defaults.includes(Number(rate.value)))) rate.value = unit.rate;
+      const u = plural(unit);
+      quantityLabel.textContent = u.charAt(0).toUpperCase() + u.slice(1);
+      rateLabel.textContent = `Rate / ${unit}`;
+      // Switching category swaps in its default rate, unless one was typed.
+      const defaults = expenseCategories().map((x) => Number(x.rate)).filter((r) => r > 0);
+      if (fromChange && (rate.value === "" || defaults.includes(Number(rate.value)))) rate.value = c.rate ?? "";
     }
     updateCost();
   }
 
+  // A link to email the receipt to the project's PM, subject filled in.
+  function updateReceipt() {
+    const { people, projects } = getData();
+    const project = projects.find((p) => p.id === projectSelect.value);
+    const pm = project && people.find((p) => p.id === project.pmPersonId);
+    const on = kind === "project" && !!project && !!info(category.value)?.receipt;
+    receipt.style.display = on ? "" : "none";
+    if (!on) return;
+    const desc = description.value.trim();
+    const subject = `Receipt: ${project.name}${desc ? " – " + desc : ""}`;
+    receipt.href = `mailto:${pm && pm.email ? pm.email.trim() : ""}?subject=${encodeURIComponent(subject)}`;
+    receipt.textContent = `Email the receipt to ${pm ? pm.name : "the PM"} →`;
+  }
+
   function updateCost() {
-    if (kind !== "project" || !UNIT_CATEGORIES[category.value]) { cost.textContent = ""; return; }
+    if (kind !== "project" || !info(category.value)?.unit) { cost.textContent = ""; return; }
     const total = (Number(quantity.value) || 0) * (Number(rate.value) || 0);
     cost.textContent = total ? `Cost ${formatCurrency(total)}` : "";
   }
@@ -183,14 +242,16 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     paidBy.value = record ? record.personId || "" : sessionPersonId;
 
     description.value = record ? record.description || "" : "";
-    category.value = record?.category || CATEGORIES[0];
+    fillCategories(record?.category);
+    category.value = record?.category || expenseCategories()[0].name;
     date.value = record ? record.date : todayISO();
     quantity.value = record?.quantity ?? "";
-    rate.value = record?.rate ?? (UNIT_CATEGORIES[category.value]?.rate ?? "");
+    rate.value = record?.rate ?? (info(category.value)?.rate ?? "");
     amount.value = record && (kind === "sub" || record.quantity == null) ? record.amount : "";
     applyCategory(false);
     description.placeholder = kind === "sub" ? "e.g. Invoice #1042" : "e.g. Mileage to site visit";
     updateCost();
+    updateReceipt();
     deleteBtn.style.display = record ? "" : "none";
     saveBtn.textContent = record ? "Save changes" : kind === "sub" ? "Add invoice" : "Add expense";
     modal.style.display = "flex";
@@ -199,8 +260,9 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
 
   function close() { modal.style.display = "none"; }
 
-  projectSelect.addEventListener("change", () => { if (kind === "sub") fillSubs(projectSelect.value); });
-  category.addEventListener("change", () => applyCategory(true));
+  projectSelect.addEventListener("change", () => { if (kind === "sub") fillSubs(projectSelect.value); updateReceipt(); });
+  category.addEventListener("change", () => { applyCategory(true); updateReceipt(); });
+  description.addEventListener("input", updateReceipt);
   quantity.addEventListener("input", updateCost);
   rate.addEventListener("input", updateCost);
   $("expenseClose").addEventListener("click", close);
@@ -233,18 +295,18 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
       data = { kind, projectId, subId: subField.value, description: desc, date: date.value, amount: total };
       if (!editing) Object.assign(data, { approved: true, approvedDate: new Date().toISOString() });
     } else {
-      const unit = UNIT_CATEGORIES[category.value];
+      const unit = info(category.value)?.unit || "";
       if (!desc) return showToast("Add a description.");
       let money;
       if (unit) {
         const q = Number(quantity.value);
         const r = Number(rate.value);
-        if (!(q > 0) || !(r > 0)) return showToast(`Enter the ${unit.label.toLowerCase()} and rate.`);
-        money = { quantity: q, rate: r, amount: Math.round(q * r * 100) / 100 };
+        if (!(q > 0) || !(r > 0)) return showToast(`Enter the ${plural(unit)} and rate.`);
+        money = { quantity: q, rate: r, unit, amount: Math.round(q * r * 100) / 100 };
       } else {
         const total = Number(amount.value);
         if (!(total > 0)) return showToast("Enter the amount.");
-        money = { quantity: null, rate: null, amount: Math.round(total * 100) / 100 };
+        money = { quantity: null, rate: null, unit: null, amount: Math.round(total * 100) / 100 };
       }
       data = {
         kind, projectId, category: category.value, description: desc, date: date.value, ...money,
@@ -257,7 +319,8 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
       if (editing) await Expenses.update(editing.id, data);
       else await Expenses.add({ ...data, createdByPersonId: sessionPersonId });
       close();
-      showToast(editing ? "Expense updated." : kind === "sub" ? "Invoice recorded." : "Expense added.");
+      showToast(editing ? "Expense updated." : kind === "sub" ? "Invoice recorded."
+        : info(data.category)?.receipt ? "Expense added. Remember to email the receipt." : "Expense added.");
     } catch (err) {
       showToast("Error: " + err.message);
     }
