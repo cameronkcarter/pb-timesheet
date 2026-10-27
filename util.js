@@ -230,3 +230,49 @@ export function dueItemHtml(d, { canComplete = false, canEdit = false, canDelete
     ${canDelete ? `<button type="button" class="icon-btn due-delete" data-action="delete-duedate" data-id="${d.id}" title="Delete" aria-label="Delete">&times;</button>` : ""}
   </div>`;
 }
+
+// Branded stand-ins for the browser's alert() and confirm(): a small card
+// centered over the page. Paragraphs in the message are split on blank
+// lines. Both resolve once answered — confirmDialog to true (OK) or false
+// (Cancel, Escape, or a click outside).
+//   if (!(await confirmDialog("Delete this?", { confirmText: "Delete", danger: true }))) return;
+export function showDialog({ title = "", message = "", confirmText = "OK", cancelText = null, danger = false } = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "dialog-overlay";
+    const text = String(message || "").trim();
+    const paragraphs = text ? text.split(/\n\s*\n/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("") : "";
+    overlay.innerHTML = `<div class="dialog-card" role="alertdialog" aria-modal="true" ${title ? 'aria-labelledby="dialogTitle"' : ""} aria-describedby="dialogBody">
+      ${title ? `<h2 id="dialogTitle">${esc(title)}</h2>` : ""}
+      <div id="dialogBody" class="dialog-body">${paragraphs}</div>
+      <div class="dialog-actions">
+        ${cancelText ? `<button type="button" class="secondary" data-answer="no">${esc(cancelText)}</button>` : ""}
+        <button type="button" class="${danger ? "danger" : ""}" data-answer="yes">${esc(confirmText)}</button>
+      </div>
+    </div>`;
+    const lastFocus = document.activeElement;
+    const done = (answer) => {
+      document.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+      resolve(answer);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(false); }
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); done(true); }
+    };
+    overlay.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-answer]");
+      if (btn) done(btn.dataset.answer === "yes");
+      else if (e.target === overlay) done(false);
+    });
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-answer="yes"]').focus();
+  });
+}
+
+export const alertDialog = (message, title = "") => showDialog({ title, message });
+
+export const confirmDialog = (message, { title = "", confirmText = "OK", danger = false } = {}) =>
+  showDialog({ title, message, confirmText, cancelText: "Cancel", danger });

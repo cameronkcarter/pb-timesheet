@@ -1,5 +1,5 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Staff, Expenses, Settings, normEmail } from "./db.js";
-import { formatCurrency, showToast, closeOnBackdropClick, esc } from "./util.js";
+import { formatCurrency, showToast, closeOnBackdropClick, esc, confirmDialog } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
 import { createAnalytics } from "./analytics.js";
 import { createSheetSync } from "./sheet-sync.js";
@@ -229,11 +229,11 @@ async function removePerson(id) {
   const hasHistory = timeEntries.some((e) => e.personId === id) || assignments.some((a) => a.personId === id);
   try {
     if (hasHistory) {
-      if (!confirm(`${person.name} has logged hours or task assignments, so they can't be deleted without losing history.\n\nDeactivate them instead? They won't be able to log in or be assigned work, but their past hours stay on record. You can reactivate them later.`)) return;
+      if (!(await confirmDialog(`${person.name} has logged hours or task assignments, so they can't be deleted without losing history. Deactivated, they can't log in or be assigned work, but their past hours stay on record. You can reactivate them later.`, { title: `Deactivate ${person.name}?`, confirmText: "Deactivate" }))) return;
       await People.update(id, { inactive: true });
       showToast(`${person.name} deactivated.`);
     } else {
-      if (!confirm(`Permanently remove ${person.name}?`)) return;
+      if (!(await confirmDialog("This can't be undone.", { title: `Remove ${person.name}?`, confirmText: "Remove", danger: true }))) return;
       await People.remove(id);
       showToast(`${person.name} removed.`);
     }

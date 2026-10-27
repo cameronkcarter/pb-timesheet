@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
-  todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, dateRange, entryDate,
+  todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, dateRange, entryDate, confirmDialog,
   firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, sortProjects, esc,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -236,7 +236,7 @@ dayEntries.addEventListener("click", async (e) => {
   }
   const delBtn = e.target.closest("[data-delete-entry]");
   if (!delBtn) return;
-  if (!confirm("Delete this entry?")) return;
+  if (!(await confirmDialog("", { title: "Delete this entry?", confirmText: "Delete", danger: true }))) return;
   try {
     await TimeEntries.remove(delBtn.dataset.deleteEntry);
   } catch (err) {

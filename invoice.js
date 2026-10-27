@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, TimeEntries, Invoices, Expenses } from "./db.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
-  formatCurrency, showToast, fmtHrs,
+  formatCurrency, showToast, fmtHrs, confirmDialog,
   lastDayOfMonth, formatShortMDY, toISODate, sortProjects, esc, projectColor,
 } from "./util.js";
 import { sheetSyncEnabled } from "./sheets.js";
@@ -462,7 +462,7 @@ subBody.addEventListener("click", async (e) => {
   if (!rec) return;
   if (btn.dataset.action === "edit-sub") return subEditor.open(rec);
   const paying = btn.dataset.action === "sub-paid";
-  if (!paying && !confirm("Undo — mark this subconsultant invoice as not paid yet?")) return;
+  if (!paying && !(await confirmDialog("It goes back to owed to the subconsultant.", { title: "Mark as not paid yet?", confirmText: "Undo paid" }))) return;
   try {
     await Expenses.update(rec.id, { subPaid: paying, subPaidDate: paying ? new Date().toISOString() : null });
     showToast(paying ? "Marked paid to sub." : "Marked not paid.");
@@ -915,7 +915,7 @@ async function generate(row, isPreview, btn) {
   const periodLabel = row.label.trim() || periodLabelFor(row.from, row.to);
   const invoiceNumber = row.number.trim() || nextInvoiceNumber();
   if (!isPreview && invoices.some((i) => i.invoiceNumber === invoiceNumber) &&
-    !confirm(`Invoice # ${invoiceNumber} has already been used. Use it again anyway?`)) return;
+    !(await confirmDialog(`Invoice # ${invoiceNumber} has already been used.`, { title: "Use this number again?", confirmText: "Use it anyway" }))) return;
 
   const buttons = [...invoiceBody.querySelectorAll(".inv-actions button")];
   buttons.forEach((b) => { b.disabled = true; });
@@ -1004,7 +1004,7 @@ async function downloadPdf(inv) {
 // Voiding keeps the invoice (marked Void, number not reused) but sends its
 // hours, expenses and subconsultant invoices back to Unbilled hours.
 async function voidInvoice(inv) {
-  if (!confirm(`Void invoice ${inv.invoiceNumber}?\n\nIts hours and expenses go back to Unbilled hours so they can go on a new invoice. The voided invoice stays in the list for the record.`)) return;
+  if (!(await confirmDialog("Its hours and expenses go back to Unbilled hours so they can go on a new invoice. The voided invoice stays in the list for the record.", { title: `Void invoice ${inv.invoiceNumber}?`, confirmText: "Void invoice", danger: true }))) return;
   try {
     const entries = timeEntries.filter((e) => e.invoiceId === inv.id);
     const exps = expenses.filter((e) => e.invoiceId === inv.id);
@@ -1021,7 +1021,7 @@ async function voidInvoice(inv) {
 }
 
 async function markUnpaid(inv) {
-  if (!confirm("Undo paid? This invoice and its hours go back to outstanding.")) return;
+  if (!(await confirmDialog("This invoice and its hours go back to outstanding.", { title: "Undo paid?", confirmText: "Undo paid" }))) return;
   try {
     const linked = timeEntries.filter((entry) => entry.invoiceId === inv.id);
     await Promise.all(linked.map((entry) => TimeEntries.update(entry.id, { paid: false, paidDate: null })));
@@ -1034,7 +1034,7 @@ async function markUnpaid(inv) {
 }
 
 async function markPaid(inv) {
-  if (!confirm("Mark this invoice as paid? Its hours will show as client-paid.")) return;
+  if (!(await confirmDialog("Its hours will show as client-paid.", { title: "Mark this invoice paid?", confirmText: "Mark paid" }))) return;
   try {
     const linkedEntries = timeEntries.filter((entry) => entry.invoiceId === inv.id);
     await TimeEntries.markPaid(linkedEntries.map((entry) => entry.id));
