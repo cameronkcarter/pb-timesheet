@@ -124,8 +124,6 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
     }).sort((x, y) => order.indexOf(x.projectId) - order.indexOf(y.projectId));
   }
 
-  const notBilledTag = (e) => (!e.isExpense && !isBillable(e) ? '<span class="pill not-billed">Not billed</span> ' : "");
-
   function entryRowHtml(e) {
     const { tasks, projects, people } = getData();
     if (e.isExpense && !(editing && editing.id === e.id)) {
@@ -134,10 +132,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
         <td class="appr-task appr-muted">Expense</td>
         <td class="num appr-muted">—</td>
         <td class="appr-entry-note"><strong>${formatCurrency(e.amount)}</strong> · ${esc(expenseLabel(e, projects.find((p) => p.id === e.projectId)))}</td>
-        <td class="num appr-actions" colspan="2">
-          <button type="button" class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>
-          ${rowActions(e)}
-        </td></tr>`;
+        <td class="num appr-actions" colspan="2">${actionsHtml(e, "edit-expense")}</td></tr>`;
     }
     const mode = editing && editing.id === e.id ? editing.mode : null;
     const task = tasks.find((t) => t.id === e.taskId);
@@ -171,23 +166,26 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
     return `<tr class="appr-entry">${lead}
       <td class="appr-task appr-muted">${esc(who)}</td>
       <td class="num ${!byTask() && isOver(e.personId, e.taskId) ? "appr-over" : ""}">${fmtHrs(Number(e.hours))}</td>
-      <td class="appr-entry-note ${e.note ? "" : "appr-muted"}">${notBilledTag(e)}${e.note ? esc(e.note) : "No note"}</td>
-      <td class="num appr-actions" colspan="2">
-        <button type="button" class="link-btn" data-action="edit-entry" data-id="${e.id}">Edit</button>
-        ${rowActions(e)}
-      </td></tr>`;
+      <td class="appr-entry-note ${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}</td>
+      <td class="num appr-actions" colspan="2">${actionsHtml(e, "edit-entry")}</td></tr>`;
   }
 
-  // Don't bill / Bill, then Decline + Approve while waiting; Unapprove once
-  // approved. Internal hours just get Edit.
-  function rowActions(e) {
-    if (view === "internal") return "";
+  // An entry's actions: Edit (a plain link); "Don't bill", a dashed amber
+  // chip that turns solid ("Not billed ×") once set, since it's the unusual
+  // case; then Decline | Approve as one split button while waiting, or
+  // Unapprove once approved. Internal hours just get Edit.
+  function actionsHtml(e, editAction) {
+    const id = `data-id="${e.id}"`;
+    const edit = `<button type="button" class="link-btn appr-edit" data-action="${editAction}" ${id}>Edit</button>`;
+    if (view === "internal") return `<div class="appr-btns">${edit}</div>`;
     const bill = e.isExpense ? ""
-      : `<button type="button" class="link-btn" data-action="toggle-bill" data-id="${e.id}">${isBillable(e) ? "Don't bill" : "Bill"}</button>`;
-    return view === "approved"
-      ? `${bill}<button type="button" class="link-btn appr-decline" data-action="unapprove-entry" data-id="${e.id}">Unapprove</button>`
-      : `${bill}<button type="button" class="link-btn appr-decline" data-action="decline-entry" data-id="${e.id}">Decline</button>
-         <button type="button" class="link-btn appr-approve" data-action="approve-entry" data-id="${e.id}">Approve</button>`;
+      : isBillable(e)
+        ? `<button type="button" class="bill-chip" data-action="toggle-bill" ${id} title="Still paid, but not charged to the client">Don't bill</button>`
+        : `<button type="button" class="bill-chip on" data-action="toggle-bill" ${id} title="Click to bill the client again">Not billed <span aria-hidden="true">&times;</span></button>`;
+    const decide = view === "approved"
+      ? `<button type="button" class="appr-unapprove" data-action="unapprove-entry" ${id}>Unapprove</button>`
+      : `<span class="appr-split"><button type="button" class="split-decline" data-action="decline-entry" ${id}>Decline</button><button type="button" class="split-approve" data-action="approve-entry" ${id}>Approve</button></span>`;
+    return `<div class="appr-btns">${edit}${bill}${decide}</div>`;
   }
 
   function render() {

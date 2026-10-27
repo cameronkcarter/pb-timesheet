@@ -3288,21 +3288,15 @@ button.task-card-more:hover { background: #faf8fb; }
 .inv-note.inv-unbilled { color: #9a5a16; }
 
 /* ---------- Admin: expense categories ---------- */
-.cat-hint {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 6px 0 12px;
-  max-width: 640px;
-}
-
 .cat-grid {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 110px 150px 64px 32px;
+  grid-template-columns: minmax(120px, 1fr) 120px 130px 64px 32px;
   gap: 10px;
   align-items: center;
 }
 
 .cat-head {
+  margin-top: 14px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -3326,6 +3320,16 @@ button.task-card-more:hover { background: #faf8fb; }
 
 .cat-row .money-input.disabled { opacity: 0.45; }
 
+/* "/ mile": the unit the default rate is per. */
+.cat-per {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.cat-per input { margin: 0; width: 100%; }
+
 .cat-receipt {
   display: flex;
   justify-content: center;
@@ -3335,8 +3339,7 @@ button.task-card-more:hover { background: #faf8fb; }
 .cat-receipt input { margin: 0; width: 16px; height: 16px; }
 
 @media (max-width: 600px) {
-  .cat-grid { grid-template-columns: minmax(0, 1fr) 70px 96px 40px 28px; gap: 6px; }
-  .cat-row .money-input span:last-child { display: none; }
+  .cat-grid { grid-template-columns: minmax(0, 1fr) 80px 86px 40px 28px; gap: 6px; }
 }
 
 /* ---------- Admin: analytics ---------- */
@@ -3535,3 +3538,113 @@ select.analytics-select {
 /* Calendar / List sits after Today; wraps under the month on narrow screens. */
 .cal-nav { flex-wrap: wrap; justify-content: flex-end; }
 .cal-nav #viewToggle { margin-left: 6px; }
+
+/* ---------- Approvals: entry actions ---------- */
+/* Edit (quiet link) · "Don't bill" (amber chip, the unusual case) ·
+   Decline | Approve (one split button). */
+.appr-btns {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.appr-btns button { margin: 0; }
+
+.appr-actions .appr-btns .link-btn.appr-edit {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.appr-actions .appr-btns .link-btn.appr-edit:hover { color: var(--navy); }
+
+button.bill-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px dashed #d9934a;
+  background: transparent;
+  color: #9a5a16;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+button.bill-chip:hover { background: #fdf5ec; }
+
+button.bill-chip.on {
+  border-style: solid;
+  background: #fbefe2;
+}
+
+button.bill-chip.on:hover { background: #f6e1c9; }
+
+.appr-split {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.appr-split button {
+  border-radius: 0;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.appr-split .split-decline {
+  background: #fff;
+  color: var(--red);
+  border-right: 1px solid var(--border);
+}
+
+.appr-split .split-decline:hover { background: #fdecea; }
+
+.appr-split .split-approve {
+  background: var(--green);
+  color: #fff;
+}
+
+.appr-split .split-approve:hover { background: #256a29; }
+
+button.appr-unapprove {
+  padding: 4px 11px;
+  font-size: 12px;
+  background: #fff;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+button.appr-unapprove:hover { color: var(--red); background: #fff; }
+
+.appr-card .appr-table col.c-actions { width: 290px; }
+
+/* ---------- Nav on phones: links wrap under the logo ---------- */
+@media (max-width: 700px) {
+  nav {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px 10px;
+    row-gap: 4px;
+  }
+  nav .brand {
+    flex: 1 0 100%;
+    margin: 0;
+    padding: 6px 4px 4px;
+  }
+  nav a {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .nav-user-name { display: none; }
+}
+.appr-card .appr-table col.c-task { width: 20%; }
+.appr-card .appr-table col.c-date { width: 112px; }
+
+/* Phones: each category's name gets its own line above rate · unit · receipt. */
+@media (max-width: 600px) {
+  .cat-grid { grid-template-columns: 96px minmax(0, 1fr) 44px 28px; gap: 6px; }
+  .cat-row .cat-name { grid-column: 1 / -1; }
+  .cat-head span:first-child { display: none; }
+}

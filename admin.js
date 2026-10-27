@@ -57,8 +57,8 @@ if (sessionPersonId) {
 
 // ---------- Expense categories ----------
 // The categories staff pick from when recording an expense (see expenses.js):
-// name, an optional unit with a default rate, and whether to prompt for a
-// receipt. Each change saves the whole list; a new row saves once it has a
+// name, an optional default rate per unit (e.g. $0.70 / mile — entered as a
+// quantity; no unit means an amount), and whether to prompt for a receipt. Each change saves the whole list; a new row saves once it has a
 // name. Past expenses keep the category they were recorded with.
 const categoryRows = document.getElementById("categoryRows");
 let unsavedCategory = false; // a just-added row with no name yet
@@ -69,9 +69,9 @@ function renderCategories() {
   const list = expenseCategories();
   const rowHtml = (c) => `<div class="cat-grid cat-row">
       <input type="text" class="cat-name" value="${esc(c.name)}" placeholder="Category name" aria-label="Name" />
-      <input type="text" class="cat-unit" value="${esc(c.unit || "")}" placeholder="amount" aria-label="Unit" />
       <div class="money-input ${c.unit ? "" : "disabled"}"><span>$</span><input type="number" class="cat-rate" min="0" step="0.01"
-        value="${c.unit && c.rate != null ? c.rate : ""}" ${c.unit ? "" : "disabled"} aria-label="Default rate" /><span>${c.unit ? "/" + esc(c.unit) : ""}</span></div>
+        value="${c.unit && c.rate != null ? c.rate : ""}" ${c.unit ? "" : "disabled"} aria-label="Default rate" /></div>
+      <div class="cat-per"><span>/</span><input type="text" class="cat-unit" value="${esc(c.unit || "")}" placeholder="none" aria-label="Unit" /></div>
       <label class="cat-receipt"><input type="checkbox" class="cat-receipt-box" ${c.receipt ? "checked" : ""} aria-label="Ask for a receipt" /></label>
       <button type="button" class="icon-btn cat-remove" title="Remove category" aria-label="Remove category">&times;</button>
     </div>`;
@@ -106,15 +106,16 @@ async function saveCategories(list, message = "Saved.") {
   }
 }
 
+// Typing a unit turns the rate box on (clearing it turns it off).
+categoryRows.addEventListener("input", (e) => {
+  if (!e.target.classList.contains("cat-unit")) return;
+  const row = e.target.closest(".cat-row");
+  const on = !!e.target.value.trim();
+  row.querySelector(".cat-rate").disabled = !on;
+  row.querySelector(".money-input").classList.toggle("disabled", !on);
+});
+
 categoryRows.addEventListener("change", (e) => {
-  // A unit turns the rate box on (and off).
-  if (e.target.classList.contains("cat-unit")) {
-    const row = e.target.closest(".cat-row");
-    const on = !!e.target.value.trim();
-    row.querySelector(".cat-rate").disabled = !on;
-    row.querySelector(".money-input").classList.toggle("disabled", !on);
-    row.querySelector(".money-input span:last-child").textContent = on ? "/" + e.target.value.trim().toLowerCase() : "";
-  }
   const list = readCategories();
   if (list.some((c) => c.unit && !c.rate) && e.target.classList.contains("cat-rate")) return showToast("Enter a default rate above $0.");
   saveCategories(list);
