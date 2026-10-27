@@ -43,6 +43,16 @@
 
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Expense categories</h2>
+      <button id="addCategory" class="secondary small">+ Add category</button>
+    </div>
+    <div class="cat-hint">What staff can pick when recording an expense. Give a category a unit (mile, night, day…) to enter it as a quantity × default rate; leave it blank to enter an amount. Changes only affect new expenses.</div>
+    <div class="cat-grid cat-head"><span>Name</span><span>Unit</span><span>Default rate</span><span>Receipt</span><span></span></div>
+    <div id="categoryRows"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
       <h2 style="margin:0;">People &amp; Rates</h2>
       <button id="openAddPerson" class="secondary small">+ Add Person</button>
     </div>
@@ -51,24 +61,6 @@
       <tbody></tbody>
     </table>
     <div id="peopleEmpty" class="empty" style="display:none;">No people added yet.</div>
-  </div>
-
-  <div class="card data-card">
-    <h2>Reimbursement rates</h2>
-    <div class="data-row">
-      <div>
-        <div class="data-title">Mileage</div>
-        <div class="data-sub">Default for new mileage expenses</div>
-      </div>
-      <div class="money-input rate-input"><span>$</span><input type="number" id="mileageRate" min="0" step="0.01" /><span>/mile</span></div>
-    </div>
-    <div class="data-row">
-      <div>
-        <div class="data-title">Lodging</div>
-        <div class="data-sub">Default for new lodging expenses</div>
-      </div>
-      <div class="money-input rate-input"><span>$</span><input type="number" id="lodgingRate" min="0" step="1" /><span>/night</span></div>
-    </div>
   </div>
 
   <div class="card data-card">

@@ -105,7 +105,7 @@ service cloud.firestore {
             && resource.data.get("invoiced", false) == false
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               "approved", "approvedDate", "declined", "declineReason", "description",
-              "category", "date", "quantity", "rate", "amount", "personId"]));
+              "category", "date", "quantity", "rate", "unit", "amount", "personId"]));
       allow delete: if isAdmin() || (isStaff() && myOpenExpense(resource.data));
     }
 

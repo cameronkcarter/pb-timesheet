@@ -3287,15 +3287,56 @@ button.task-card-more:hover { background: #faf8fb; }
 /* ---------- Invoices ---------- */
 .inv-note.inv-unbilled { color: #9a5a16; }
 
-/* ---------- Admin: reimbursement rates ---------- */
-.money-input.rate-input {
-  width: 170px;
-  flex: 0 0 auto;
+/* ---------- Admin: expense categories ---------- */
+.cat-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 6px 0 12px;
+  max-width: 640px;
 }
 
-.money-input.rate-input input {
-  width: 100%;
+.cat-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 110px 150px 64px 32px;
+  gap: 10px;
+  align-items: center;
+}
+
+.cat-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  padding-bottom: 6px;
+}
+
+.cat-head span:nth-child(4) { text-align: center; }
+
+.cat-row {
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.cat-row input[type="text"],
+.cat-row .money-input input {
   margin: 0;
+  width: 100%;
+}
+
+.cat-row .money-input.disabled { opacity: 0.45; }
+
+.cat-receipt {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+.cat-receipt input { margin: 0; width: 16px; height: 16px; }
+
+@media (max-width: 600px) {
+  .cat-grid { grid-template-columns: minmax(0, 1fr) 70px 96px 40px 28px; gap: 6px; }
+  .cat-row .money-input span:last-child { display: none; }
 }
 
 /* ---------- Admin: analytics ---------- */
@@ -3490,3 +3531,7 @@ select.analytics-select {
 }
 .appr-head .row-actions { flex-wrap: wrap; }
 #analyticsRange { flex-wrap: nowrap; }
+
+/* Calendar / List sits after Today; wraps under the month on narrow screens. */
+.cal-nav { flex-wrap: wrap; justify-content: flex-end; }
+.cal-nav #viewToggle { margin-left: 6px; }

@@ -4,7 +4,7 @@ import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode
 import { createAnalytics } from "./analytics.js";
 import { createSheetSync } from "./sheet-sync.js";
 import { DEFAULT_BILL_RATE, personPayRate, personBillRate } from "./rates.js";
-import { UNIT_CATEGORIES, applyExpenseRates } from "./expenses.js";
+import { expenseCategories, applyExpenseSettings } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -51,34 +51,94 @@ if (sessionPersonId) {
   TimeEntries.listen((d) => { timeEntries = d; analytics.render(); });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; renderSheetRow(); });
-  Settings.listen((d) => { settings = d; renderSheetRow(); renderBackupRow(); renderExpenseRates(); });
+  Settings.listen((d) => { settings = d; renderSheetRow(); renderBackupRow(); renderCategories(); });
   Expenses.listen((d) => { expenses = d; });
 }
 
-// ---------- Reimbursement rates ----------
-// Defaults filled in on new mileage/lodging expenses (each expense keeps the
-// rate it was entered with). Saved when you leave the box.
-const rateInputs = { Mileage: document.getElementById("mileageRate"), Lodging: document.getElementById("lodgingRate") };
+// ---------- Expense categories ----------
+// The categories staff pick from when recording an expense (see expenses.js):
+// name, an optional unit with a default rate, and whether to prompt for a
+// receipt. Each change saves the whole list; a new row saves once it has a
+// name. Past expenses keep the category they were recorded with.
+const categoryRows = document.getElementById("categoryRows");
+let unsavedCategory = false; // a just-added row with no name yet
 
-function renderExpenseRates() {
-  applyExpenseRates(settings);
-  Object.entries(rateInputs).forEach(([cat, input]) => {
-    if (document.activeElement !== input) input.value = UNIT_CATEGORIES[cat].rate;
+function renderCategories() {
+  applyExpenseSettings(settings);
+  if (categoryRows.contains(document.activeElement)) return;
+  const list = expenseCategories();
+  const rowHtml = (c) => `<div class="cat-grid cat-row">
+      <input type="text" class="cat-name" value="${esc(c.name)}" placeholder="Category name" aria-label="Name" />
+      <input type="text" class="cat-unit" value="${esc(c.unit || "")}" placeholder="amount" aria-label="Unit" />
+      <div class="money-input ${c.unit ? "" : "disabled"}"><span>$</span><input type="number" class="cat-rate" min="0" step="0.01"
+        value="${c.unit && c.rate != null ? c.rate : ""}" ${c.unit ? "" : "disabled"} aria-label="Default rate" /><span>${c.unit ? "/" + esc(c.unit) : ""}</span></div>
+      <label class="cat-receipt"><input type="checkbox" class="cat-receipt-box" ${c.receipt ? "checked" : ""} aria-label="Ask for a receipt" /></label>
+      <button type="button" class="icon-btn cat-remove" title="Remove category" aria-label="Remove category">&times;</button>
+    </div>`;
+  categoryRows.innerHTML = list.map(rowHtml).join("")
+    + (unsavedCategory ? rowHtml({ name: "", unit: "", rate: null, receipt: true }) : "");
+}
+
+function readCategories() {
+  return [...categoryRows.querySelectorAll(".cat-row")].map((row) => {
+    const unit = row.querySelector(".cat-unit").value.trim().toLowerCase();
+    const rate = Number(row.querySelector(".cat-rate").value);
+    return {
+      name: row.querySelector(".cat-name").value.trim(),
+      unit,
+      rate: unit && rate > 0 ? rate : null,
+      receipt: row.querySelector(".cat-receipt-box").checked,
+    };
   });
 }
 
-Object.entries(rateInputs).forEach(([cat, input]) => {
-  input.addEventListener("change", async () => {
-    const v = Number(input.value);
-    if (!(v > 0)) { renderExpenseRates(); return showToast("Enter a rate above $0."); }
-    try {
-      await Settings.set({ [UNIT_CATEGORIES[cat].setting]: v });
-      showToast(`${cat} rate saved.`);
-    } catch (err) {
-      showToast("Error: " + err.message);
-    }
-  });
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+async function saveCategories(list, message = "Saved.") {
+  const named = list.filter((c) => c.name);
+  const names = named.map((c) => c.name.toLowerCase());
+  if (names.some((n, i) => names.indexOf(n) !== i)) return showToast("Two categories have the same name.");
+  if (!named.length) return showToast("Keep at least one category.");
+  unsavedCategory = list.length > named.length;
+  try {
+    await Settings.set({ expenseCategories: named });
+    showToast(message);
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
+categoryRows.addEventListener("change", (e) => {
+  // A unit turns the rate box on (and off).
+  if (e.target.classList.contains("cat-unit")) {
+    const row = e.target.closest(".cat-row");
+    const on = !!e.target.value.trim();
+    row.querySelector(".cat-rate").disabled = !on;
+    row.querySelector(".money-input").classList.toggle("disabled", !on);
+    row.querySelector(".money-input span:last-child").textContent = on ? "/" + e.target.value.trim().toLowerCase() : "";
+  }
+  const list = readCategories();
+  if (list.some((c) => c.unit && !c.rate) && e.target.classList.contains("cat-rate")) return showToast("Enter a default rate above $0.");
+  saveCategories(list);
+});
+
+categoryRows.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("input")) e.target.blur(); });
+
+// Saving re-renders once focus leaves the list.
+categoryRows.addEventListener("focusout", () => setTimeout(() => { if (!categoryRows.contains(document.activeElement)) renderCategories(); }, 0));
+
+categoryRows.addEventListener("click", (e) => {
+  const btn = e.target.closest(".cat-remove");
+  if (!btn) return;
+  const row = btn.closest(".cat-row");
+  const name = row.querySelector(".cat-name").value.trim();
+  row.remove();
+  if (!name) { unsavedCategory = false; renderCategories(); return; }
+  saveCategories(readCategories(), `Removed "${name}". Past expenses keep it.`);
+});
+
+document.getElementById("addCategory").addEventListener("click", () => {
+  unsavedCategory = true;
+  renderCategories();
+  categoryRows.querySelector(".cat-row:last-child .cat-name").focus();
 });
 
 // ---------- People (table + modal) ----------

@@ -185,7 +185,8 @@ export const TimeEntries = {
 // invoices (kind "sub": subId, description, amount). Approved like hours, then
 // invoiced; project expenses someone paid for are later marked reimbursed.
 // { projectId, kind, personId, subId, category, description, date, quantity,
-//   rate, amount, approved, approvedDate, declined, declineReason, invoiced,
+//   rate, unit (e.g. "mile"; blank for amounts), amount, approved,
+//   approvedDate, declined, declineReason, invoiced,
 //   invoiceId, invoicedDate, reimbursed, reimbursedDate, createdByPersonId,
 //   subPaid, subPaidDate (subconsultant invoices: we've paid the sub) }
 export const Expenses = {
