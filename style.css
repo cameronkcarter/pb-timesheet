@@ -3648,3 +3648,17 @@ button.appr-unapprove:hover { color: var(--red); background: #fff; }
   .cat-row .cat-name { grid-column: 1 / -1; }
   .cat-head span:first-child { display: none; }
 }
+
+/* ---------- Project popup: Merge into another project ---------- */
+.sheet-foot[hidden] { display: none; }
+#projectFoot button.link-btn.item-delete { margin-right: 0; }
+#projectFoot button.link-btn.merge-link {
+  margin: 0 auto 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.merge-foot { align-items: center; flex-wrap: wrap; }
+.merge-foot .merge-label { margin: 0 auto 0 0; font-weight: 600; font-size: 14px; }
+.merge-foot select { margin: 0; width: auto; max-width: 260px; }
+.merge-foot button { margin: 0; }

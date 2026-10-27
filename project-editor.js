@@ -126,6 +126,8 @@ export function createProjectEditor({ getData, onSaved }) {
     updateSubTotal();
     setModalType(project && project.internal ? "internal" : "rates");
     removeBtn.style.display = project ? "" : "none";
+    $("modalMergeProject").style.display = project ? "" : "none";
+    showMerge(false);
 
     projectModal.style.display = "flex";
     modalProjectName.focus();
@@ -177,6 +179,128 @@ export function createProjectEditor({ getData, onSaved }) {
       return false;
     }
   }
+
+  // ---------- Merge into another project ----------
+  // For duplicates (e.g. someone made "RFPs" when "Proposals & Pursuits"
+  // already existed): moves this project's tasks, hours, assignments,
+  // subtasks, expenses and subconsultants into the chosen project, then
+  // removes this one. Tasks with the same name are combined; if one person
+  // has hours on both on the same day, those become one entry (hours added,
+  // notes joined). Only between projects of the same kind (both internal or
+  // both billed), and not once anything here has been invoiced.
+  const projectFoot = $("projectFoot");
+  const mergeFoot = $("mergeFoot");
+  const mergeTarget = $("mergeTarget");
+
+  function showMerge(on) {
+    projectFoot.hidden = on;
+    mergeFoot.hidden = !on;
+  }
+
+  $("modalMergeProject").addEventListener("click", () => {
+    const { projects, timeEntries, expenses = [], invoices } = getData();
+    const project = projects.find((p) => p.id === editingId);
+    if (!project) return;
+    if (timeEntries.some((e) => e.projectId === project.id && e.invoiced)
+      || expenses.some((e) => e.projectId === project.id && e.invoiced)
+      || invoices.some((i) => i.projectId === project.id)) {
+      return alert(`"${project.name}" has been invoiced, so it can't be merged — that would break the invoice history.`);
+    }
+    const choices = projects.filter((p) => p.id !== project.id && !!p.internal === !!project.internal)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!choices.length) {
+      return alert(`There's no other ${project.internal ? "internal" : "billed"} project to merge into.`);
+    }
+    mergeTarget.innerHTML = choices.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+    showMerge(true);
+  });
+
+  $("mergeCancel").addEventListener("click", () => showMerge(false));
+
+  $("mergeConfirm").addEventListener("click", async () => {
+    const { projects, tasks, assignments, dueDates, timeEntries, expenses = [] } = getData();
+    const source = projects.find((p) => p.id === editingId);
+    const target = projects.find((p) => p.id === mergeTarget.value);
+    if (!source || !target) return;
+    const hours = timeEntries.filter((e) => e.projectId === source.id).reduce((s, e) => s + Number(e.hours || 0), 0);
+    if (!confirm(`Move everything in "${source.name}" (${Math.round(hours * 100) / 100} hrs logged) into "${target.name}", then remove "${source.name}"?\n\nTasks with the same name are combined. This can't be undone.`)) return;
+
+    const btn = $("mergeConfirm");
+    btn.disabled = true;
+    btn.textContent = "Merging…";
+    try {
+      const norm = (s) => String(s || "").trim().toLowerCase();
+      const targetTasks = tasks.filter((t) => t.projectId === target.id);
+      // Entries already on the target, kept current as entries combine into them.
+      const onTarget = timeEntries.filter((e) => e.projectId === target.id).map((e) => ({ ...e }));
+
+      for (const task of tasks.filter((t) => t.projectId === source.id)) {
+        const same = targetTasks.find((t) => norm(t.name) === norm(task.name));
+        const taskId = same ? same.id : task.id;
+
+        for (const e of timeEntries.filter((x) => x.taskId === task.id)) {
+          const twin = same && onTarget.find((x) => x.taskId === taskId && x.personId === e.personId && x.date === e.date);
+          if (twin) {
+            twin.hours = Number(twin.hours || 0) + Number(e.hours || 0);
+            twin.note = [twin.note, e.note].filter(Boolean).join("; ");
+            twin.approved = !!twin.approved && !!e.approved;
+            await TimeEntries.update(twin.id, { hours: twin.hours, note: twin.note, approved: twin.approved, approvedDate: twin.approved ? twin.approvedDate || null : null });
+            await TimeEntries.remove(e.id);
+          } else {
+            await TimeEntries.update(e.id, { projectId: target.id, taskId });
+            onTarget.push({ ...e, projectId: target.id, taskId });
+          }
+        }
+        for (const a of assignments.filter((x) => x.taskId === task.id)) {
+          const twin = same && assignments.find((x) => x.taskId === taskId && x.personId === a.personId);
+          if (twin) {
+            await Assignments.update(twin.id, { hours: Number(twin.hours || 0) + Number(a.hours || 0) });
+            await Assignments.remove(a.id);
+          } else {
+            await Assignments.update(a.id, { projectId: target.id, taskId });
+          }
+        }
+        for (const d of dueDates.filter((x) => x.taskId === task.id)) {
+          await DueDates.update(d.id, { projectId: target.id, taskId });
+        }
+        if (same) {
+          // Budgets add up; a closed duplicate doesn't close the kept task.
+          if (Number(task.budget || 0)) await Tasks.update(same.id, { budget: Number(same.budget || 0) + Number(task.budget || 0) });
+          await Tasks.remove(task.id);
+        } else {
+          await Tasks.update(task.id, { projectId: target.id });
+        }
+      }
+
+      // Anything left on the project that isn't tied to one of its tasks.
+      for (const e of timeEntries.filter((x) => x.projectId === source.id && !tasks.some((t) => t.id === x.taskId && t.projectId === source.id))) {
+        await TimeEntries.update(e.id, { projectId: target.id });
+      }
+      for (const d of dueDates.filter((x) => x.projectId === source.id && !x.taskId)) {
+        await DueDates.update(d.id, { projectId: target.id });
+      }
+      for (const x of expenses.filter((e) => e.projectId === source.id)) {
+        await Expenses.update(x.id, { projectId: target.id });
+      }
+      const subs = source.subconsultants || [];
+      const targetUpdate = {};
+      if (subs.length) targetUpdate.subconsultants = [...(target.subconsultants || []), ...subs];
+      if (Number(source.expenseBudget || 0)) targetUpdate.expenseBudget = Number(target.expenseBudget || 0) + Number(source.expenseBudget || 0);
+      if (Object.keys(targetUpdate).length) await Projects.update(target.id, targetUpdate);
+
+      await Projects.remove(source.id);
+      showToast(`Merged into "${target.name}".`);
+      showMerge(false);
+      close();
+      onSaved(target.id);
+      syncBudgetsToSheet();
+    } catch (err) {
+      showToast("Error: " + err.message + " (merge stopped partway; run it again to finish)");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Merge";
+    }
+  });
 
   $("modalAddSubRow").addEventListener("click", () => {
     subRows.insertAdjacentHTML("beforeend", subRowHtml());

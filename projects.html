@@ -167,10 +167,17 @@
       </section>
     </div>
 
-    <div class="sheet-foot">
+    <div class="sheet-foot" id="projectFoot">
       <button type="button" id="modalRemoveProject" class="link-btn item-delete">Remove project</button>
+      <button type="button" id="modalMergeProject" class="link-btn merge-link">Merge into…</button>
       <button type="button" id="modalCancelProject" class="secondary">Cancel</button>
       <button type="button" id="modalSaveProject">Save project</button>
+    </div>
+    <div class="sheet-foot merge-foot" id="mergeFoot" hidden>
+      <label for="mergeTarget" class="merge-label">Move everything into</label>
+      <select id="mergeTarget"></select>
+      <button type="button" id="mergeCancel" class="secondary">Cancel</button>
+      <button type="button" id="mergeConfirm">Merge</button>
     </div>
   </div>
 </div>
