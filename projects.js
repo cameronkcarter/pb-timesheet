@@ -162,7 +162,7 @@ function renderProjectCards() {
   projectCardsEl.innerHTML = visible.map((p) => `
     <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
       <div class="name">${esc(p.name)}</div>
-      <div class="client">${p.client ? esc(p.client) : "&nbsp;"}</div>
+      <div class="client">${p.client ? esc(p.client) : isInternal(p) ? "Internal" : "&nbsp;"}</div>
     </div>
   `).join("");
 }
