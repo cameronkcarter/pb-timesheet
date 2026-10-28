@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, esc, fmtHrs,
-  todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, dueItemHtml, sortProjects,
+  todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, sortProjects,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -175,14 +175,26 @@ function render() {
   }
 
   // Each card: three numbers (your hours logged, your hours remaining, the
-  // project's budget used), then a row per task with your logged and
-  // remaining hours and the task's budget used, its subtasks underneath.
+  // project's budget used), then a row per task with its end date, your
+  // logged and remaining hours and the task's budget used; its subtasks
+  // underneath in the same columns.
   // Remaining counts down from what's assigned and stops at 0. Staff see
   // budgets as percentages only, never dollars.
   const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
-  const itemsHtml = (items) => items.length
-    ? `<div class="due-list pc-subtasks">${items.sort(byDue).map((d) => dueItemHtml(d, { canComplete: true, canEdit: canManage(d), canDelete: canManage(d) })).join("")}</div>`
-    : "";
+  // Subtasks sit in the task grid: checkbox and name, due date in the Due
+  // column, Edit / delete at the far right.
+  const today = todayISO();
+  const subtaskRow = (d) => {
+    const overdue = !d.completed && d.dueDate < today;
+    const due = d.completed ? `Done${d.completedDate ? " " + shortDate(String(d.completedDate)) : ""}` : shortDate(d.dueDate);
+    return `<div class="pc-task pc-sub ${d.completed ? "done" : ""}">
+      <label class="pc-sub-name" title="${esc(d.title)}"><input type="checkbox" ${d.completed ? "checked" : ""}
+        data-action="${d.completed ? "reopen-duedate" : "complete-duedate"}" data-id="${d.id}" aria-label="Mark complete" /><span>${esc(d.title)}</span></label>
+      <div class="pc-due ${overdue ? "overdue" : ""}">${due}</div>
+      <div class="pc-sub-actions">${canManage(d) && !d.completed ? `<button type="button" class="link-btn" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : ""}${canManage(d) ? `<button type="button" class="icon-btn" data-action="delete-duedate" data-id="${d.id}" title="Delete" aria-label="Delete">&times;</button>` : ""}</div>
+    </div>`;
+  };
+  const itemsHtml = (items) => items.sort(byDue).map(subtaskRow).join("");
   const pctOf = (spent, budget) => (budget > 0 ? Math.round((spent / budget) * 100) : null);
   const metric = (label, value, sub = "") => `<div class="pc-metric"><div class="pc-metric-label">${label}</div>
     <div class="pc-metric-value">${value}</div>${sub ? `<div class="pc-metric-sub">${sub}</div>` : ""}</div>`;
@@ -217,19 +229,19 @@ function render() {
     const budgetPct = pctOf(billedAmount(timeEntries.filter((e) => e.projectId === projectId && !e.declined), { projects, people }), projectBudget);
 
     const metrics = internal ? "" : `<div class="pc-metrics">
-      ${metric("You've logged", hrs(sumHours(projectEntries)))}
-      ${metric("Your hrs remaining", assignedTotal > 0 ? hrs(remainingTotal) : "—",
+      ${metric("Logged", hrs(sumHours(projectEntries)))}
+      ${metric("Remaining", assignedTotal > 0 ? hrs(remainingTotal) : "—",
         assignedTotal > 0 ? `of ${fmtHrs(assignedTotal)} assigned` : "None assigned")}
-      ${metric("Project budget used", budgetPct != null ? `${budgetPct}%` : "—")}
+      ${metric("Budget used", budgetPct != null ? `${budgetPct}%` : "—")}
     </div>`;
 
     const taskRows = projectTasks.map((task) => {
       const logged = loggedOn(task.id);
       const assigned = assignedOn(task.id);
       const pct = internal ? null : pctOf(billedAmount(timeEntries.filter((e) => e.taskId === task.id && !e.declined), { projects, people }), Number(task.budget || 0));
-      const ends = task.endDate ? ` <span class="pc-task-end">· ends ${shortDate(task.endDate)}</span>` : "";
       return `<div class="pc-task">
-        <div class="pc-task-name" title="${esc(task.name)}">${esc(task.name)}${ends}</div>
+        <div class="pc-task-name" title="${esc(task.name)}">${esc(task.name)}</div>
+        <div class="pc-due">${task.endDate ? shortDate(task.endDate) : ""}</div>
         <div class="pc-num">${fmtHrs(logged)}</div>
         <div class="pc-num ${assigned == null ? "pc-dim" : ""}">${internal ? "" : assigned == null ? "—" : fmtHrs(Math.max(0, assigned - logged))}</div>
         <div class="pc-budget">${pct != null ? `<div class="pc-bar"><div style="width:${Math.min(100, pct)}%; background:${color};"></div></div><span>${pct}%</span>` : ""}</div>
@@ -244,10 +256,10 @@ function render() {
       </div>
       ${metrics}
       ${taskRows ? `<div class="pc-tasks">
-        <div class="pc-task pc-task-head"><div>Task</div><div class="pc-num">Logged</div><div class="pc-num">${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Task budget"}</div></div>
+        <div class="pc-task pc-task-head"><div>Task</div><div>Due</div><div class="pc-num">Logged</div><div class="pc-num">${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Task budget"}</div></div>
         ${taskRows}
       </div>` : ""}
-      ${generalItems.length ? `<div class="pc-general"><div class="pc-general-label">Other subtasks</div>${itemsHtml(generalItems)}</div>` : ""}
+      ${generalItems.length ? `<div class="pc-tasks pc-general"><div class="pc-task"><div class="pc-task-name">Other subtasks</div></div>${itemsHtml(generalItems)}</div>` : ""}
       ${cardFooterHtml(project)}
     </div>`;
   }).join("");

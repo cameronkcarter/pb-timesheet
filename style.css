@@ -3961,10 +3961,10 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
 .pc-tasks { margin-top: 16px; }
 .pc-task {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 70px 86px 150px;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 76px 64px 76px 180px;
+  gap: 20px;
   align-items: center;
-  padding: 9px 0 5px;
+  padding: 9px 0;
   border-top: 1px solid var(--border);
   font-size: 14px;
 }
@@ -3975,16 +3975,25 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   color: var(--text-muted);
 }
 .pc-task-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pc-task-end { font-weight: 400; font-size: 12px; color: var(--text-muted); }
-.pc-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pc-due { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.pc-due.overdue { color: var(--red); font-weight: 600; }
+.pc-num { font-variant-numeric: tabular-nums; }
 .pc-dim { color: var(--text-muted); }
 .pc-budget { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
 .pc-budget span { width: 36px; text-align: right; }
 .pc-bar { flex: 1; height: 6px; border-radius: 3px; background: #efeaf2; overflow: hidden; }
 .pc-bar > div { height: 100%; }
-.pc-subtasks { margin: 0 0 6px 2px; padding-left: 12px; border-left: 2px solid var(--border); }
-.pc-general { border-top: 1px solid var(--border); padding-top: 8px; }
-.pc-general-label { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+/* Subtasks: indented under their task, same columns, no divider between. */
+.pc-task.pc-sub { border-top: none; padding: 0 0 7px; font-size: 13px; margin-top: -2px; }
+.pc-sub-name { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0 0 0 4px;
+  padding-left: 12px; border-left: 2px solid var(--border); font-weight: 400; color: var(--text); cursor: pointer; }
+.pc-sub-name input { margin: 0; width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--civic-purple); cursor: pointer; }
+.pc-sub-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-sub.done .pc-sub-name span { text-decoration: line-through; color: var(--text-muted); }
+.pc-sub-actions { grid-column: 3 / -1; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.pc-sub-actions .link-btn { margin: 0; padding: 0; font-size: 12px; }
+.pc-sub-actions .icon-btn { margin: 0; padding: 0 2px; font-size: 16px; line-height: 1; color: var(--text-muted); }
+.pc-general { margin-top: 0; }
 .pc-foot {
   display: flex;
   align-items: center;
@@ -4003,8 +4012,9 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   .pc-metrics { gap: 8px; }
   .pc-metric { padding: 8px 10px; }
   .pc-metric-value { font-size: 20px; }
-  .pc-task { grid-template-columns: minmax(0, 1fr) 50px 60px; }
+  .pc-task { grid-template-columns: minmax(0, 1fr) 52px 44px 52px; gap: 10px; }
   .pc-task-name { white-space: normal; }
+  .pc-sub-name span { white-space: normal; }
   .pc-task .pc-budget { grid-column: 1 / -1; }
   .pc-task-head > div:last-child { display: none; }
 }

@@ -93,10 +93,26 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
   let editing = null; // record being edited, or null when adding
   let mode = "subtask"; // "subtask" | "event"
 
+  // Subtasks always belong to a task. Staff can only pick tasks they're
+  // assigned to; admins, the project's PM and anyone on an internal project
+  // (no assignments there) can pick any open task. Events can be on the
+  // whole project.
+  function taskChoices(projectId, keepTaskId) {
+    const { tasks, people, projects, assignments = [] } = getData();
+    const me = people.find((p) => p.id === sessionPersonId);
+    const project = projects.find((p) => p.id === projectId);
+    const anyTask = mode === "event" || !!(me && me.isAdmin) || !!(project && (project.internal || project.pmPersonId === sessionPersonId));
+    return tasks.filter((t) => t.projectId === projectId && (t.id === keepTaskId || (!t.closed && (anyTask
+      || assignments.some((a) => a.taskId === t.id && a.personId === sessionPersonId)))))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   function fillTasks(projectId, selectedTaskId) {
-    const { tasks } = getData();
-    const projectTasks = tasks.filter((t) => t.projectId === projectId).sort((a, b) => a.name.localeCompare(b.name));
-    taskSelect.innerHTML = `<option value="">${mode === "event" ? "No specific task" : "Whole project"}</option>` +
+    const projectTasks = taskChoices(projectId, selectedTaskId);
+    const first = mode === "event"
+      ? `<option value="">No specific task</option>`
+      : `<option value="" disabled ${selectedTaskId ? "" : "selected"}>${projectTasks.length ? "Choose a task" : "No tasks you're assigned to"}</option>`;
+    taskSelect.innerHTML = first +
       projectTasks.map((t) => `<option value="${t.id}" ${t.id === selectedTaskId ? "selected" : ""}>${esc(t.name)}</option>`).join("");
   }
 
@@ -163,6 +179,7 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
       : [];
     if (!title) { titleInput.focus(); return showToast("Give it a name."); }
     if (!projectId) return showToast("Select a project.");
+    if (mode === "subtask" && !taskId) return showToast("Choose a task.");
     if (!dueDate) return showToast(mode === "event" ? "Pick a date." : "Pick a due date.");
     if (mode === "subtask" && personIds.length === 0) return showToast("Assign it to at least one person.");
     try {
