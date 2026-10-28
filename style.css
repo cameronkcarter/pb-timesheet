@@ -3115,16 +3115,11 @@ td.accordion-cell .assign-row > .icon-btn {
 
 /* ---------- Expense popup: email the receipt ---------- */
 .expense-receipt {
-  display: block;
   margin-top: 10px;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--navy);
+  color: var(--text-muted);
   text-align: right;
-  text-decoration: none;
 }
-
-.expense-receipt:hover { text-decoration: underline; }
 
 /* ---------- Dashboard: Approvals (one line until opened) ---------- */
 .card.appr-card {

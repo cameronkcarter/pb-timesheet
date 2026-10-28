@@ -108,7 +108,7 @@ const MARKUP = `
         </label>
       </div>
       <div class="expense-cost" id="expenseCost"></div>
-      <a class="expense-receipt" id="expenseReceipt" style="display:none;"></a>
+      <div class="expense-receipt" id="expenseReceipt" style="display:none;"></div>
     </div>
     <div class="sheet-foot">
       <button type="button" id="expenseDelete" class="link-btn item-delete" style="display:none;">Delete</button>
@@ -194,7 +194,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     updateCost();
   }
 
-  // A link to email the receipt to the project's PM, subject filled in.
+  // A reminder to email the receipt to the project's PM.
   function updateReceipt() {
     const { people, projects } = getData();
     const project = projects.find((p) => p.id === projectSelect.value);
@@ -202,10 +202,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     const on = kind === "project" && !!project && !!info(category.value)?.receipt;
     receipt.style.display = on ? "" : "none";
     if (!on) return;
-    const desc = description.value.trim();
-    const subject = `Receipt: ${project.name}${desc ? " – " + desc : ""}`;
-    receipt.href = `mailto:${pm && pm.email ? pm.email.trim() : ""}?subject=${encodeURIComponent(subject)}`;
-    receipt.textContent = `Email the receipt to ${pm ? pm.name : "the PM"} →`;
+    receipt.textContent = `Email the receipt to ${pm ? pm.name : "the project manager"}.`;
   }
 
   function updateCost() {
