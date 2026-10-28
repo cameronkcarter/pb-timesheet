@@ -4068,3 +4068,18 @@ button.declined-fix {
 
 /* Projects tab: one "+ Subtask" under a task's people. */
 button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
+
+/* Projects tab subtasks: same look as the Dashboard's. */
+.sub-checks { margin: 6px 0 2px; }
+.sub-check { display: flex; align-items: center; gap: 14px; padding: 3px 0; font-size: 13px; }
+.sub-check-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; margin: 0;
+  padding-left: 10px; border-left: 2px solid var(--border); font-weight: 400; color: var(--text); cursor: pointer; }
+.sub-check-name input { margin: 0; width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--civic-purple); cursor: pointer; }
+.sub-check-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-check-who { color: var(--text-muted); font-size: 12px; }
+.sub-check.done .sub-check-name > span { text-decoration: line-through; color: var(--text-muted); }
+.sub-check-due { flex: 0 0 76px; color: var(--text-muted); white-space: nowrap; }
+.sub-check-due.overdue { color: var(--red); font-weight: 600; }
+.sub-check-actions { flex: 0 0 64px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.sub-check-actions .link-btn { margin: 0; padding: 0; font-size: 12px; }
+.sub-check-actions .icon-btn { margin: 0; padding: 0 2px; font-size: 16px; line-height: 1; color: var(--text-muted); }
