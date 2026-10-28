@@ -3923,7 +3923,7 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   padding-right: 20px;
 }
 .project-picker-row .project-chips { flex: 1; min-width: 0; }
-.project-picker-row button#editProjectBtn { margin: 0; flex: 0 0 auto; }
+.project-picker-row button#openAddProject { margin: 0; flex: 0 0 auto; }
 .card.project-switch .project-head {
   border-bottom: none;
   border-top: 1px solid var(--border);
