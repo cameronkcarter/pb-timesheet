@@ -202,8 +202,8 @@ function pickProject(id) {
   if (btn) pickProject(btn.dataset.projectCard);
 }));
 
-// The open project's numbers: budget used, hours logged and what's waiting
-// for approval (billable); hours and open tasks (internal).
+// The open project's numbers: budget used, hours logged and hours (and
+// expenses) waiting for approval (billable); hours and open tasks (internal).
 function renderProjectStats(project) {
   const internal = isInternal(project);
   const entries = timeEntries.filter((e) => e.projectId === project.id);
@@ -218,12 +218,15 @@ function renderProjectStats(project) {
   const budget = tasks.filter((t) => t.projectId === project.id).reduce((s, t) => s + Number(t.budget || 0), 0);
   const spent = billedAmount(entries, ctx());
   const pct = budget > 0 ? Math.round((spent / budget) * 100) : null;
-  const waiting = entries.filter((e) => !e.approved && !e.declined && !e.invoiced).length
-    + expenses.filter((e) => e.projectId === project.id && e.kind !== "sub" && !e.approved && !e.declined && !e.invoiced).length;
+  // Waiting for approval: hours, plus any expenses in dollars.
+  const waiting = (e) => !e.approved && !e.declined && !e.invoiced;
+  const waitingHrs = loggedHours(entries.filter(waiting));
+  const waitingExp = expenses.filter((e) => e.projectId === project.id && e.kind !== "sub" && waiting(e))
+    .reduce((t, e) => t + Number(e.amount || 0), 0);
   projectStats.innerHTML = `<div class="project-stat-row">
       ${pct != null ? stat(`<span class="${pct > 100 ? "hours-over" : ""}">${pct}%</span>`, "budget used") : ""}
       ${stat(`${fmtHrs(hours)} hrs`, "logged")}
-      ${stat(waiting, "waiting approval")}
+      ${stat(`${fmtHrs(waitingHrs)} hrs${waitingExp ? ` · ${formatCurrency(waitingExp)}` : ""}`, "waiting approval")}
     </div>
     ${pct != null ? `<div class="project-stat-bar"><i style="width:${Math.min(100, pct)}%;"></i></div>` : ""}`;
 }
