@@ -2,6 +2,7 @@ import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, 
 import {
   formatCurrency, formatDate, dueLabel, showToast,
   todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml, sortProjects, esc, confirmDialog,
+  projectShortName,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, isSubtask, setItemCompleted, deleteItem } from "./subtasks.js";
@@ -22,7 +23,7 @@ let dueDates = [];
 let invoices = [];
 let expenses = [];
 let navChecked = false;
-let showAll = false;   // admins: "All" projects instead of just theirs
+let othersOpen = false; // the "Other projects" list is open
 let editMode = false;  // admins: edit assigned hours instead of seeing subtasks
 let selectedProjectId = null;
 let projectPicked = false; // until you pick one, the first (newest) project is selected
@@ -40,12 +41,12 @@ const projectDetail = document.getElementById("projectDetail");
 const projectHead = document.getElementById("projectHead");
 const projectHeadName = document.getElementById("projectHeadName");
 const projectHeadMeta = document.getElementById("projectHeadMeta");
+const projectStats = document.getElementById("projectStats");
+const otherProjectsEl = document.getElementById("otherProjects");
 const budgetHeading = document.getElementById("budgetHeading");
 const budgetTbody = document.querySelector("#budgetTable tbody");
 const budgetEmpty = document.getElementById("budgetEmpty");
 const barLegend = document.getElementById("barLegend");
-const projectsAdminBar = document.getElementById("projectsAdminBar");
-const projectScope = document.getElementById("projectScope");
 const editAssignmentsBtn = document.getElementById("editAssignmentsBtn");
 const editProjectBtn = document.getElementById("editProjectBtn");
 const editTimelineBtn = document.getElementById("editTimelineBtn");
@@ -127,9 +128,8 @@ if (sessionPersonId) {
 }
 
 // Projects you're on: assigned to a task, or its project manager, plus
-// internal ones (open to everyone). Admins can switch to "All projects".
-function visibleProjects() {
-  if (showAll && isAdmin()) return sortProjects(projects);
+// internal ones (open to everyone). Everything else is under "Other projects".
+function myProjects() {
   const assignedProjectIds = new Set(
     assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId)
   );
@@ -144,36 +144,45 @@ function renderAll() {
 }
 
 // ---------- Project picker ----------
+// One card: the open project (name, client, PM, a few numbers, Edit project),
+// then your projects as chips, then "Other projects (N)", which opens a list
+// of every other project's name. Picking one from that list shows it as a
+// chip too while it's open.
 function renderProjectCards() {
-  projectsAdminBar.style.display = isAdmin() ? "" : "none";
-  document.getElementById("projectsHeading").textContent = showAll && isAdmin() ? "All projects" : "Your projects";
-  projectScope.querySelectorAll("button").forEach((b) => b.classList.toggle("on", (b.dataset.value === "all") === showAll));
-  const visible = visibleProjects();
-  if (visible.length === 0) {
+  document.getElementById("openAddProject").style.display = isAdmin() ? "" : "none";
+  if (projects.length === 0) {
     projectCardsEl.innerHTML = "";
+    otherProjectsEl.hidden = true;
+    projectHead.hidden = true;
     projectCardsEmpty.style.display = "block";
     projectDetail.style.display = "none";
     return;
   }
+  projectHead.hidden = false;
   projectCardsEmpty.style.display = "none";
   projectDetail.style.display = "block";
 
-  if (!projectPicked || !selectedProjectId || !visible.some((p) => p.id === selectedProjectId)) {
-    selectedProjectId = visible[0].id;
+  const mine = myProjects();
+  const mineIds = new Set(mine.map((p) => p.id));
+  const others = projects.filter((p) => !mineIds.has(p.id)).sort((x, y) => x.name.localeCompare(y.name));
+  if (!projectPicked || !projects.some((p) => p.id === selectedProjectId)) {
+    selectedProjectId = (mine[0] || sortProjects(projects)[0]).id;
   }
-
-  projectCardsEl.innerHTML = visible.map((p) => `
-    <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
-      <div class="name">${esc(p.name)}</div>
-      <div class="client">${p.client ? esc(p.client) : isInternal(p) ? "Internal" : "&nbsp;"}</div>
-    </div>
-  `).join("");
+  const selected = projects.find((p) => p.id === selectedProjectId);
+  const chip = (p) => `<button type="button" class="project-chip ${p.id === selectedProjectId ? "on" : ""}" data-project-card="${p.id}"
+    style="--c:${projectColor(p.id)};" title="${esc(p.name)}"><i aria-hidden="true"></i>${esc(projectShortName(p))}</button>`;
+  projectCardsEl.innerHTML = [...mine, ...(mineIds.has(selectedProjectId) ? [] : [selected])].map(chip).join("")
+    + (others.length ? `<button type="button" class="project-chip project-chip-more" data-action="other-projects" aria-expanded="${othersOpen}">
+        Other projects (${others.length}) <span class="chev ${othersOpen ? "up" : ""}" aria-hidden="true">&#9662;</span></button>` : "");
+  otherProjectsEl.hidden = !othersOpen || !others.length;
+  otherProjectsEl.innerHTML = others.map((p) => `<button type="button" class="other-project ${p.id === selectedProjectId ? "on" : ""}"
+    data-project-card="${p.id}" style="--c:${projectColor(p.id)};"><i aria-hidden="true"></i>${esc(p.name)}</button>`).join("");
 }
 
-projectCardsEl.addEventListener("click", (e) => {
-  const card = e.target.closest(".project-card");
-  if (!card || card.dataset.projectCard === selectedProjectId) return;
-  selectedProjectId = card.dataset.projectCard;
+function pickProject(id) {
+  othersOpen = false;
+  if (id === selectedProjectId) { renderProjectCards(); return; }
+  selectedProjectId = id;
   projectPicked = true;
   finishEditing();
   expandedTaskId = null;
@@ -181,7 +190,43 @@ projectCardsEl.addEventListener("click", (e) => {
   userHasScrolledGantt = false;
   closeDotPopover();
   renderAll();
-});
+}
+
+[projectCardsEl, otherProjectsEl].forEach((el) => el.addEventListener("click", (e) => {
+  if (e.target.closest('[data-action="other-projects"]')) {
+    othersOpen = !othersOpen;
+    renderProjectCards();
+    return;
+  }
+  const btn = e.target.closest("[data-project-card]");
+  if (btn) pickProject(btn.dataset.projectCard);
+}));
+
+// The open project's numbers: budget used, hours logged and what's waiting
+// for approval (billable); hours and open tasks (internal).
+function renderProjectStats(project) {
+  const internal = isInternal(project);
+  const entries = timeEntries.filter((e) => e.projectId === project.id);
+  const hours = loggedHours(entries);
+  const stat = (value, label) => `<div><b>${value}</b>${label}</div>`;
+  if (internal) {
+    const open = tasks.filter((t) => t.projectId === project.id && !t.closed).length;
+    const peopleCount = new Set(entries.map((e) => e.personId)).size;
+    projectStats.innerHTML = `<div class="project-stat-row">${stat(`${fmtHrs(hours)} hrs`, "logged")}${stat(open, open === 1 ? "open task" : "open tasks")}${stat(peopleCount, peopleCount === 1 ? "person" : "people")}</div>`;
+    return;
+  }
+  const budget = tasks.filter((t) => t.projectId === project.id).reduce((s, t) => s + Number(t.budget || 0), 0);
+  const spent = billedAmount(entries, ctx());
+  const pct = budget > 0 ? Math.round((spent / budget) * 100) : null;
+  const waiting = entries.filter((e) => !e.approved && !e.declined && !e.invoiced).length
+    + expenses.filter((e) => e.projectId === project.id && e.kind !== "sub" && !e.approved && !e.declined && !e.invoiced).length;
+  projectStats.innerHTML = `<div class="project-stat-row">
+      ${pct != null ? stat(`<span class="${pct > 100 ? "hours-over" : ""}">${pct}%</span>`, "budget used") : ""}
+      ${stat(`${fmtHrs(hours)} hrs`, "logged")}
+      ${stat(waiting, "waiting approval")}
+    </div>
+    ${pct != null ? `<div class="project-stat-bar"><i style="width:${Math.min(100, pct)}%;"></i></div>` : ""}`;
+}
 
 // ---------- Budget ----------
 // Budgets are spent at each person's bill rate (see rates.js). Bars show
@@ -243,6 +288,7 @@ function renderBudget() {
   // The selected project: name, then client / internal and its PM, with
   // Edit project (admins) beside them.
   projectHead.style.setProperty("--c", projectColor(project.id));
+  renderProjectStats(project);
   projectHeadName.textContent = project.name;
   projectHeadMeta.textContent = [
     project.client || (internal ? "Internal" : ""),
@@ -683,27 +729,18 @@ budgetTbody.addEventListener("click", async (e) => {
   renderBudget();
 });
 
-// ---------- Admin tools: Assigned/All, add/edit project, edit staff & hours ----------
+// ---------- Admin tools: add/edit project, edit staff & hours ----------
 const projectEditor = createProjectEditor({
   getData: () => ({ people, projects, tasks, assignments, dueDates, timeEntries, invoices, expenses }),
   onSaved: (projectId) => {
     if (projectId) {
       selectedProjectId = projectId;
       projectPicked = true;
-      // A new project you're not on only shows under "All".
-      if (!visibleProjects().some((p) => p.id === projectId)) showAll = true;
     } else {
       projectPicked = false;
     }
     renderAll();
   },
-});
-
-projectScope.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-value]");
-  if (!btn) return;
-  showAll = btn.dataset.value === "all";
-  renderAll();
 });
 
 document.getElementById("openAddProject").addEventListener("click", () => projectEditor.open(null));
@@ -921,7 +958,12 @@ async function handleDueDateAction(action, id) {
 const itemEditor = createItemEditor({
   getData: () => ({ people, tasks, projects, assignments }),
   sessionPersonId,
-  projectChoices: visibleProjects,
+  // Your projects, plus the open one if it is one of the others.
+  projectChoices: () => {
+    const mine = myProjects();
+    const open = projects.find((p) => p.id === selectedProjectId);
+    return open && !mine.includes(open) ? [...mine, open] : mine;
+  },
   canManage,
 });
 

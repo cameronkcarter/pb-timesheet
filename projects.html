@@ -24,31 +24,29 @@
 </nav>
 
 <main>
-  <h1>Projects</h1>
+  <div class="page-title-row">
+    <h1>Projects</h1>
+    <button type="button" id="openAddProject" class="small btn-tint-purple" style="display:none;">+ Add project</button>
+  </div>
 
-  <div class="card">
-    <div class="projects-head">
-      <h2 id="projectsHeading">Your projects</h2>
-      <div class="row-actions projects-admin-bar" id="projectsAdminBar" style="display:none;">
-        <button type="button" id="openAddProject" class="small btn-tint-purple">+ Add project</button>
-        <div class="segmented segmented-small" id="projectScope" role="radiogroup">
-          <button type="button" data-value="mine" role="radio" class="on">Assigned projects</button>
-          <button type="button" data-value="all" role="radio">All projects</button>
-        </div>
-      </div>
-    </div>
-    <div id="projectCards" class="project-card-row" style="margin-top:0;"></div>
+  <div class="card project-switch">
     <div id="projectCardsEmpty" class="empty" style="display:none;">No projects to show yet.</div>
+    <div class="project-head" id="projectHead">
+      <div class="project-head-top">
+        <div>
+          <h2 id="projectHeadName"></h2>
+          <div class="project-head-meta" id="projectHeadMeta"></div>
+        </div>
+        <button id="editProjectBtn" class="small btn-tint-purple" style="display:none;">Edit project</button>
+      </div>
+      <div class="project-stats" id="projectStats"></div>
+    </div>
+    <div class="chip-label">Your projects</div>
+    <div class="project-chips" id="projectCards"></div>
+    <div class="other-projects" id="otherProjects" hidden></div>
   </div>
 
   <div id="projectDetail" style="display:none;">
-    <div class="card project-head" id="projectHead">
-      <div>
-        <h2 id="projectHeadName"></h2>
-        <div class="project-head-meta" id="projectHeadMeta"></div>
-      </div>
-      <button id="editProjectBtn" class="small btn-tint-purple" style="display:none;">Edit project</button>
-    </div>
 
     <div class="card">
       <div class="budget-header">
@@ -109,6 +107,17 @@
         <div class="field">
           <label for="modalProjectNumber">Project # <span class="field-optional">on invoices</span></label>
           <input type="text" id="modalProjectNumber" placeholder="Client's reference or PO #" />
+        </div>
+      </div>
+
+      <div class="field-grid">
+        <div class="field">
+          <label for="modalProjectShortName">Short name <span class="field-optional">for the project list</span></label>
+          <input type="text" id="modalProjectShortName" maxlength="24" placeholder="Roy 1900 W" />
+        </div>
+        <div class="field">
+          <label>Color</label>
+          <div class="color-swatches" id="modalProjectColor" role="radiogroup" aria-label="Project color"></div>
         </div>
       </div>
 

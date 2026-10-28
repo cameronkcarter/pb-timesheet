@@ -13,6 +13,7 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { isTestMode } from "./session.js";
+import { setProjectColors } from "./util.js";
 import {
   listenTest,
   addTest,
@@ -138,9 +139,10 @@ export const Settings = {
 // Project documents look like:
 // { name, client, projectNumber, billToName, billToCompany, billToAddress1,
 //   billToAddress2, pmPersonId (project manager: approves its hours),
-//   internal (not billed or paid, e.g. Proposals & Pursuits) }
+//   internal (not billed or paid, e.g. Proposals & Pursuits),
+//   color, shortName (optional; see projectColor / projectShortName in util.js) }
 export const Projects = {
-  listen: (cb) => listenCollection("projects", cb, "name"),
+  listen: (cb) => listenCollection("projects", (list) => { setProjectColors(list); cb(list); }, "name"),
   add: (data) => add("projects", data),
   update: (id, data) => update("projects", id, data),
   remove: (id) => remove("projects", id),
