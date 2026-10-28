@@ -31,19 +31,19 @@
 
   <div class="card project-switch">
     <div id="projectCardsEmpty" class="empty" style="display:none;">No projects to show yet.</div>
-    <div class="project-head" id="projectHead">
-      <div class="project-head-top">
-        <div>
-          <h2 id="projectHeadName"></h2>
-          <div class="project-head-meta" id="projectHeadMeta"></div>
-        </div>
+    <div class="project-picker">
+      <div class="chip-label">Your projects</div>
+      <div class="project-picker-row">
+        <div class="project-chips" id="projectCards"></div>
         <button id="editProjectBtn" class="small btn-tint-purple" style="display:none;">Edit project</button>
       </div>
+      <div class="other-projects" id="otherProjects" hidden></div>
+    </div>
+    <div class="project-head" id="projectHead">
+      <h2 id="projectHeadName"></h2>
+      <div class="project-head-meta" id="projectHeadMeta"></div>
       <div class="project-stats" id="projectStats"></div>
     </div>
-    <div class="chip-label">Your projects</div>
-    <div class="project-chips" id="projectCards"></div>
-    <div class="other-projects" id="otherProjects" hidden></div>
   </div>
 
   <div id="projectDetail" style="display:none;">
