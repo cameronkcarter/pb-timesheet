@@ -128,7 +128,7 @@ function render() {
     .filter((a) => a.personId === personId && !isInternal(projects.find((p) => p.id === a.projectId)))
     .forEach((a) => {
       const assigned = assignedHours(a);
-      const logged = sumHours(myEntries.filter((e) => e.taskId === a.taskId));
+      const logged = sumHours(myEntries.filter((e) => e.taskId === a.taskId && !e.declined));
       assignedTotal += assigned;
       loggedTotal += logged;
       remainingTotal += Math.max(0, assigned - logged);
