@@ -42,13 +42,20 @@
   </div>
 
   <div id="projectDetail" style="display:none;">
+    <div class="card project-head" id="projectHead">
+      <div>
+        <h2 id="projectHeadName"></h2>
+        <div class="project-head-meta" id="projectHeadMeta"></div>
+      </div>
+      <button id="editProjectBtn" class="small btn-tint-purple" style="display:none;">Edit project</button>
+    </div>
+
     <div class="card">
       <div class="budget-header">
-        <h2 style="margin:0;">Budget <span class="budget-pm" id="budgetPm"></span></h2>
+        <h2 style="margin:0;" id="budgetHeading">Tasks &amp; Budget</h2>
         <div class="row-actions">
           <button id="toggleCompletedBtn" class="secondary small">Show completed subtasks</button>
           <button id="editAssignmentsBtn" class="small btn-tint-amber" style="display:none;">Edit staff &amp; hours</button>
-          <button id="editProjectBtn" class="small btn-tint-purple" style="display:none;">Edit project</button>
         </div>
       </div>
       <div class="bar-legend" id="barLegend">

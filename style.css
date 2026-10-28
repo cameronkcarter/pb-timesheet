@@ -3726,3 +3726,25 @@ button.appr-unapprove:hover { color: var(--red); background: #fff; }
   25% { transform: translateX(-4px); }
   75% { transform: translateX(4px); }
 }
+
+/* ---------- Projects: the selected project's header ---------- */
+.card.project-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-left: 5px solid var(--c, var(--navy));
+}
+
+.project-head h2 { margin: 0; }
+
+.project-head-meta {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.project-head-meta:empty { display: none; }
+
+.project-head button { margin: 0; flex: 0 0 auto; }
