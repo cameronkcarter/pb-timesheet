@@ -2,7 +2,7 @@
 // invoice-to details and tasks with budgets and dates. Also removes projects.
 // Markup lives in projects.html (#projectModal).
 import { Projects, Tasks, Assignments, TimeEntries, DueDates, Expenses } from "./db.js";
-import { formatCurrency, showToast, closeOnBackdropClick, esc, alertDialog, confirmDialog } from "./util.js";
+import { formatCurrency, showToast, closeOnBackdropClick, esc, alertDialog, confirmDialog, PROJECT_COLOR_CHOICES, projectColor, projectShortName } from "./util.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
 
 // How a project bills: each person's bill rate, or not at all (internal).
@@ -22,6 +22,21 @@ export function createProjectEditor({ getData, onSaved }) {
   const modalBillToAddress1 = $("modalBillToAddress1");
   const modalBillToAddress2 = $("modalBillToAddress2");
   const modalProjectNumber = $("modalProjectNumber");
+  const modalProjectShortName = $("modalProjectShortName");
+  const modalProjectColor = $("modalProjectColor");
+  let modalColor = null; // picked swatch; null keeps the automatic color
+
+  // Color swatches; the project's current color (picked or automatic) starts selected.
+  function renderSwatches(current) {
+    modalProjectColor.innerHTML = PROJECT_COLOR_CHOICES.map((c) => `<button type="button" class="swatch ${c === current ? "on" : ""}"
+      style="--c:${c};" data-color="${c}" role="radio" aria-checked="${c === current}" aria-label="Color ${c}"></button>`).join("");
+  }
+  modalProjectColor.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-color]");
+    if (!b) return;
+    modalColor = b.dataset.color;
+    renderSwatches(modalColor);
+  });
   const modalProjectType = $("modalProjectType");
   const modalProjectPm = $("modalProjectPm");
   const modalTypeHint = $("modalTypeHint");
@@ -113,6 +128,10 @@ export function createProjectEditor({ getData, onSaved }) {
     modalBillToAddress1.value = project ? project.billToAddress1 || "" : "";
     modalBillToAddress2.value = project ? project.billToAddress2 || "" : "";
     modalProjectNumber.value = project ? project.projectNumber || "" : "";
+    modalProjectShortName.value = project ? project.shortName || "" : "";
+    modalProjectShortName.placeholder = project ? projectShortName({ name: project.name }) : "Short name";
+    modalColor = project ? project.color || null : null;
+    renderSwatches(project ? projectColor(project.id) : null);
     const pmChoices = people.filter((p) => !p.inactive || (project && p.id === project.pmPersonId))
       .sort((x, y) => x.name.localeCompare(y.name));
     modalProjectPm.innerHTML = '<option value="">None</option>' + pmChoices
@@ -393,6 +412,8 @@ This can't be undone.`, { title: `Merge into "${target.name}"?`, confirmText: "M
       billToAddress1: modalBillToAddress1.value.trim(),
       billToAddress2: modalBillToAddress2.value.trim(),
       projectNumber: modalProjectNumber.value.trim(),
+      shortName: modalProjectShortName.value.trim() || null,
+      color: modalColor,
       internal,
       billAtPayRate: false,
       pmPersonId: modalProjectPm.value || null,

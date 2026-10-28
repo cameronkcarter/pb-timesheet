@@ -18,12 +18,39 @@ export function todayISO() {
   return toISODate(new Date());
 }
 
-// Stable color per project (same project = same color on every page).
+// Project colors: the one an admin picked in Edit project (project.color),
+// or else a stable one from the project id (same color on every page).
+// db.js passes every projects update to setProjectColors, so pages keep
+// calling projectColor(id).
 const PROJECT_COLORS = [
   "#2f6db5", "#2e8b57", "#c0632a", "#8e44ad", "#b8860b",
   "#c0392b", "#16808a", "#6d4c41", "#d14d8a", "#4a5d23",
 ];
+// Swatches offered in Edit project: the defaults plus a few brand tones.
+export const PROJECT_COLOR_CHOICES = [...PROJECT_COLORS, "#6e3073", "#4a5fa8", "#2a8a8a", "#6f6874"];
+
+const chosenColors = new Map();
+export function setProjectColors(projects) {
+  chosenColors.clear();
+  projects.forEach((p) => { if (p.color) chosenColors.set(p.id, p.color); });
+}
+
+// Short name for chips: the one set in Edit project, or the name's first
+// words up to about 16 characters.
+export function projectShortName(project) {
+  if (!project) return "";
+  if (project.shortName) return project.shortName;
+  const words = String(project.name || "").split(/\s+/);
+  let out = words[0] || "";
+  for (const w of words.slice(1)) {
+    if ((out + " " + w).length > 16) break;
+    out += " " + w;
+  }
+  return out;
+}
+
 export function projectColor(projectId) {
+  if (chosenColors.has(projectId)) return chosenColors.get(projectId);
   let hash = 0;
   for (const ch of String(projectId || "")) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
   return PROJECT_COLORS[Math.abs(hash) % PROJECT_COLORS.length];
