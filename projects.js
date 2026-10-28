@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, sortProjects, subtaskActionsHtml, esc, confirmDialog,
+  todayISO, toISODate, addDays, daysBetween, projectColor, fmtHrs, closeOnBackdropClick, budgetBarHtml, sortProjects, subtaskActionsHtml, esc, confirmDialog,
   projectShortName,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -100,17 +100,18 @@ function projectItems({ taskId, personId } = {}) {
 
 function itemsListHtml(items, withWho = false) {
   if (!items.length) return "";
-  // Same look as the Dashboard: name, due date, Edit / ✓ / ×.
+  // Same look as the Dashboard: a band of rows under the person, each with
+  // its name, due date (in the Due column) and Edit / ✓ / × at the right.
   const today = todayISO();
   const short = (iso) => new Date(String(iso).slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `<div class="sub-checks">${items.map((d) => {
+  return `<div class="tp-subs">${items.map((d) => {
     const who = withWho ? (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean).join(", ") : "";
     const overdue = !d.completed && d.dueDate < today;
     const due = d.completed ? `Done${d.completedDate ? " " + short(d.completedDate) : ""}` : short(d.dueDate);
-    return `<div class="sub-check ${d.completed ? "done" : ""}">
-      <span class="sub-check-name" title="${esc(d.title)}"><span>${esc(d.title)}${who ? ` <span class="sub-check-who">${esc(who)}</span>` : ""}</span></span>
-      <span class="sub-check-due ${overdue ? "overdue" : ""}">${due}</span>
-      <span class="sub-check-actions">${subtaskActionsHtml(d, { canComplete: canComplete(d), canManage: canManage(d) })}</span>
+    return `<div class="tp-row tp-sub ${d.completed ? "done" : ""}">
+      <div class="tp-sub-name" title="${esc(d.title)}"><span>${esc(d.title)}${who ? ` <span class="tp-sub-who">${esc(who)}</span>` : ""}</span></div>
+      <div class="tp-due ${overdue ? "overdue" : ""}">${due}</div>
+      <div class="tp-sub-actions">${subtaskActionsHtml(d, { canComplete: canComplete(d), canManage: canManage(d) })}</div>
     </div>`;
   }).join("")}</div>`;
 }
@@ -354,7 +355,7 @@ function renderBudget() {
 
   // Someone was just added: put the cursor in their hours box.
   if (focusPersonId) {
-    const input = budgetTbody.querySelector(`.assign-row[data-person-id="${focusPersonId}"] .assignHours`);
+    const input = budgetTbody.querySelector(`.tp-row[data-person-id="${focusPersonId}"] .assignHours`);
     if (input) {
       focusPersonId = null;
       input.focus();
@@ -493,14 +494,13 @@ function taskPeopleHtml(task) {
         <button class="link-btn" data-action="${task.closed ? "reopen-task" : "close-task"}" data-task-id="${task.id}">${task.closed ? "Reopen task" : "Close task"}</button></div>`
     : "";
   const personIds = [...new Set([
-    ...(internal ? people.filter((x) => !x.inactive).map((x) => x.id) : []),
     ...taskAssignments.map((a) => a.personId),
     ...taskEntries.map((e) => e.personId),
     ...taskItems.flatMap((d) => d.personIds || []),
   ])];
   if (personIds.length === 0) {
-    return `<div class="empty">No one is assigned to this task yet.</div>
-      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Subtask</button>`;
+    return `${closeBar}<div class="empty">${internal ? "No hours or subtasks on this task yet." : "No one is assigned to this task yet."}</div>
+      <button class="link-btn task-add-subtask" data-action="quick-assign" data-task-id="${task.id}">+ Subtask</button>`;
   }
 
   const rows = personIds.map((pid) => {
@@ -516,27 +516,31 @@ function taskPeopleHtml(task) {
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Same columns as "Edit staff & hours" (name | hours box | bar | ×), so
-  // switching modes doesn't move anything: the box and × columns are empty
-  // here, and subtasks sit under the bar.
-  const color = projectColor(task.projectId);
-  return `${closeBar}<div class="assign-list">${rows.map((r) => `<div class="assign-row people-row">
-      <div class="assign-name">${esc(r.name)}</div>
+  // Like the Dashboard: one row per person with plain numbers (Assigned,
+  // Logged, Remaining — remaining stops at 0), their subtasks in a band
+  // underneath. Same columns as "Edit staff & hours" so switching modes
+  // doesn't move anything. Internal tasks only have hours logged.
+  return `${closeBar}<div class="tp-list ${internal ? "tp-internal" : ""}">
+    ${tpHeadHtml(internal)}
+    ${rows.map((r) => `<div class="tp-row tp-person">
+      <div class="tp-name">${esc(r.name)}</div>
       <div></div>
-      <div class="assign-bar">
-        ${internal
-          ? `<div class="hours-logged-only">${r.logged ? `${fmtHrs(r.logged)} hrs` : "—"}</div>`
-          : r.isAssigned || r.logged ? hoursBarHtml(r.logged, r.assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
-        ${itemsListHtml(r.items)}
-      </div>
+      <div class="tp-num ${r.isAssigned ? "" : "tp-dim"}">${internal ? "" : r.isAssigned ? fmtHrs(r.assigned) : "—"}</div>
+      <div class="tp-num">${fmtHrs(r.logged)}</div>
+      <div class="tp-num ${r.isAssigned ? "" : "tp-dim"}">${internal ? "" : r.isAssigned ? fmtHrs(Math.max(0, r.assigned - r.logged)) : "—"}</div>
       <div></div>
-    </div>`).join("")}</div>
-    <button class="link-btn task-add-subtask" data-action="quick-assign" data-task-id="${task.id}">+ Subtask</button>`;
+    </div>${itemsListHtml(r.items)}`).join("")}
+  </div>
+  <button class="link-btn task-add-subtask" data-action="quick-assign" data-task-id="${task.id}">+ Subtask</button>`;
+}
+
+function tpHeadHtml(internal, edit = false) {
+  return `<div class="tp-row tp-head"><div>Person</div><div>${edit ? "" : "Due"}</div><div>${internal ? "" : "Assigned"}</div><div>Logged</div><div>${internal ? "" : "Remaining"}</div><div></div></div>`;
 }
 
 // ---------- Edit assignments (admins) ----------
 // Each person on the task gets an hours box (saves itself a moment after
-// typing), the assigned-vs-logged bar and a remove button; "+ Add person"
+// typing), their logged and remaining hours and a remove button; "+ Add person"
 // adds someone. Unassigned updates as you type.
 let addingTaskId = null;    // task whose "Add person" chips are showing
 let focusPersonId = null;   // just added: focus their hours box once it appears
@@ -544,16 +548,18 @@ let renderDeferred = false; // skip re-rendering while someone is editing hours
 const saveTimers = {};      // assignmentId -> pending auto-save
 const SAVE_DELAY_MS = 800;
 
-function assignRowHtml(a, color) {
+function assignRowHtml(a) {
   const person = people.find((p) => p.id === a.personId);
   const project = projects.find((p) => p.id === a.projectId);
   const hours = assignedHours(a);
   const logged = loggedBy(a.taskId, a.personId);
-  return `<div class="assign-row" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-logged="${logged}">
-    <div class="assign-name">${person ? esc(person.name) : "—"}<div class="empty" style="padding:0; font-size:12px; font-weight:400;">${person ? `Bill ${formatCurrency(assignmentRate(project, person))}/hr` : ""}</div></div>
-    <div class="assign-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" /> hrs <span class="saved-tick"></span></div>
-    <div class="assign-bar">${hoursBarHtml(logged, hours, color)}</div>
-    <button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button>
+  return `<div class="tp-row tp-person" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-logged="${logged}">
+    <div class="tp-name">${person ? esc(person.name) : "—"}<div class="tp-rate">${person ? `Bill ${formatCurrency(assignmentRate(project, person))}/hr` : ""}</div></div>
+    <div class="tp-saved"><span class="saved-tick"></span></div>
+    <div class="tp-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" aria-label="Assigned hours" /></div>
+    <div class="tp-num">${fmtHrs(logged)}</div>
+    <div class="tp-num tp-remaining">${fmtHrs(Math.max(0, hours - logged))}</div>
+    <div class="tp-x"><button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button></div>
   </div>`;
 }
 
@@ -579,29 +585,27 @@ function addPersonHtml(task) {
 }
 
 function assignEditorHtml(task) {
-  const color = projectColor(task.projectId);
   const rows = assignments.filter((a) => a.taskId === task.id)
     .sort((a, b) => (people.find((p) => p.id === a.personId)?.name || "").localeCompare(people.find((p) => p.id === b.personId)?.name || ""))
-    .map((a) => assignRowHtml(a, color)).join("");
-  return `<div class="assign-list">
+    .map((a) => assignRowHtml(a)).join("");
+  return `<div class="tp-list">
     <div class="assign-summary">Unassigned budget <strong class="unassignedCell">${unassignedHtml(task)}</strong></div>
-    ${rows || '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
+    ${rows ? tpHeadHtml(false, true) + rows : '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
     ${addPersonHtml(task)}
   </div>`;
 }
 
-// Redraw a task's people bars and Unassigned cell from the hours boxes as
+// Redraw a task's Remaining hours and Unassigned cell from the hours boxes as
 // they're being edited (before the save lands).
 function liveUpdateTask(detailRow) {
   if (!detailRow) return;
   const task = tasks.find((t) => t.id === detailRow.dataset.taskId);
-  const color = projectColor(task.projectId);
   const override = {};
-  detailRow.querySelectorAll(".assign-row[data-assignment-id]").forEach((row) => {
+  detailRow.querySelectorAll(".tp-row[data-assignment-id]").forEach((row) => {
     const value = Number(row.querySelector(".assignHours").value);
     const hours = isNaN(value) || value < 0 ? 0 : value;
     override[row.dataset.assignmentId] = hours;
-    row.querySelector(".assign-bar").innerHTML = hoursBarHtml(Number(row.dataset.logged || 0), hours, color);
+    row.querySelector(".tp-remaining").textContent = fmtHrs(Math.max(0, hours - Number(row.dataset.logged || 0)));
   });
   const mainRow = budgetTbody.querySelector(`tr.task-row[data-task-row="${task.id}"]`);
   if (!mainRow) return;
