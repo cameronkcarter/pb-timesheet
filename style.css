@@ -4080,6 +4080,62 @@ button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
 .sub-check.done .sub-check-name > span { text-decoration: line-through; color: var(--text-muted); }
 .sub-check-due { flex: 0 0 76px; color: var(--text-muted); white-space: nowrap; }
 .sub-check-due.overdue { color: var(--red); font-weight: 600; }
-.sub-check-actions { flex: 0 0 64px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.sub-check-actions { flex: 0 0 88px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 .sub-check-actions .link-btn { margin: 0; padding: 0; font-size: 12px; }
 .sub-check-actions .icon-btn { margin: 0; padding: 0 2px; font-size: 16px; line-height: 1; color: var(--text-muted); }
+
+/* Subtask row buttons: Edit, ✓ complete / ↺ reopen, × delete. */
+.pc-sub-actions .icon-btn.sub-act,
+.sub-check-actions .icon-btn.sub-act {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+.icon-btn.sub-act.sub-act-done { color: #3d8b4f; font-weight: 700; }
+.icon-btn.sub-act.sub-act-done:hover { background: #e8f4ea; color: #2a6a38; }
+.pc-sub-name, .sub-check-name { cursor: default; }
+
+/* Toast with an Undo button. */
+.toast.has-action.show { pointer-events: auto; display: flex; align-items: center; gap: 14px; }
+.toast .toast-action {
+  margin: 0;
+  padding: 2px 4px;
+  background: none;
+  border: none;
+  color: #f2c48d;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.toast .toast-action:hover { text-decoration: underline; }
+
+/* Dashboard: a task's subtasks sit in their own tinted band under it,
+   one row each, due dates still in the Due column. */
+.pc-subs {
+  margin: 0 -10px 10px;
+  padding: 4px 10px;
+  background: #f8f5fa;
+  border-radius: 8px;
+}
+.pc-subs .pc-task.pc-sub { margin-top: 0; padding: 6px 0; }
+.pc-subs .pc-task.pc-sub + .pc-task.pc-sub { border-top: 1px solid #ece6f0; }
+.pc-subs .pc-sub-name { border-left: none; padding-left: 14px; margin-left: 0; position: relative; }
+.pc-subs .pc-sub-name::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--c, var(--civic-purple));
+}
+.pc-subs .pc-sub.done .pc-sub-name::before { background: #c9c2cf; }

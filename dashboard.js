@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, esc, fmtHrs,
-  todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, sortProjects,
+  todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, sortProjects, subtaskActionsHtml,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -181,20 +181,19 @@ function render() {
   // Remaining counts down from what's assigned and stops at 0. Staff see
   // budgets as percentages only, never dollars.
   const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
-  // Subtasks sit in the task grid: checkbox and name, due date in the Due
-  // column, Edit / delete at the far right.
+  // Subtasks sit in the task grid: name, due date in the Due column, then
+  // Edit / ✓ complete / × delete at the far right.
   const today = todayISO();
   const subtaskRow = (d) => {
     const overdue = !d.completed && d.dueDate < today;
     const due = d.completed ? `Done${d.completedDate ? " " + shortDate(String(d.completedDate)) : ""}` : shortDate(d.dueDate);
     return `<div class="pc-task pc-sub ${d.completed ? "done" : ""}">
-      <label class="pc-sub-name" title="${esc(d.title)}"><input type="checkbox" ${d.completed ? "checked" : ""}
-        data-action="${d.completed ? "reopen-duedate" : "complete-duedate"}" data-id="${d.id}" aria-label="Mark complete" /><span>${esc(d.title)}</span></label>
+      <div class="pc-sub-name" title="${esc(d.title)}"><span>${esc(d.title)}</span></div>
       <div class="pc-due ${overdue ? "overdue" : ""}">${due}</div>
-      <div class="pc-sub-actions">${canManage(d) && !d.completed ? `<button type="button" class="link-btn" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : ""}${canManage(d) ? `<button type="button" class="icon-btn" data-action="delete-duedate" data-id="${d.id}" title="Delete" aria-label="Delete">&times;</button>` : ""}</div>
+      <div class="pc-sub-actions">${subtaskActionsHtml(d, { canManage: canManage(d) })}</div>
     </div>`;
   };
-  const itemsHtml = (items) => items.sort(byDue).map(subtaskRow).join("");
+  const itemsHtml = (items) => (items.length ? `<div class="pc-subs">${items.sort(byDue).map(subtaskRow).join("")}</div>` : "");
   const pctOf = (spent, budget) => (budget > 0 ? Math.round((spent / budget) * 100) : null);
   const metric = (label, value, sub = "") => `<div class="pc-metric"><div class="pc-metric-label">${label}</div>
     <div class="pc-metric-value">${value}</div>${sub ? `<div class="pc-metric-sub">${sub}</div>` : ""}</div>`;

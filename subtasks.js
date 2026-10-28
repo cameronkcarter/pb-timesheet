@@ -13,7 +13,8 @@ export function isSubtask(d) {
 export async function setItemCompleted(id, completed) {
   try {
     await DueDates.update(id, { completed, completedDate: completed ? new Date().toISOString() : null });
-    showToast(completed ? "Marked complete." : "Reopened.");
+    if (completed) showToast("Marked complete.", { action: "Undo", onAction: () => setItemCompleted(id, false) });
+    else showToast("Reopened.");
   } catch (err) {
     showToast("Error: " + err.message);
   }

@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, sortProjects, esc, confirmDialog,
+  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, sortProjects, subtaskActionsHtml, esc, confirmDialog,
   projectShortName,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -100,7 +100,7 @@ function projectItems({ taskId, personId } = {}) {
 
 function itemsListHtml(items, withWho = false) {
   if (!items.length) return "";
-  // Same look as the Dashboard: checkbox and name, due date, Edit / delete.
+  // Same look as the Dashboard: name, due date, Edit / ✓ / ×.
   const today = todayISO();
   const short = (iso) => new Date(String(iso).slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `<div class="sub-checks">${items.map((d) => {
@@ -108,10 +108,9 @@ function itemsListHtml(items, withWho = false) {
     const overdue = !d.completed && d.dueDate < today;
     const due = d.completed ? `Done${d.completedDate ? " " + short(d.completedDate) : ""}` : short(d.dueDate);
     return `<div class="sub-check ${d.completed ? "done" : ""}">
-      <label class="sub-check-name" title="${esc(d.title)}"><input type="checkbox" ${d.completed ? "checked" : ""} ${canComplete(d) ? "" : "disabled"}
-        data-action="${d.completed ? "reopen-duedate" : "complete-duedate"}" data-id="${d.id}" aria-label="Mark complete" /><span>${esc(d.title)}${who ? ` <span class="sub-check-who">${esc(who)}</span>` : ""}</span></label>
+      <span class="sub-check-name" title="${esc(d.title)}"><span>${esc(d.title)}${who ? ` <span class="sub-check-who">${esc(who)}</span>` : ""}</span></span>
       <span class="sub-check-due ${overdue ? "overdue" : ""}">${due}</span>
-      <span class="sub-check-actions">${canManage(d) && !d.completed ? `<button type="button" class="link-btn" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : ""}${canManage(d) ? `<button type="button" class="icon-btn" data-action="delete-duedate" data-id="${d.id}" title="Delete" aria-label="Delete">&times;</button>` : ""}</span>
+      <span class="sub-check-actions">${subtaskActionsHtml(d, { canComplete: canComplete(d), canManage: canManage(d) })}</span>
     </div>`;
   }).join("")}</div>`;
 }
@@ -706,7 +705,7 @@ async function handleAssignAction(btn) {
 }
 
 budgetTbody.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-action], input[data-action]");
+  const btn = e.target.closest("button[data-action]");
   if (btn) {
     if (["open-add", "cancel-add", "remove-assignment", "add-assignment"].includes(btn.dataset.action)) {
       await handleAssignAction(btn);
@@ -937,7 +936,7 @@ document.body.addEventListener("click", async (e) => {
 });
 
 generalItemsEl.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-action], input[data-action]");
+  const btn = e.target.closest("button[data-action]");
   if (btn) await handleItemAction(btn);
 });
 
