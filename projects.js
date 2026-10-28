@@ -359,7 +359,7 @@ function renderBudget() {
 // ---------- Expenses in the Budget table ----------
 // Under the tasks: Tasks subtotal, Project expenses, one row per
 // subconsultant, Expenses subtotal and the grand Total. Expense rows open to
-// list what was recorded, with "+ Record expense" / "+ Record invoice".
+// list what was recorded, with "+ Expense" / "+ Sub invoice".
 function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = "") {
   const remaining = budget - spent;
   return `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
@@ -420,8 +420,8 @@ function expenseListHtml(g) {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
   const canRecordSub = isAdmin() || isPmOf(project.id);
   const addBtn = g.sub
-    ? (canRecordSub ? `<button class="link-btn" data-action="add-expense" data-kind="sub" data-sub-id="${g.sub.id}">+ Record invoice</button>` : "")
-    : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Record expense</button>`;
+    ? (canRecordSub ? `<button class="link-btn" data-action="add-expense" data-kind="sub" data-sub-id="${g.sub.id}">+ Sub invoice</button>` : "")
+    : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Expense</button>`;
   if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">Nothing recorded yet.</div>${addBtn}`;
   const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `<table class="expense-list">
@@ -493,7 +493,7 @@ function taskPeopleHtml(task) {
   ])];
   if (personIds.length === 0) {
     return `<div class="empty">No one is assigned to this task yet.</div>
-      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Add subtask</button>`;
+      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Subtask</button>`;
   }
 
   const rows = personIds.map((pid) => {
@@ -514,10 +514,7 @@ function taskPeopleHtml(task) {
   // here, and subtasks sit under the bar.
   const color = projectColor(task.projectId);
   return `${closeBar}<div class="assign-list">${rows.map((r) => `<div class="assign-row people-row">
-      <div class="assign-name">
-        ${esc(r.name)}
-        <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Add subtask</button>
-      </div>
+      <div class="assign-name">${esc(r.name)}</div>
       <div></div>
       <div class="assign-bar">
         ${internal
@@ -526,7 +523,8 @@ function taskPeopleHtml(task) {
         ${itemsListHtml(r.items)}
       </div>
       <div></div>
-    </div>`).join("")}</div>`;
+    </div>`).join("")}</div>
+    <button class="link-btn task-add-subtask" data-action="quick-assign" data-task-id="${task.id}">+ Subtask</button>`;
 }
 
 // ---------- Edit assignments (admins) ----------
@@ -558,7 +556,7 @@ function addPersonHtml(task) {
     .sort((a, b) => a.name.localeCompare(b.name));
   if (available.length === 0) return "";
   if (addingTaskId !== task.id) {
-    return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Add person</button>`;
+    return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Person</button>`;
   }
   // Tap someone to add them (0 hrs); their hours box is then ready to type in.
   const project = projects.find((pr) => pr.id === task.projectId);

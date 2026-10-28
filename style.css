@@ -3942,3 +3942,119 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
 .ts-project-selected .name { font-weight: 700; font-size: 14px; }
 .ts-project-selected .meta { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
 .ts-project-selected .meta:empty { display: none; }
+
+/* ---------- Dashboard project cards ---------- */
+.project-card-v2 .pc-head h2 { margin: 0; }
+.pc-meta { margin: 2px 0 0 22px; font-size: 13px; color: var(--text-muted); }
+.pc-meta:empty { display: none; }
+.pc-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.pc-metric { background: #faf7fb; border-radius: 8px; padding: 10px 14px; }
+.pc-metric-label { font-size: 12px; color: var(--text-muted); }
+.pc-metric-value { font-size: 26px; font-weight: 700; line-height: 1.2; color: var(--text); }
+.pc-unit { font-size: 14px; font-weight: 500; color: var(--text-muted); }
+.pc-metric-sub { font-size: 12px; color: var(--text-muted); }
+.pc-tasks { margin-top: 16px; }
+.pc-task {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 86px 150px;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 0 5px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+.pc-task.pc-task-head {
+  border-top: none;
+  padding: 0 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.pc-task-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-task-end { font-weight: 400; font-size: 12px; color: var(--text-muted); }
+.pc-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pc-dim { color: var(--text-muted); }
+.pc-budget { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.pc-budget span { width: 36px; text-align: right; }
+.pc-bar { flex: 1; height: 6px; border-radius: 3px; background: #efeaf2; overflow: hidden; }
+.pc-bar > div { height: 100%; }
+.pc-subtasks { margin: 0 0 6px 2px; padding-left: 12px; border-left: 2px solid var(--border); }
+.pc-general { border-top: 1px solid var(--border); padding-top: 8px; }
+.pc-general-label { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.pc-foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.pc-foot button.link-btn { margin: 0; padding: 0; font-size: 13px; }
+.pc-foot .pc-exp-toggle { margin-left: auto !important; color: var(--text-muted); font-weight: 500; }
+.pc-exp-toggle .chev.up { display: inline-block; transform: rotate(180deg); }
+.pc-expenses { margin-top: 6px; }
+
+@media (max-width: 600px) {
+  .pc-metrics { gap: 8px; }
+  .pc-metric { padding: 8px 10px; }
+  .pc-metric-value { font-size: 20px; }
+  .pc-task { grid-template-columns: minmax(0, 1fr) 50px 60px; }
+  .pc-task-name { white-space: normal; }
+  .pc-task .pc-budget { grid-column: 1 / -1; }
+  .pc-task-head > div:last-child { display: none; }
+}
+
+/* Dashboard: declined hours / expenses to fix. */
+.declined-strip {
+  margin-bottom: 18px;
+  border: 1px solid #f0c4bf;
+  background: #fdf1ef;
+  border-radius: 10px;
+  padding: 4px 14px;
+}
+.declined-strip[hidden] { display: none; }
+.declined-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  font-size: 14px;
+  color: #8e2a1f;
+}
+.declined-row + .declined-row { border-top: 1px solid #f0c4bf; }
+.declined-icon {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.declined-body { flex: 1; min-width: 0; }
+.declined-reason { font-size: 13px; margin-top: 2px; }
+.declined-fix,
+button.declined-fix {
+  margin: 0;
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid #e4a59d;
+  border-radius: 8px;
+  background: #fff;
+  color: #8e2a1f;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.declined-fix:hover { background: #fff7f6; }
+
+/* Projects tab: one "+ Subtask" under a task's people. */
+button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
