@@ -3911,3 +3911,20 @@ button.swatch {
 
 button.swatch:hover { background: var(--c); transform: scale(1.1); }
 button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
+
+/* Picker on top (chips + Edit project), the open project's details below. */
+.card.project-switch { padding: 0; }
+.project-picker { padding: 14px 0 14px; }
+.project-picker .chip-label { margin-top: 0; }
+.project-picker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-right: 20px;
+}
+.project-picker-row .project-chips { flex: 1; min-width: 0; }
+.project-picker-row button#editProjectBtn { margin: 0; flex: 0 0 auto; }
+.card.project-switch .project-head {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
