@@ -37,7 +37,10 @@ const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
 const projectDetail = document.getElementById("projectDetail");
 
-const budgetPm = document.getElementById("budgetPm");
+const projectHead = document.getElementById("projectHead");
+const projectHeadName = document.getElementById("projectHeadName");
+const projectHeadMeta = document.getElementById("projectHeadMeta");
+const budgetHeading = document.getElementById("budgetHeading");
 const budgetTbody = document.querySelector("#budgetTable tbody");
 const budgetEmpty = document.getElementById("budgetEmpty");
 const barLegend = document.getElementById("barLegend");
@@ -237,7 +240,16 @@ function renderBudget() {
   const cols = 5;
 
   const pm = people.find((x) => x.id === project.pmPersonId);
-  budgetPm.textContent = internal ? "Internal" : pm ? `PM: ${pm.name}` : "";
+  // The selected project: name, then client / internal and its PM, with
+  // Edit project (admins) beside them.
+  projectHead.style.setProperty("--c", projectColor(project.id));
+  projectHeadName.textContent = project.name;
+  projectHeadMeta.textContent = [
+    project.client || (internal ? "Internal" : ""),
+    project.client && internal ? "Internal" : "",
+    pm ? `PM: ${pm.name}` : "",
+  ].filter(Boolean).join(" · ");
+  budgetHeading.textContent = internal ? "Tasks" : "Tasks & Budget";
   editProjectBtn.style.display = admin ? "" : "none";
   editAssignmentsBtn.style.display = admin && !internal ? "" : "none";
   editAssignmentsBtn.textContent = editMode ? "Done editing" : "Edit staff & hours";
