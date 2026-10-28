@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
   todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, dateRange, entryDate, confirmDialog,
-  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, sortProjects, esc,
+  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, projectShortName, sortProjects, esc,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { assignedHours, isInternal } from "./rates.js";
@@ -40,6 +40,7 @@ const dayEntries = document.getElementById("dayEntries");
 const logTitle = document.getElementById("logTitle");
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
+const projectSelectedEl = document.getElementById("projectSelected");
 const noAssignmentsEmpty = document.getElementById("noAssignmentsEmpty");
 const entryForm = document.getElementById("entryForm");
 const taskCardsEl = document.getElementById("taskCards");
@@ -300,6 +301,7 @@ function renderLogForm() {
   const mine = myProjects();
   if (mine.length === 0) {
     projectCardsEl.innerHTML = "";
+    projectSelectedEl.hidden = true;
     projectCardsEmpty.style.display = "block";
     noAssignmentsEmpty.style.display = "none";
     entryForm.style.display = "none";
@@ -309,11 +311,18 @@ function renderLogForm() {
   if (selectedProjectId && !mine.some((p) => p.id === selectedProjectId)) selectedProjectId = null;
   if (!projectPicked || !selectedProjectId) selectedProjectId = mine[0].id;
 
-  projectCardsEl.innerHTML = mine.map((p) => `
-    <div class="project-card project-card-colored ${p.id === selectedProjectId ? "active" : ""}" data-project-card="${p.id}" style="--c:${projectColor(p.id)};">
-      <div class="name">${esc(p.name)}</div>
-      <div class="client">${p.client ? esc(p.client) : isInternal(p) ? "Internal" : "&nbsp;"}</div>
-    </div>`).join("");
+  // Your projects as chips (short names), then the picked one's full name,
+  // client and PM underneath.
+  projectCardsEl.innerHTML = mine.map((p) => `<button type="button" class="project-chip ${p.id === selectedProjectId ? "on" : ""}"
+    data-project-card="${p.id}" style="--c:${projectColor(p.id)};" title="${esc(p.name)}"><i aria-hidden="true"></i>${esc(projectShortName(p))}</button>`).join("");
+  const picked = mine.find((p) => p.id === selectedProjectId);
+  const pm = picked && people.find((x) => x.id === picked.pmPersonId);
+  projectSelectedEl.hidden = !picked;
+  if (picked) {
+    projectSelectedEl.style.setProperty("--c", projectColor(picked.id));
+    projectSelectedEl.innerHTML = `<div class="name">${esc(picked.name)}</div>
+      <div class="meta">${esc([picked.client || (isInternal(picked) ? "Internal" : ""), pm ? `PM: ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>`;
+  }
 
   if (!selectedProjectId) {
     noAssignmentsEmpty.style.display = "none";
@@ -481,7 +490,7 @@ function renderExistingHint() {
 }
 
 projectCardsEl.addEventListener("click", (e) => {
-  const card = e.target.closest(".project-card");
+  const card = e.target.closest(".project-chip");
   if (!card || card.dataset.projectCard === selectedProjectId) return;
   selectedProjectId = card.dataset.projectCard;
   projectPicked = true;
