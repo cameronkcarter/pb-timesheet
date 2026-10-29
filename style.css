@@ -552,11 +552,10 @@ tr.task-row.expanded td {
   background: #f5eef8;
 }
 
-/* Expense and sub rows: same striping in a warm tint, their own section. */
-#budgetTable tr.task-row.expense-row td { background: #fdfaf5; }
-#budgetTable tr.task-row.expense-row.stripe td { background: #f8f1e6; }
-#budgetTable tr.task-row.expense-row:hover td { background: #f6eddf; }
-#budgetTable tr.task-row.expense-row.expanded td { background: #f3e7d5; }
+/* Expense and sub rows: one warm tint, their own section. */
+#budgetTable tr.task-row.expense-row td { background: #f8f1e6; }
+#budgetTable tr.task-row.expense-row:hover td { background: #f3e8d8; }
+#budgetTable tr.task-row.expense-row.expanded td { background: #efe1cc; }
 
 td.accordion-cell {
   background: var(--bg);
@@ -4324,10 +4323,8 @@ button.due-chip:hover { filter: brightness(0.95); text-decoration: underline; }
   background: color-mix(in srgb, var(--c) 14%, #fff);
   color: var(--text);
   font-size: 12px;
-  text-decoration: none;
 }
 .mb-project::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
-.mb-project:hover { background: color-mix(in srgb, var(--c) 24%, #fff); }
 .mb-text { margin: 4px 0 8px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mb-foot { display: flex; align-items: center; gap: 12px; font-size: 12px; }
 .mb-foot .link-btn { margin: 0; padding: 0; font-size: 12px; color: var(--text-muted); }

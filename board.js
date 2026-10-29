@@ -86,7 +86,7 @@ export function createMessageBoard({ el, getData, sessionPersonId }) {
       <div class="mb-avatar" aria-hidden="true">${esc(initials(personName(m.authorPersonId)))}</div>
       <div class="mb-body">
         <div class="mb-meta"><b>${esc(personName(m.authorPersonId))}</b>${to ? ` <span class="mb-to">${to}</span>` : ""} · ${ago(m.postedAt)}${m.editedAt ? " · edited" : ""}
-          ${project ? `<a class="mb-project" href="projects.html?project=${esc(project.id)}" style="--c:${projectColor(project.id)};" title="${esc(project.name)}">${esc(projectShortName(project))}</a>` : ""}</div>
+          ${project ? `<span class="mb-project" style="--c:${projectColor(project.id)};" title="${esc(project.name)}">${esc(projectShortName(project))}</span>` : ""}</div>
         <div class="mb-text">${esc(m.text)}</div>
         <div class="mb-foot">
           <button type="button" class="mb-thumb ${iThumbed ? "on" : ""}" data-action="thumb" title="${thumbs.length ? esc(thumbs.map(personName).join(", ")) : "Thumbs up"}" aria-pressed="${iThumbed}" aria-label="Thumbs up">${THUMB_SVG}${thumbs.length ? `<span>${thumbs.length}</span>` : ""}</button>

@@ -453,8 +453,7 @@ function expenseRowsHtml(project, taskTotals, cols) {
     })),
   ];
   const exp = { budget: 0, spent: 0, invoiced: 0 };
-  // Expense and sub rows: striped like the tasks, in a warm tint so they
-  // read as their own section.
+  // Expense and sub rows: one warm tint, so they read as their own section.
   const groupRows = groups.map((g, i) => {
     const spent = sum(g.items);
     const invoiced = sum(g.items.filter((e) => e.invoiced));
@@ -462,7 +461,7 @@ function expenseRowsHtml(project, taskTotals, cols) {
     exp.spent += spent;
     exp.invoiced += invoiced;
     const expanded = expandedTaskId === g.key;
-    const row = `<tr class="task-row expense-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${g.key}">
+    const row = `<tr class="task-row expense-row ${expanded ? "expanded" : ""}" data-task-row="${g.key}">
       <td><div class="task-cell" title="${esc(g.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${g.sub ? `<span class="row-kind">Sub</span>` : ""}${esc(g.name)}</span></div></td>
       ${moneyCells({ budget: g.budget, spent, invoiced })}</tr>`;
     return expanded ? row + `<tr><td colspan="${cols}" class="accordion-cell">${expenseListHtml(g)}</td></tr>` : row;
