@@ -4151,11 +4151,11 @@ button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
 
 /* ---------- Projects tab: a task's people (view and Edit staff & hours) ----------
    Same columns in both modes: Person | Due | Assigned | Logged | Remaining | actions. */
-.tp-list { max-width: 820px; }
+.tp-list { max-width: 900px; }
 .tp-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px 80px 64px 84px 96px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 70px 72px 60px 76px 190px 28px;
+  gap: 18px;
   align-items: center;
   font-size: 14px;
 }
@@ -4169,7 +4169,7 @@ button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
 .tp-input input { width: 72px; margin: 0; padding: 5px 8px; }
 .tp-x { display: flex; justify-content: flex-end; }
 .tp-x .icon-btn { margin: 0; }
-.tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 76px 0 64px 0 96px; }
+.tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 70px 0 60px 0 0 96px; }
 
 /* Subtasks under a person: their own tinted band, like the Dashboard. */
 .tp-subs {
@@ -4209,8 +4209,10 @@ button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
 #generalItems .tp-subs { margin: 6px 0 0; }
 
 @media (max-width: 600px) {
-  .tp-row { grid-template-columns: minmax(0, 1fr) 54px 52px 44px 60px 24px; gap: 8px; font-size: 13px; }
-  .tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 54px 0 44px 0 24px; }
+  .tp-row { grid-template-columns: minmax(0, 1fr) 54px 52px 44px 56px 0 24px; gap: 8px; font-size: 13px; }
+  .tp-row .tp-share { grid-column: 1 / -1; grid-row: 2; }
+  .tp-head > :nth-child(6) { display: none; }
+  .tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 54px 0 44px 0 0 24px; }
   .tp-name { white-space: normal; }
   .tp-input input { width: 52px; padding: 4px; }
   .tp-sub-name > span { white-space: normal; }
@@ -4246,23 +4248,16 @@ button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
   .tp-exp .tp-exp-row > div:not(.tp-sub-name) { justify-self: start; }
 }
 
-/* Projects tab: a task's budget split by person. */
-.tp-split { max-width: 820px; margin: 0 0 14px; }
-.tp-split-bar {
-  position: relative;
-  display: flex;
-  height: 12px;
-  border-radius: 6px;
-  background: #ebe5ef;
-  overflow: hidden;
-}
-.tp-seg { height: 100%; background: var(--pc); }
-.tp-seg + .tp-seg { box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.7); }
-.tp-seg.tp-seg-togo { background: color-mix(in srgb, var(--pc) 35%, #fff); }
-.tp-split-end { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--red); }
-.tp-split-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 12px; color: var(--text-muted); }
-.tp-split-key i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
-.tp-key-solid { background: #8a8291; }
-.tp-key-light { background: #d6d1da; }
-.tp-split-left { margin-left: auto; font-weight: 600; color: var(--text); }
-.tp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--pc); margin-right: 8px; vertical-align: 1px; }
+/* Projects tab: each person's share of the task budget, in the project's
+   color (solid = logged, light = assigned, not logged), and what's left. */
+.tp-share { display: flex; align-items: center; gap: 8px; }
+.tp-bar { flex: 1; display: flex; height: 8px; border-radius: 4px; background: #ebe5ef; overflow: hidden; }
+.tp-bar-logged { height: 100%; background: var(--c, var(--civic-purple)); }
+.tp-bar-togo { height: 100%; background: color-mix(in srgb, var(--c, var(--civic-purple)) 30%, #fff); }
+.tp-bar-open { height: 100%; background: repeating-linear-gradient(135deg, #cfc7d6 0 4px, #e2dce7 4px 8px); }
+.tp-share-pct { width: 34px; text-align: right; font-size: 12px; color: var(--text-muted); }
+.tp-row.tp-unassigned { padding: 9px 0; border-top: 1px solid var(--border); }
+.tp-unassigned .tp-name { font-weight: 500; font-style: italic; color: var(--text-muted); }
+.tp-unassigned .tp-num { color: var(--text-muted); font-size: 13px; }
+.tp-share.over { font-size: 13px; }
+.tp-open-amt { font-style: normal; font-weight: 400; font-size: 13px; margin-left: 6px; }

@@ -264,51 +264,53 @@ function loggedBy(taskId, personId) {
   return loggedHours(timeEntries.filter((e) => e.taskId === taskId && e.personId === personId));
 }
 
-// Budget not yet spent or handed out, in dollars (see taskBudgetUse).
-// hoursOverride ({ assignmentId: hours }) follows unsaved edits.
-// Each person keeps one color everywhere (by name order), so their segment
-// in a task's budget bar matches the dot by their name.
-const PERSON_COLORS = ["#3b7dd8", "#d9822b", "#2a9d8f", "#9b59b6", "#c0392b", "#7f8c2a", "#d14d8a", "#5d6d7e"];
-function personColor(personId) {
-  const order = [...people].sort((a, b) => a.name.localeCompare(b.name)).map((p) => p.id);
-  const i = order.indexOf(personId);
-  return PERSON_COLORS[(i < 0 ? 0 : i) % PERSON_COLORS.length];
-}
-const personDot = (personId) => `<i class="tp-dot" style="--pc:${personColor(personId)};" aria-hidden="true"></i>`;
-
-// One bar for the task's budget, split by person: solid for what they've
-// logged, lighter for hours assigned but not logged yet, empty for budget
-// nobody has. Past the budget, a line marks where it ends.
-function taskSplitHtml(task, hoursOverride = {}) {
+// Each person's share of a task's budget, in dollars at their bill rate:
+// what they've logged (spent) and their assigned hours not logged yet
+// (outstanding). Bars are drawn against the budget, or against everything
+// logged and assigned when that's more. hoursOverride ({ assignmentId: hours })
+// follows unsaved edits. Internal tasks have no budget, so no bars.
+function taskShares(task, hoursOverride = {}) {
   const project = projects.find((p) => p.id === task.projectId);
-  if (isInternal(project)) return "";
+  if (isInternal(project)) return null;
   const entries = timeEntries.filter((e) => e.taskId === task.id);
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
-  const ids = [...new Set([...taskAssignments.map((a) => a.personId), ...entries.map((e) => e.personId)])];
-  const parts = ids.map((pid) => {
+  const byPerson = {};
+  [...new Set([...taskAssignments.map((a) => a.personId), ...entries.map((e) => e.personId)])].forEach((pid) => {
     const person = people.find((p) => p.id === pid);
     const mine = entries.filter((e) => e.personId === pid);
     const a = taskAssignments.find((x) => x.personId === pid);
     const hours = a ? (a.id in hoursOverride ? hoursOverride[a.id] : assignedHours(a)) : 0;
     const logged = loggedHours(mine);
     const toGo = Math.max(0, hours - logged);
-    return {
-      pid, name: person ? person.name : "—", logged, toGo,
-      spent: billedAmount(mine, { projects, people }),
-      outstanding: toGo * assignmentRate(project, person),
-    };
-  }).sort((a, b) => a.name.localeCompare(b.name));
+    byPerson[pid] = { logged, toGo, spent: billedAmount(mine, { projects, people }), outstanding: toGo * assignmentRate(project, person) };
+  });
   const use = taskBudgetUse(task, { projects, people, assignments, timeEntries }, hoursOverride);
-  const scale = Math.max(use.budget, use.committed);
-  if (scale <= 0) return "";
-  const pct = (n) => `${(n / scale) * 100}%`;
-  const segs = parts.map((p) => `${p.spent > 0 ? `<div class="tp-seg" style="width:${pct(p.spent)}; --pc:${personColor(p.pid)};" title="${esc(p.name)}: ${fmtHrs(p.logged)} hrs logged"></div>` : ""}${p.outstanding > 0 ? `<div class="tp-seg tp-seg-togo" style="width:${pct(p.outstanding)}; --pc:${personColor(p.pid)};" title="${esc(p.name)}: ${fmtHrs(p.toGo)} hrs assigned, not logged yet"></div>` : ""}`).join("");
-  const over = use.committed > use.budget + 0.005;
-  return `<div class="tp-split">
-    <div class="tp-split-bar">${segs}${over && use.budget > 0 ? `<span class="tp-split-end" style="left:${pct(use.budget)};" title="Budget"></span>` : ""}</div>
-    <div class="tp-split-key"><span><i class="tp-key-solid"></i>Logged</span><span><i class="tp-key-light"></i>Assigned, not logged</span>
-      <span class="tp-split-left">${over ? `<span class="hours-over-strong">Over by ${formatCurrency(use.committed - use.budget)}</span>` : `${formatCurrency(use.unassigned)} unassigned`}</span></div>
-  </div>`;
+  return { ...use, byPerson, scale: Math.max(use.budget, use.committed) };
+}
+
+// One person's bar: solid for logged, lighter for assigned but not logged,
+// then their share of the budget as a percent.
+function shareCellHtml(shares, personId) {
+  const p = shares && shares.byPerson[personId];
+  if (!p || shares.scale <= 0) return "";
+  const pct = (n) => `${(n / shares.scale) * 100}%`;
+  const share = shares.budget > 0 ? `${Math.round(((p.spent + p.outstanding) / shares.budget) * 100)}%` : "";
+  return `<div class="tp-bar" title="${fmtHrs(p.logged)} hrs logged${p.toGo ? ` · ${fmtHrs(p.toGo)} hrs assigned, not logged yet` : ""}">
+      <div class="tp-bar-logged" style="width:${pct(p.spent)};"></div><div class="tp-bar-togo" style="width:${pct(p.outstanding)};"></div>
+    </div><span class="tp-share-pct">${share}</span>`;
+}
+
+// Last row: budget nobody has yet, or how far over it is.
+function unassignedRowHtml(shares) {
+  if (!shares || shares.budget <= 0) return "";
+  const over = shares.unassigned < -0.005;
+  const cell = over
+    ? `<span class="hours-over-strong">Over by ${formatCurrency(-shares.unassigned)}</span>`
+    : `<div class="tp-bar"><div class="tp-bar-open" style="width:${(shares.unassigned / shares.scale) * 100}%;"></div></div><span class="tp-share-pct">${Math.round((shares.unassigned / shares.budget) * 100)}%</span>`;
+  return `<div class="tp-row tp-unassigned">
+      <div class="tp-name">Unassigned${over ? "" : ` <span class="tp-open-amt">${formatCurrency(shares.unassigned)}</span>`}</div><div></div><div></div><div></div><div></div>
+      <div class="tp-share ${over ? "over" : ""}">${cell}</div><div></div>
+    </div>`;
 }
 
 function renderBudget() {
@@ -557,25 +559,29 @@ function taskPeopleHtml(task) {
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   // Like the Dashboard: one row per person with plain numbers (Assigned,
-  // Logged, Remaining — remaining stops at 0), their subtasks in a band
-  // underneath. Same columns as "Edit staff & hours" so switching modes
+  // Logged, Remaining — remaining stops at 0) and a bar for their share of
+  // the task's budget, their subtasks in a band underneath; then a row for
+  // the budget nobody has yet. Same columns as "Edit staff & hours" so switching modes
   // doesn't move anything. Internal tasks only have hours logged.
-  return `${closeBar}${taskSplitHtml(task)}<div class="tp-list ${internal ? "tp-internal" : ""}">
+  const shares = taskShares(task);
+  return `${closeBar}<div class="tp-list ${internal ? "tp-internal" : ""}" style="--c:${projectColor(task.projectId)};">
     ${tpHeadHtml(internal)}
     ${rows.map((r) => `<div class="tp-row tp-person">
-      <div class="tp-name">${personDot(r.personId)}${esc(r.name)}</div>
+      <div class="tp-name">${esc(r.name)}</div>
       <div></div>
       <div class="tp-num ${r.isAssigned ? "" : "tp-dim"}">${internal ? "" : r.isAssigned ? fmtHrs(r.assigned) : "—"}</div>
       <div class="tp-num">${fmtHrs(r.logged)}</div>
       <div class="tp-num ${r.isAssigned ? "" : "tp-dim"}">${internal ? "" : r.isAssigned ? fmtHrs(Math.max(0, r.assigned - r.logged)) : "—"}</div>
+      <div class="tp-share">${shareCellHtml(shares, r.personId)}</div>
       <div></div>
     </div>${itemsListHtml(r.items)}`).join("")}
+    ${unassignedRowHtml(shares)}
   </div>
   <button class="link-btn task-add-subtask" data-action="quick-assign" data-task-id="${task.id}">+ Subtask</button>`;
 }
 
 function tpHeadHtml(internal, edit = false) {
-  return `<div class="tp-row tp-head"><div>Person</div><div>${edit ? "" : "Due"}</div><div>${internal ? "" : "Assigned"}</div><div>Logged</div><div>${internal ? "" : "Remaining"}</div><div></div></div>`;
+  return `<div class="tp-row tp-head"><div>Person</div><div>${edit ? "" : "Due"}</div><div>${internal ? "" : "Assigned"}</div><div>Logged</div><div>${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Share of budget"}</div><div></div></div>`;
 }
 
 // ---------- Edit assignments (admins) ----------
@@ -588,17 +594,18 @@ let renderDeferred = false; // skip re-rendering while someone is editing hours
 const saveTimers = {};      // assignmentId -> pending auto-save
 const SAVE_DELAY_MS = 800;
 
-function assignRowHtml(a) {
+function assignRowHtml(a, shares) {
   const person = people.find((p) => p.id === a.personId);
   const project = projects.find((p) => p.id === a.projectId);
   const hours = assignedHours(a);
   const logged = loggedBy(a.taskId, a.personId);
   return `<div class="tp-row tp-person" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-logged="${logged}">
-    <div class="tp-name">${personDot(a.personId)}${person ? esc(person.name) : "—"}<div class="tp-rate">${person ? `Bill ${formatCurrency(assignmentRate(project, person))}/hr` : ""}</div></div>
+    <div class="tp-name">${person ? esc(person.name) : "—"}<div class="tp-rate">${person ? `Bill ${formatCurrency(assignmentRate(project, person))}/hr` : ""}</div></div>
     <div class="tp-saved"><span class="saved-tick"></span></div>
     <div class="tp-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" aria-label="Assigned hours" /></div>
     <div class="tp-num">${fmtHrs(logged)}</div>
     <div class="tp-num tp-remaining">${fmtHrs(Math.max(0, hours - logged))}</div>
+    <div class="tp-share">${shareCellHtml(shares, a.personId)}</div>
     <div class="tp-x"><button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button></div>
   </div>`;
 }
@@ -625,16 +632,18 @@ function addPersonHtml(task) {
 }
 
 function assignEditorHtml(task) {
+  const shares = taskShares(task);
   const rows = assignments.filter((a) => a.taskId === task.id)
     .sort((a, b) => (people.find((p) => p.id === a.personId)?.name || "").localeCompare(people.find((p) => p.id === b.personId)?.name || ""))
-    .map((a) => assignRowHtml(a)).join("");
-  return `${taskSplitHtml(task)}<div class="tp-list">
+    .map((a) => assignRowHtml(a, shares)).join("");
+  return `<div class="tp-list" style="--c:${projectColor(task.projectId)};">
     ${rows ? tpHeadHtml(false, true) + rows : '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
+    ${unassignedRowHtml(shares)}
     ${addPersonHtml(task)}
   </div>`;
 }
 
-// Redraw a task's Remaining hours and budget bar from the hours boxes as
+// Redraw a task's Remaining hours and budget bars from the hours boxes as
 // they're being edited (before the save lands).
 function liveUpdateTask(detailRow) {
   if (!detailRow) return;
@@ -649,8 +658,12 @@ function liveUpdateTask(detailRow) {
   const mainRow = budgetTbody.querySelector(`tr.task-row[data-task-row="${task.id}"]`);
   if (!mainRow) return;
   const use = taskBudgetUse(task, { projects, people, assignments, timeEntries }, override);
-  const split = detailRow.querySelector(".tp-split");
-  if (split) split.outerHTML = taskSplitHtml(task, override);
+  const shares = taskShares(task, override);
+  detailRow.querySelectorAll(".tp-row[data-person-id]").forEach((row) => {
+    row.querySelector(".tp-share").innerHTML = shareCellHtml(shares, row.dataset.personId);
+  });
+  const open = detailRow.querySelector(".tp-unassigned");
+  if (open) open.outerHTML = unassignedRowHtml(shares);
   const progressCell = mainRow.querySelector(".progressCell");
   if (progressCell) progressCell.innerHTML = budgetBarHtml(use.spent, use.committed, use.budget, false, invoicedOnTask(task.id));
 }
