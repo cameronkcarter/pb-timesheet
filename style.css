@@ -2491,12 +2491,6 @@ table.appr-table {
   font-size: 13px;
 }
 
-.appr-entry input.appr-hours {
-  width: 70px;
-  text-align: right;
-}
-
-.appr-entry input.appr-note-input,
 .appr-entry input.appr-reason {
   width: 100%;
 }
@@ -3043,12 +3037,6 @@ td.accordion-cell .assign-row > .icon-btn {
   margin-right: 4px;
 }
 
-.appr-entry select.appr-task-select {
-  width: 100%;
-  margin: 0;
-  padding: 4px 6px;
-  font-size: 13px;
-}
 
 .appr-table tr.appr-closed td { opacity: 0.6; }
 
@@ -3379,7 +3367,7 @@ select.analytics-select {
 .chart-tip b { margin-left: auto; padding-left: 12px; color: var(--text); }
 .chart-tip .tip-total { border-top: 1px solid var(--border); padding-top: 3px; margin-top: 2px; }
 
-/* Room for Edit · Don't bill · Decline · Approve. */
+/* Room for Edit · Decline | No charge | Approve. */
 .appr-card .appr-table col.c-actions { width: 244px; }
 
 /* Analytics header wraps on narrow screens; month labels thin out. */
@@ -3398,8 +3386,8 @@ select.analytics-select {
 .cal-nav #viewToggle { margin-left: 6px; }
 
 /* ---------- Approvals: entry actions ---------- */
-/* Edit (quiet link) · "Don't bill" (amber chip, the unusual case) ·
-   Decline | Approve (one split button). */
+/* Edit (expenses only, a quiet link) · Decline | No charge | Approve
+   (one button group). */
 .appr-btns {
   display: inline-flex;
   align-items: center;
@@ -3417,24 +3405,30 @@ select.analytics-select {
 
 .appr-actions .appr-btns .link-btn.appr-edit:hover { color: var(--navy); }
 
-button.bill-chip {
-  padding: 3px 10px;
+/* Approved without billing the client. */
+.nc-tag {
+  padding: 2px 9px;
   border-radius: 999px;
-  border: 1px dashed #d9934a;
-  background: transparent;
+  background: #fbefe2;
   color: #9a5a16;
   font-size: 12px;
   font-weight: 600;
 }
 
-button.bill-chip:hover { background: #fdf5ec; }
-
-button.bill-chip.on {
-  border-style: solid;
-  background: #fbefe2;
+/* Task, hours and note: click to change in place. */
+.appr-table td.appr-editable { cursor: pointer; }
+.appr-table td.appr-editable:hover {
+  background: #f6f1f9;
+  text-decoration: underline dotted #b9a8c4;
+  text-underline-offset: 3px;
 }
-
-button.bill-chip.on:hover { background: #f6e1c9; }
+.appr-table .appr-inline {
+  width: 100%;
+  margin: 0;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+.appr-table .appr-inline-hours { width: 64px; text-align: right; }
 
 .appr-split {
   display: inline-flex;
@@ -3457,6 +3451,15 @@ button.bill-chip.on:hover { background: #f6e1c9; }
 }
 
 .appr-split .split-decline:hover { background: #fdecea; }
+
+.appr-split .split-nocharge {
+  background: #fff;
+  color: #9a5a16;
+  border-right: 1px solid var(--border);
+}
+
+.appr-split .split-nocharge:hover,
+.appr-split .split-nocharge.on { background: #fbefe2; }
 
 .appr-split .split-approve {
   background: var(--green);

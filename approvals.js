@@ -7,7 +7,7 @@
 // the person's Timesheet (with the reason) and return once they edit them.
 // Invoiced hours aren't shown — void the invoice to change them.
 //
-// "Don't bill" marks an entry as paid but not charged to the client (see
+// "No charge" marks an entry as paid but not charged to the client (see
 // isBillable in rates.js). Edit can also move an entry to another task on
 // the same project.
 //
@@ -40,7 +40,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
     projectChoices: () => getData().projects,
     canPickPayer: () => true,
   });
-  let editing = null; // { id, mode: "edit" | "decline" }
+  let editing = null; // { id, field: "task" | "hours" | "note" } or { id, mode: "decline" }
 
   const me = () => getData().people.find((p) => p.id === sessionPersonId);
   const isAdmin = () => !!me()?.isAdmin;
@@ -137,27 +137,14 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
         <td class="appr-task appr-muted">Expense</td>
         <td class="num appr-muted">—</td>
         <td class="appr-entry-note"><strong>${formatCurrency(e.amount)}</strong> · ${esc(expenseLabel(e, projects.find((p) => p.id === e.projectId)))}</td>
-        <td class="num appr-actions" colspan="2">${actionsHtml(e, "edit-expense")}</td></tr>`;
+        <td class="num appr-actions" colspan="2">${actionsHtml(e)}</td></tr>`;
     }
     const mode = editing && editing.id === e.id ? editing.mode : null;
+    const field = editing && editing.id === e.id ? editing.field : null;
     const task = tasks.find((t) => t.id === e.taskId);
     // Second column: the task, or (grouped by task) the person.
     const who = byTask() ? people.find((p) => p.id === e.personId)?.name || "—" : task ? task.name : "—";
     const lead = `<td class="appr-date">${entryDate(e.date)}</td>`;
-    if (mode === "edit") {
-      // The task can be changed to any task on the same project.
-      const choices = tasks.filter((t) => t.projectId === e.projectId && (!t.closed || t.id === e.taskId))
-        .sort((a, b) => a.name.localeCompare(b.name));
-      return `<tr class="appr-entry editing">${lead}
-        <td><select class="appr-task-select" aria-label="Task">${choices.map((t) =>
-          `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></td>
-        <td class="num"><input type="number" class="appr-hours" min="0" step="0.25" value="${Number(e.hours)}" /></td>
-        <td><input type="text" class="appr-note-input" value="${esc(e.note || "")}" /></td>
-        <td class="num appr-actions" colspan="2">
-          <button type="button" class="link-btn" data-action="cancel-entry">Cancel</button>
-          <button type="button" class="small" data-action="save-entry" data-id="${e.id}">Save</button>
-        </td></tr>`;
-    }
     if (mode === "decline") {
       return `<tr class="appr-entry editing">${lead}
         <td class="appr-task appr-muted">${esc(who)}</td>
@@ -168,30 +155,45 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
           <button type="button" class="small danger" data-action="confirm-decline" data-id="${e.id}">Decline</button>
         </td></tr>`;
     }
+    // Task (when listed by person), hours and note: click one to change it
+    // in place. It saves when you pick a task, press Enter or click away.
     const over = byTask() ? "" : overNote(e.personId, e.taskId);
-    return `<tr class="appr-entry">${lead}
-      <td class="appr-task appr-muted">${esc(who)}</td>
-      <td class="num ${over ? "appr-over" : ""}" ${over ? `title="${esc(over)}"` : ""}>${fmtHrs(Number(e.hours))}</td>
-      <td class="appr-entry-note ${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}</td>
-      <td class="num appr-actions" colspan="2">${actionsHtml(e, "edit-entry")}</td></tr>`;
+    let taskCell = `<td class="appr-task appr-muted">${esc(who)}</td>`;
+    if (!byTask()) {
+      // Any task on the same project.
+      const choices = tasks.filter((t) => t.projectId === e.projectId && (!t.closed || t.id === e.taskId))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      taskCell = field === "task"
+        ? `<td><select class="appr-inline" aria-label="Task">${choices.map((t) =>
+            `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></td>`
+        : `<td class="appr-task appr-muted appr-editable" data-edit="task" title="Change task">${esc(who)}</td>`;
+    }
+    const hoursCell = field === "hours"
+      ? `<td class="num"><input type="number" class="appr-inline appr-inline-hours" min="0" step="0.25" value="${Number(e.hours)}" aria-label="Hours" /></td>`
+      : `<td class="num appr-editable ${over ? "appr-over" : ""}" data-edit="hours" title="${over ? esc(over) : "Change hours"}">${fmtHrs(Number(e.hours))}</td>`;
+    const noteCell = field === "note"
+      ? `<td><input type="text" class="appr-inline" value="${esc(e.note || "")}" placeholder="Note" aria-label="Note" /></td>`
+      : `<td class="appr-entry-note appr-editable ${e.note ? "" : "appr-muted"}" data-edit="note" title="Change note">${e.note ? esc(e.note) : "No note"}</td>`;
+    return `<tr class="appr-entry ${field ? "editing" : ""}" data-id="${e.id}">${lead}${taskCell}${hoursCell}${noteCell}
+      <td class="num appr-actions" colspan="2">${actionsHtml(e)}</td></tr>`;
   }
 
-  // An entry's actions: Edit (a plain link); "Don't bill", a dashed amber
-  // chip that turns solid ("Not billed ×") once set, since it's the unusual
-  // case; then Decline | Approve as one split button while waiting, or
-  // Unapprove once approved. Internal hours just get Edit.
-  function actionsHtml(e, editAction) {
+  // An entry's actions. Waiting: Decline | No charge | Approve as one group
+  // (No charge approves it but doesn't bill the client; they're still paid).
+  // Approved: a "No charge" tag when it applies, and Unapprove. Expenses
+  // have no No charge and keep Edit, which opens their own editor. Internal
+  // hours have none.
+  function actionsHtml(e) {
     const id = `data-id="${e.id}"`;
-    const edit = `<button type="button" class="link-btn appr-edit" data-action="${editAction}" ${id}>Edit</button>`;
+    const edit = e.isExpense ? `<button type="button" class="link-btn appr-edit" data-action="edit-expense" ${id}>Edit</button>` : "";
     if (view === "internal") return `<div class="appr-btns">${edit}</div>`;
-    const bill = e.isExpense ? ""
-      : isBillable(e)
-        ? `<button type="button" class="bill-chip" data-action="toggle-bill" ${id} title="Still paid, but not charged to the client">Don't bill</button>`
-        : `<button type="button" class="bill-chip on" data-action="toggle-bill" ${id} title="Click to bill the client again">Not billed <span aria-hidden="true">&times;</span></button>`;
-    const decide = view === "approved"
-      ? `<button type="button" class="appr-unapprove" data-action="unapprove-entry" ${id}>Unapprove</button>`
-      : `<span class="appr-split"><button type="button" class="split-decline" data-action="decline-entry" ${id}>Decline</button><button type="button" class="split-approve" data-action="approve-entry" ${id}>Approve</button></span>`;
-    return `<div class="appr-btns">${edit}${bill}${decide}</div>`;
+    if (view === "approved") {
+      const tag = !e.isExpense && !isBillable(e) ? '<span class="nc-tag">No charge</span>' : "";
+      return `<div class="appr-btns">${edit}${tag}<button type="button" class="appr-unapprove" data-action="unapprove-entry" ${id}>Unapprove</button></div>`;
+    }
+    const noCharge = e.isExpense ? ""
+      : `<button type="button" class="split-nocharge ${isBillable(e) ? "" : "on"}" data-action="nocharge-entry" ${id} title="Approve, but don't bill the client (still paid)">No charge</button>`;
+    return `<div class="appr-btns">${edit}<span class="appr-split"><button type="button" class="split-decline" data-action="decline-entry" ${id}>Decline</button>${noCharge}<button type="button" class="split-approve" data-action="approve-entry" ${id}>Approve</button></span></div>`;
   }
 
   function render() {
@@ -234,7 +236,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
             `${r.entries.length} ${r.entries.length === 1 ? "entry" : "entries"}`,
             people > 1 ? `${people} people` : "",
             expenseSum(r.entries) ? `${formatCurrency(expenseSum(r.entries))} expenses` : "",
-            unbilled ? `${fmtHrs(unbilled)} hrs not billed` : "",
+            unbilled ? `${fmtHrs(unbilled)} hrs no charge` : "",
           ].filter(Boolean).join(" · ");
           return `<tr class="appr-row ${open ? "open" : ""} ${r.closed ? "appr-closed" : ""}" data-key="${esc(r.key)}">
             <td class="appr-date">${dateRange(r.entries)}</td>
@@ -263,24 +265,61 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
     }
   }
 
-  async function saveEntry(btn) {
-    const row = btn.closest("tr");
-    const entry = getData().timeEntries.find((x) => x.id === btn.dataset.id);
-    if (!entry) return;
-    const hours = Number(row.querySelector(".appr-hours").value);
-    const note = row.querySelector(".appr-note-input").value.trim();
-    const taskId = row.querySelector(".appr-task-select")?.value || entry.taskId;
-    if (!(hours > 0) || hours > 24) return showToast("Enter hours between 0 and 24.");
-    // One entry per person, task and day (the Timesheet relies on it).
-    if (taskId !== entry.taskId && getData().timeEntries.some((x) =>
-      x.id !== entry.id && x.personId === entry.personId && x.taskId === taskId && x.date === entry.date)) {
-      return showToast("They already have hours on that task that day. Edit that entry instead.");
+  // Click a task, hours or note to edit just that.
+  function startEdit(id, field) {
+    editing = { id, field };
+    render();
+    const el = body.querySelector(".appr-inline");
+    if (!el) return;
+    el.focus();
+    if (el.tagName === "SELECT") {
+      try { el.showPicker(); } catch (_) { /* not supported: it's focused */ }
+    } else {
+      el.select();
     }
+  }
+
+  // Saves the field being edited if it changed, with Undo.
+  async function commitInline(el) {
+    if (!editing || !editing.field) return;
+    const { id, field } = editing;
+    editing = null;
+    const entry = getData().timeEntries.find((x) => x.id === id);
+    let key = field;
+    let value = el.value;
+    let message;
+    if (!entry) return render();
+    if (field === "hours") {
+      value = Number(value);
+      if (value === Number(entry.hours)) return render();
+      if (!(value > 0) || value > 24) {
+        render();
+        return showToast("Enter hours between 0 and 24.");
+      }
+      message = `Hours ${fmtHrs(Number(entry.hours))} → ${fmtHrs(value)}.`;
+    } else if (field === "note") {
+      value = value.trim();
+      if (value === (entry.note || "")) return render();
+      message = "Note saved.";
+    } else {
+      key = "taskId";
+      if (value === entry.taskId) return render();
+      // One entry per person, task and day (the Timesheet relies on it).
+      if (getData().timeEntries.some((x) =>
+        x.id !== entry.id && x.personId === entry.personId && x.taskId === value && x.date === entry.date)) {
+        render();
+        return showToast("They already have hours on that task that day. Edit that entry instead.");
+      }
+      message = `Moved to ${getData().tasks.find((t) => t.id === value)?.name || "that task"}.`;
+    }
+    const before = { [key]: key === "note" ? entry.note || "" : entry[key] };
+    render();
     try {
-      await TimeEntries.update(entry.id, { hours, note, taskId });
-      editing = null;
-      render();
-      showToast(taskId !== entry.taskId ? "Moved." : "Entry updated.");
+      await TimeEntries.update(id, { [key]: value });
+      showToast(message, {
+        action: "Undo",
+        onAction: () => TimeEntries.update(id, before).catch((err) => showToast("Error: " + err.message)),
+      });
     } catch (err) {
       showToast("Error: " + err.message);
     }
@@ -288,6 +327,11 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
 
   body.addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-action]");
+    const cell = e.target.closest("td[data-edit]");
+    if (cell) {
+      startEdit(cell.closest("tr").dataset.id, cell.dataset.edit);
+      return;
+    }
     if (!btn) {
       const row = e.target.closest("tr.appr-row");
       if (row) {
@@ -303,8 +347,8 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
       if (rec) expenseEditor.open(rec);
       return;
     }
-    if (action === "edit-entry" || action === "decline-entry") {
-      editing = { id: btn.dataset.id, mode: action === "edit-entry" ? "edit" : "decline" };
+    if (action === "decline-entry") {
+      editing = { id: btn.dataset.id, mode: "decline" };
       render();
       const input = body.querySelector(".appr-entry.editing input");
       if (input) input.focus();
@@ -315,13 +359,12 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
       render();
       return;
     }
-    if (action === "save-entry") return saveEntry(btn);
-    if (action === "toggle-bill") {
-      const entry = getData().timeEntries.find((x) => x.id === btn.dataset.id);
-      if (!entry) return;
+    // Approve one entry, billed or not.
+    if (action === "nocharge-entry" || (action === "approve-entry" && getData().timeEntries.some((x) => x.id === btn.dataset.id && !isBillable(x)))) {
+      const billable = action === "approve-entry";
       try {
-        await TimeEntries.update(entry.id, { billable: !isBillable(entry) });
-        showToast(isBillable(entry) ? "Won't be billed. Still paid." : "Will be billed.");
+        await TimeEntries.update(btn.dataset.id, { approved: true, approvedDate: new Date().toISOString(), billable });
+        showToast(billable ? "Approved." : "Approved, no charge to the client.");
       } catch (err) {
         showToast("Error: " + err.message);
       }
@@ -344,7 +387,9 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
       const item = pendingEntries().find((x) => x.id === btn.dataset.id);
       if (!item) return;
       try {
-        await (item.isExpense ? Expenses : TimeEntries).update(item.id, { approved: false, approvedDate: null });
+        // Hours go back to billed, to be decided again.
+        await (item.isExpense ? Expenses : TimeEntries).update(item.id,
+          item.isExpense ? { approved: false, approvedDate: null } : { approved: false, approvedDate: null, billable: true });
         showToast("Moved back to Pending.");
       } catch (err) {
         showToast("Error: " + err.message);
@@ -367,10 +412,19 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
   });
 
   body.addEventListener("keydown", (e) => {
+    if (e.target.matches(".appr-inline")) {
+      if (e.key === "Escape") { editing = null; render(); }
+      if (e.key === "Enter") commitInline(e.target);
+      return;
+    }
     if (!e.target.matches(".appr-entry input")) return;
     if (e.key === "Escape") { editing = null; render(); }
     if (e.key === "Enter") e.target.closest("tr").querySelector("button.small")?.click();
   });
+
+  // Picking a task, or leaving hours / note, saves.
+  body.addEventListener("change", (e) => { if (e.target.matches("select.appr-inline")) commitInline(e.target); });
+  body.addEventListener("focusout", (e) => { if (e.target.matches(".appr-inline")) commitInline(e.target); });
 
   viewToggle.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");

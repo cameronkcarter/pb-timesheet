@@ -124,7 +124,7 @@ const shortDate = (iso) => new Date(String(iso).slice(0, 10) + "T00:00:00")
   .toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 // Next invoice per project: its approved, uninvoiced hours. Approved hours
-// marked "Don't bill" (unbilled) aren't charged, but are closed out with the
+// marked "No charge" (unbilled) aren't charged, but are closed out with the
 // invoice (billed at $0) so they're paid along with everyone else's.
 function nextRows() {
   return billableProjects().map((project) => {
@@ -279,11 +279,11 @@ function peopleHtml(rowKey, entries, fallbackRows) {
 }
 
 // "Also closes out 3 hrs not billed (Ann, Ben) · $240 pay" — hours a PM
-// marked "Don't bill" that ride along with the invoice at $0.
+// marked "No charge" that ride along with the invoice at $0.
 function unbilledNoteHtml(unbilled, lead) {
   if (!unbilled || !unbilled.length) return "";
   const names = [...new Set(unbilled.map((e) => people.find((p) => p.id === e.personId)?.name).filter(Boolean))];
-  return `<div class="inv-note inv-unbilled">${lead} ${fmtHrs(sumHours(unbilled))} hrs not billed (${esc(names.join(", "))})
+  return `<div class="inv-note inv-unbilled">${lead} ${fmtHrs(sumHours(unbilled))} hrs no charge (${esc(names.join(", "))})
     · ${formatCurrency(paidAmount(unbilled, { projects, people }))} pay, not charged to the client</div>`;
 }
 

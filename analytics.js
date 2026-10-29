@@ -1,7 +1,7 @@
 // Analytics (on Admin): where everyone's hours went, for one project or all
 // of them, over the last 3 or 12 months or all time.
 //   - Totals: hours, share billable to clients, and (one billable project) budget used
-//   - Hours by month, stacked: billable · not billed (paid, "Don't bill") · internal
+//   - Hours by month, stacked: billable · no charge (paid, not billed) · internal
 //   - Hours by person, same split, with each person's billable share — on all
 //     projects that's the usual consulting "utilization" number.
 // Counts every hour logged except declined ones (pending hours included).
@@ -11,7 +11,7 @@ import { isInternal, isBillable, billedAmount } from "./rates.js";
 
 const KINDS = [
   { key: "billed", label: "Billable", color: "#7b3d86" },
-  { key: "unbilled", label: "Not billed", color: "#c26f1a" },
+  { key: "unbilled", label: "No charge", color: "#c26f1a" },
   { key: "internal", label: "Internal", color: "#1f7fa8" },
 ];
 

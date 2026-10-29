@@ -44,7 +44,7 @@ export function payRateOf(entry, { projects, people }) {
   return entry.rate != null ? Number(entry.rate) : personPayRate(findPerson(entry.personId, people));
 }
 
-// Hours a PM marked "Don't bill" (entry.billable === false): still paid, never
+// Hours a PM marked "No charge" (entry.billable === false): still paid, never
 // charged to the client, and they don't spend the task's budget. Entries
 // without the field are billable.
 export const isBillable = (entry) => entry.billable !== false;
