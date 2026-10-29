@@ -112,7 +112,7 @@ function renderSchedule() {
       const who = (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean).join(", ");
       return `<div class="sched-row sched-item ${sub ? "" : "sched-event"} ${done ? "done" : ""}" data-item-id="${d.id}" data-task-id="${d.taskId || ""}">
         <div class="sched-due ${!done && d.dueDate < today ? "overdue" : ""}">${short(d.dueDate)}</div>
-        <div class="sched-name"><span>${esc(d.title)}</span>${sub ? "" : '<span class="row-kind">Event</span>'}</div>
+        <div class="sched-name"><span>${esc(d.title)}</span></div>
         <div class="sched-task">${task ? esc(task.name) : sub ? "Whole project" : ""}</div>
         <div class="sched-who">${esc(who)}</div>
         <div class="tp-sub-actions">${subtaskActionsHtml(d, { canComplete: sub && canComplete(d), canManage: canManage(d) })}</div>

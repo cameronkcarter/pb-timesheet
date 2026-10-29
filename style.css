@@ -4234,7 +4234,6 @@ button.declined-fix {
   background: #0f766e;
 }
 .sched-event .sched-name::before { background: var(--accent); }
-.sched-name .row-kind { flex: none; margin: 0; }
 .sched-task, .sched-who { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sched-item .tp-sub-actions { grid-column: auto; }
 .sched-item.done .sched-name > span:first-child { text-decoration: line-through; color: var(--text-muted); font-weight: 400; }
