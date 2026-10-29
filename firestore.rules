@@ -97,10 +97,10 @@ service cloud.firestore {
           || data.authorPersonId == myPersonId();
       }
       function onlyMeChanged(field) {
-        let before = resource.data.get(field, []).toSet();
-        let after = request.resource.data.get(field, []).toSet();
-        return after.difference(before).hasOnly([myPersonId()])
-          && before.difference(after).hasOnly([myPersonId()]);
+        return request.resource.data.get(field, []).toSet()
+            .difference(resource.data.get(field, []).toSet()).hasOnly([myPersonId()])
+          && resource.data.get(field, []).toSet()
+            .difference(request.resource.data.get(field, []).toSet()).hasOnly([myPersonId()]);
       }
 
       allow read: if isStaff() && canSee(resource.data);
