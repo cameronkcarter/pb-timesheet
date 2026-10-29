@@ -30,6 +30,13 @@ let addingTask = false;     // the "+ New task" box on internal projects
 let view = "calendar";      // or "list"
 let openListKey = null;     // "<projectId>|<taskId>" open in the List view
 try { if (localStorage.getItem("pb_timesheet_view") === "list") view = "list"; } catch (_) { /* no storage */ }
+// timesheet.html?day=YYYY-MM-DD opens that day (e.g. "Fix" on a declined entry).
+const linkedDay = new URLSearchParams(location.search).get("day");
+if (/^\d{4}-\d{2}-\d{2}$/.test(linkedDay || "")) {
+  selectedDay = linkedDay;
+  calMonth = firstOfMonth(new Date(linkedDay + "T00:00:00"));
+  view = "calendar";
+}
 
 const calendarEl = document.getElementById("calendar");
 const calLegend = document.getElementById("calLegend");

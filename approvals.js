@@ -84,15 +84,20 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
 
   const expenseSum = (items) => items.filter((e) => e.isExpense).reduce((t, e) => t + Number(e.amount || 0), 0);
 
-  // True when this person has logged more on the task than assigned
-  // (including tasks they weren't assigned to at all).
-  function isOver(personId, taskId) {
+  // When this person has logged more on the task than assigned (including
+  // tasks they weren't assigned to at all), why, for the hover note; else "".
+  // Declined hours don't count.
+  function overNote(personId, taskId) {
     const { assignments, timeEntries } = getData();
     const assignment = assignments.find((a) => a.taskId === taskId && a.personId === personId);
     const assigned = assignment ? assignedHours(assignment) : 0;
-    const logged = sumHours(timeEntries.filter((e) => e.taskId === taskId && e.personId === personId));
-    return logged - assigned > 0.005;
+    const logged = sumHours(timeEntries.filter((e) => e.taskId === taskId && e.personId === personId && !e.declined));
+    if (logged - assigned <= 0.005) return "";
+    return assignment
+      ? `Over assigned hours: ${fmtHrs(logged)} hrs logged on this task, ${fmtHrs(assigned)} assigned`
+      : `Not assigned to this task: ${fmtHrs(logged)} hrs logged on it`;
   }
+  const isOver = (personId, taskId) => !!overNote(personId, taskId);
 
   // [{ project, hours, entries, rows: [{ key, name, hours, entries }] }]
   // Rows are people, or tasks in the Internal view.
@@ -163,9 +168,10 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
           <button type="button" class="small danger" data-action="confirm-decline" data-id="${e.id}">Decline</button>
         </td></tr>`;
     }
+    const over = byTask() ? "" : overNote(e.personId, e.taskId);
     return `<tr class="appr-entry">${lead}
       <td class="appr-task appr-muted">${esc(who)}</td>
-      <td class="num ${!byTask() && isOver(e.personId, e.taskId) ? "appr-over" : ""}">${fmtHrs(Number(e.hours))}</td>
+      <td class="num ${over ? "appr-over" : ""}" ${over ? `title="${esc(over)}"` : ""}>${fmtHrs(Number(e.hours))}</td>
       <td class="appr-entry-note ${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}</td>
       <td class="num appr-actions" colspan="2">${actionsHtml(e, "edit-entry")}</td></tr>`;
   }

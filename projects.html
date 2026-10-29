@@ -54,7 +54,6 @@
       <div class="budget-header">
         <h2 style="margin:0;" id="budgetHeading">Tasks &amp; Budget</h2>
         <div class="row-actions">
-          <button id="toggleCompletedBtn" class="secondary small">Show completed subtasks</button>
           <button id="editAssignmentsBtn" class="small btn-tint-amber" style="display:none;">Edit staff &amp; hours</button>
         </div>
       </div>
@@ -68,25 +67,27 @@
         <tbody></tbody>
       </table>
       <div id="budgetEmpty" class="empty" style="display:none;">No tasks set up for this project yet.</div>
-      <div id="generalItems"></div>
     </div>
 
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="budget-header">
         <h2 style="margin:0;">Timeline</h2>
         <div class="row-actions">
-          <button id="editTimelineBtn" class="small btn-tint-purple" style="display:none;">Edit</button>
-          <button id="openAddEvent" class="secondary small">+ Add Event</button>
+          <button id="editTimelineBtn" class="small btn-tint-purple" style="display:none;">Edit dates</button>
         </div>
       </div>
-      <div class="gantt-legend">
-        <span><span class="legend-dot legend-dot-event"></span>Event</span>
-        <span><span class="legend-dot legend-dot-assignment"></span>Assignment</span>
-      </div>
       <div id="ganttEmpty" class="empty" style="display:none;">No task dates set for this project yet.</div>
-      <div id="ganttScroll" class="gantt-scroll">
-        <div id="ganttChart"></div>
+      <div id="ganttChart" class="gantt-chart"></div>
+
+      <div class="sched-header">
+        <h3>Subtasks &amp; Events</h3>
+        <div class="row-actions">
+          <button type="button" id="toggleCompletedBtn" class="link-btn">Show completed</button>
+          <button type="button" id="openAddEvent" class="small btn-event">+ Event</button>
+          <button type="button" id="openAddSubtask" class="small btn-subtask">+ Subtask</button>
+        </div>
       </div>
+      <div id="schedList"></div>
     </div>
 
   </div>

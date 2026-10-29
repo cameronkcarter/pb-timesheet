@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, esc, fmtHrs,
-  todayISO, toISODate, getWeekStart, addDays, projectColor, hoursBarHtml, dueItemHtml, sortProjects,
+  todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, sortProjects, subtaskActionsHtml,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -128,7 +128,7 @@ function render() {
     .filter((a) => a.personId === personId && !isInternal(projects.find((p) => p.id === a.projectId)))
     .forEach((a) => {
       const assigned = assignedHours(a);
-      const logged = sumHours(myEntries.filter((e) => e.taskId === a.taskId));
+      const logged = sumHours(myEntries.filter((e) => e.taskId === a.taskId && !e.declined));
       assignedTotal += assigned;
       loggedTotal += logged;
       remainingTotal += Math.max(0, assigned - logged);
@@ -147,17 +147,24 @@ function render() {
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid + owedBack);
   renderPay(myEntries);
 
-  // Your subtasks; completed ones too unless hidden.
-  const myOpenItems = dueDates.filter((d) => (d.personIds || []).includes(personId)
+  renderDeclined(myEntries);
+
+  // Your subtasks; completed ones too when shown.
+  const myItems = dueDates.filter((d) => (d.personIds || []).includes(personId)
     && (showCompleted || !d.completed));
-  // Internal projects (e.g. Proposals & Pursuits) only show when you have
-  // subtasks on them; they sort last.
+  const myOpenExpenses = myExpenses().filter((e) => !e.invoiced);
+  // Only what's relevant to you: billable projects you're assigned to, have
+  // logged on, have subtasks or open expenses on; internal projects (e.g.
+  // RFPs) only when you have subtasks there.
   const myProjectIds = [...new Set([
     ...assignments.filter((a) => a.personId === personId).map((a) => a.projectId),
     ...myEntries.map((e) => e.projectId),
-    ...myOpenItems.map((d) => d.projectId),
-  ])].filter((id) => !isInternal(projects.find((p) => p.id === id))
-    || myOpenItems.some((d) => d.projectId === id));
+    ...myItems.map((d) => d.projectId),
+    ...myOpenExpenses.map((e) => e.projectId),
+  ])].filter((id) => {
+    const p = projects.find((x) => x.id === id);
+    return p && (!isInternal(p) || myItems.some((d) => d.projectId === id));
+  });
   // Same order as everywhere else: newest projects first.
   const order = sortProjects(projects).map((p) => p.id);
   myProjectIds.sort((a, b) => order.indexOf(a) - order.indexOf(b));
@@ -167,80 +174,89 @@ function render() {
     return;
   }
 
-  // Progress is shown in hours only (assigned vs. logged), so staff never see
-  // billing dollars, just their hours and their own pay above. The project's
-  // overall budget is shown as a percentage — that's the real limit, since
-  // individual assignments grow as work goes on. Each task also lists the
-  // person's assignments (dated to-dos) for it, so the work and the hours
-  // for it sit together.
+  // Each card: three numbers (your hours logged, your hours remaining, the
+  // project's budget used), then a row per task with your logged and
+  // remaining hours and the task's budget used; its subtasks underneath.
+  // Remaining counts down from what's assigned and stops at 0. Staff see
+  // budgets as percentages only, never dollars.
   const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
-  const itemsHtml = (items) => items.length
-    ? `<div class="due-list">${items.sort(byDue).map((d) => dueItemHtml(d, { canComplete: true, canEdit: canManage(d), canDelete: canManage(d) })).join("")}</div>`
-    : "";
+  // Subtasks sit under their task: name with its due date after it, then
+  // Edit / ✓ complete / × delete at the far right.
+  const today = todayISO();
+  const subtaskRow = (d) => {
+    const overdue = !d.completed && d.dueDate < today;
+    const due = d.completed ? `Done${d.completedDate ? " " + shortDate(String(d.completedDate)) : ""}` : shortDate(d.dueDate);
+    return `<div class="pc-task pc-sub ${d.completed ? "done" : ""}">
+      <div class="pc-sub-name"><span>${esc(d.title)} <span class="due-inline ${overdue ? "overdue" : ""}">· ${due}</span></span></div>
+      <div class="pc-sub-actions">${subtaskActionsHtml(d, { canManage: canManage(d) })}</div>
+    </div>`;
+  };
+  const itemsHtml = (items) => (items.length ? `<div class="pc-subs">${items.sort(byDue).map(subtaskRow).join("")}</div>` : "");
+  const pctOf = (spent, budget) => (budget > 0 ? Math.round((spent / budget) * 100) : null);
+  const metric = (label, value, sub = "") => `<div class="pc-metric"><div class="pc-metric-label">${label}</div>
+    <div class="pc-metric-value">${value}</div>${sub ? `<div class="pc-metric-sub">${sub}</div>` : ""}</div>`;
+  const hrs = (n) => `${fmtHrs(n)} <span class="pc-unit">hrs</span>`;
 
   projectSummaryCards.innerHTML = myProjectIds.map((projectId) => {
     const project = projects.find((p) => p.id === projectId);
-    if (!project) return "";
-    const projectEntries = myEntries.filter((e) => e.projectId === projectId);
-    const projectItems = myOpenItems.filter((d) => d.projectId === projectId);
+    const internal = isInternal(project);
+    const color = projectColor(project.id);
+    const pm = people.find((x) => x.id === project.pmPersonId);
+    const projectEntries = myEntries.filter((e) => e.projectId === projectId && !e.declined);
+    const projectItems = myItems.filter((d) => d.projectId === projectId);
     const myAssignments = assignments.filter((a) => a.personId === personId && a.projectId === projectId);
-    // Tasks you're assigned to, have logged on, or have something due on.
+    // Tasks you're assigned to, have logged on, or have a subtask on;
+    // internal projects only list tasks with your subtasks.
     const taskIds = [...new Set([
-      ...myAssignments.map((a) => a.taskId),
-      ...(isInternal(project) ? [] : projectEntries.map((e) => e.taskId)),
+      ...(internal ? [] : myAssignments.map((a) => a.taskId)),
+      ...(internal ? [] : projectEntries.map((e) => e.taskId)),
       ...projectItems.filter((d) => d.taskId).map((d) => d.taskId),
     ])];
     const projectTasks = taskIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    const color = projectColor(project.id);
-    const internal = isInternal(project);
+    const loggedOn = (taskId) => sumHours(projectEntries.filter((e) => e.taskId === taskId));
+    const assignedOn = (taskId) => {
+      const a = myAssignments.find((x) => x.taskId === taskId);
+      return a ? assignedHours(a, { projects, people }) : null;
+    };
+    const assignedTotal = myAssignments.reduce((s, a) => s + assignedHours(a, { projects, people }), 0);
+    const remainingTotal = myAssignments.reduce((s, a) => s + Math.max(0, assignedHours(a, { projects, people }) - loggedOn(a.taskId)), 0);
     const projectBudget = tasks.filter((t) => t.projectId === projectId).reduce((s, t) => s + Number(t.budget || 0), 0);
-    const projectSpent = billedAmount(timeEntries.filter((e) => e.projectId === projectId), { projects, people });
-    const budgetPct = projectBudget > 0 ? Math.round((projectSpent / projectBudget) * 100) : null;
+    const budgetPct = pctOf(billedAmount(timeEntries.filter((e) => e.projectId === projectId && !e.declined), { projects, people }), projectBudget);
 
-    let totalAssigned = 0;
-    let totalUsed = 0;
+    const metrics = internal ? "" : `<div class="pc-metrics">
+      ${metric("Logged", hrs(sumHours(projectEntries)))}
+      ${metric("Remaining", assignedTotal > 0 ? hrs(remainingTotal) : "—",
+        assignedTotal > 0 ? `of ${fmtHrs(assignedTotal)} assigned` : "None assigned")}
+      ${metric("Budget used", budgetPct != null ? `${budgetPct}%` : "—")}
+    </div>`;
+
     const taskRows = projectTasks.map((task) => {
-      const assignment = myAssignments.find((a) => a.taskId === task.id);
-      const used = projectEntries
-        .filter((e) => e.taskId === task.id)
-        .reduce((s, e) => s + Number(e.hours || 0), 0);
-      const assigned = assignment ? assignedHours(assignment, { projects, people }) : 0;
-      totalAssigned += assigned;
-      totalUsed += used;
-      return `<div class="hours-row hours-row-with-items">
-        <div class="hours-row-name" title="${esc(task.name)}">
-          ${esc(task.name)}
-          <button class="link-btn assign-link" data-action="add-subtask" data-project-id="${projectId}" data-task-id="${task.id}">+ Add subtask</button>
-        </div>
-        <div>
-          ${internal
-            ? (used > 0 ? `<div class="hours-logged-only">${fmtHrs(used)} hrs logged</div>` : "")
-            : assigned > 0 || used > 0 ? hoursBarHtml(used, assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
-          ${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}
-        </div>
-      </div>`;
+      const logged = loggedOn(task.id);
+      const assigned = assignedOn(task.id);
+      const pct = internal ? null : pctOf(billedAmount(timeEntries.filter((e) => e.taskId === task.id && !e.declined), { projects, people }), Number(task.budget || 0));
+      return `<div class="pc-task">
+        <div class="pc-task-name" title="${esc(task.name)}">${esc(task.name)}</div>
+        <div class="pc-num">${fmtHrs(logged)}</div>
+        <div class="pc-num ${assigned == null ? "pc-dim" : ""}">${internal ? "" : assigned == null ? "—" : fmtHrs(Math.max(0, assigned - logged))}</div>
+        <div class="pc-budget">${pct != null ? `<div class="pc-bar"><div style="width:${Math.min(100, pct)}%; background:${color};"></div></div><span>${pct}%</span>` : ""}</div>
+      </div>${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}`;
     }).join("");
     const generalItems = projectItems.filter((d) => !d.taskId);
 
-    return `<div class="card">
-      <div class="hours-card-header">
-        <h2 style="margin:0;"><span class="cal-swatch" style="--c:${color};"></span>${esc(project.name)}</h2>
-        ${budgetPct != null ? `<div class="empty" style="padding:0;">Project budget: <strong class="${budgetPct > 100 ? "hours-over" : ""}">${budgetPct}% used</strong></div>` : ""}
+    return `<div class="card project-card-v2" style="--c:${color};">
+      <div class="pc-head">
+        <h2><span class="cal-swatch"></span>${esc(project.name)}</h2>
+        <div class="pc-meta">${esc([project.client || (internal ? "Internal" : ""), pm ? `PM ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>
       </div>
-      ${totalAssigned > 0 ? `
-        <div class="hours-total">
-          <div class="summary-label">Your hours &middot; all tasks</div>
-          ${hoursBarHtml(totalUsed, totalAssigned, color, true)}
-        </div>` : ""}
-      ${taskRows ? `<div class="hours-rows">${taskRows}</div>` : ""}
-      ${generalItems.length ? `<div class="hours-row hours-row-with-items">
-        <div class="hours-row-name">Other subtasks</div>
-        <div>${itemsHtml(generalItems)}</div>
+      ${metrics}
+      ${taskRows ? `<div class="pc-tasks">
+        <div class="pc-task pc-task-head"><div>Task</div><div class="pc-num">Logged</div><div class="pc-num">${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Task budget"}</div></div>
+        ${taskRows}
       </div>` : ""}
-      ${!taskRows && !generalItems.length ? '<div class="empty">No hours assigned to you on this project yet.</div>' : ""}
-      ${isInternal(project) ? "" : cardExpensesHtml(project)}
+      ${generalItems.length ? `<div class="pc-tasks pc-general"><div class="pc-task"><div class="pc-task-name">Other subtasks</div></div>${itemsHtml(generalItems)}</div>` : ""}
+      ${cardFooterHtml(project)}
     </div>`;
   }).join("");
 }
@@ -342,40 +358,76 @@ function myExpenses() {
   return expenses.filter((e) => e.personId === selectedPersonId && e.kind !== "sub");
 }
 
-// Under each project's tasks, laid out like a task row: "Expenses" with
-// "+ Record expense" on the left; on the right, your amount not yet invoiced,
-// then each expense like a subtask. Invoiced ones count as completed, so they
+// Bottom of each card: "+ Subtask" and "+ Expense", then a summary of your
+// expenses that opens the list. Invoiced ones count as completed, so they
 // only show with "Show completed subtasks".
-function cardExpensesHtml(project) {
-  const all = myExpenses().filter((e) => e.projectId === project.id);
+const openExpenseLists = new Set(); // project ids with the expense list open
+function cardFooterHtml(project) {
+  const internal = isInternal(project);
+  const all = internal ? [] : myExpenses().filter((e) => e.projectId === project.id);
   const sum = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
   const open = all.filter((e) => !e.invoiced && !e.declined);
-  const invoicedSum = sum(all.filter((e) => e.invoiced));
   const shown = all.filter((e) => showCompleted || !e.invoiced)
     .sort((a, b) => (!!a.invoiced - !!b.invoiced) || (a.date < b.date ? 1 : -1));
+  const listOpen = openExpenseLists.has(project.id) && shown.length > 0;
+  const summary = shown.length
+    ? `<button type="button" class="link-btn pc-exp-toggle" data-action="toggle-expenses" data-project-id="${project.id}" aria-expanded="${listOpen}">${shown.length} expense${shown.length === 1 ? "" : "s"} · ${formatCurrency(sum(open))} not invoiced <span class="chev ${listOpen ? "up" : ""}" aria-hidden="true">&#9662;</span></button>`
+    : "";
   const shortDay = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `<div class="card-expenses">
-    <div class="hours-row hours-row-with-items">
-      <div class="hours-row-name">
-        Expenses
-        <button type="button" class="link-btn assign-link" data-action="add-expense" data-project-id="${project.id}">+ Record expense</button>
-      </div>
-      <div>
-        <div class="expense-summary"><strong>${formatCurrency(sum(open))}</strong> not invoiced${invoicedSum ? ` <span class="appr-muted">· ${formatCurrency(invoicedSum)} invoiced</span>` : ""}</div>
-        ${shown.length ? `<div class="due-list">${shown.map((e) => {
-          const [status, cls] = expenseStatus(e);
-          return `<div class="due-item ${e.invoiced ? "done" : ""}">
-            <span class="due-mark" aria-hidden="true">${e.invoiced ? "&#10003;" : ""}</span>
-            <span class="due-title">${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span>
-            <span class="due-when">${shortDay(e.date)} &middot; ${formatCurrency(e.amount)}</span>
-            <span class="pay-status ${cls}">${status}</span>
-            ${!e.approved ? `<button type="button" class="link-btn due-edit" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
-          </div>`;
-        }).join("")}</div>` : ""}
-      </div>
+  return `<div class="pc-foot">
+      <button type="button" class="link-btn" data-action="add-subtask" data-project-id="${project.id}">+ Subtask</button>
+      ${internal ? "" : `<button type="button" class="link-btn" data-action="add-expense" data-project-id="${project.id}">+ Expense</button>`}
+      ${summary}
     </div>
-  </div>`;
+    ${listOpen ? `<div class="pc-subs pc-expenses">${shown.map((e) => {
+      const [status, cls] = expenseStatus(e);
+      return `<div class="pc-exp-row ${e.invoiced ? "done" : ""}">
+        <div class="pc-sub-name" title="${esc(expenseLabel(e, project))}"><span>${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span></div>
+        <span class="pc-exp-when">${shortDay(e.date)} &middot; ${formatCurrency(e.amount)}</span>
+        <span class="pay-status ${cls}">${status}</span>
+        <span class="pc-exp-edit">${!e.approved ? `<button type="button" class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}</span>
+      </div>`;
+    }).join("")}</div>` : ""}`;
 }
+
+// Declined hours and expenses waiting on you to fix, with the PM's reason.
+// Only shows when there's something; editing an entry resubmits it.
+const declinedStrip = document.getElementById("declinedStrip");
+function renderDeclined(myEntries) {
+  const projName = (id) => { const p = projects.find((x) => x.id === id); return p ? projectShortName(p) : "—"; };
+  const taskName = (id) => { const t = tasks.find((x) => x.id === id); return t ? t.name : ""; };
+  const rows = [
+    ...myEntries.filter((e) => e.declined && !e.approved && !e.invoiced).map((e) => ({
+      date: e.date,
+      what: `${fmtHrs(Number(e.hours))} hrs declined`,
+      where: [projName(e.projectId), taskName(e.taskId)].filter(Boolean).join(" › "),
+      reason: e.declineReason,
+      action: `<a class="declined-fix" href="timesheet.html?day=${encodeURIComponent(e.date)}">Fix on timesheet</a>`,
+    })),
+    ...myExpenses().filter((e) => e.declined && !e.approved && !e.invoiced).map((e) => ({
+      date: e.date,
+      what: `${formatCurrency(e.amount)} expense declined`,
+      where: projName(e.projectId),
+      reason: e.declineReason,
+      action: `<button type="button" class="declined-fix" data-action="edit-expense" data-id="${e.id}">Edit expense</button>`,
+    })),
+  ].sort((a, b) => (a.date < b.date ? -1 : 1));
+  declinedStrip.hidden = !rows.length;
+  declinedStrip.innerHTML = rows.map((r) => `<div class="declined-row">
+      <span class="declined-icon" aria-hidden="true">!</span>
+      <div class="declined-body">
+        <div><strong>${r.what}</strong> · ${esc(r.where)} · ${shortDate(r.date)}</div>
+        ${r.reason ? `<div class="declined-reason">“${esc(r.reason)}”</div>` : ""}
+      </div>
+      ${r.action}
+    </div>`).join("");
+}
+
+declinedStrip.addEventListener("click", (e) => {
+  const btn = e.target.closest('[data-action="edit-expense"]');
+  const exp = btn && expenses.find((x) => x.id === btn.dataset.id);
+  if (exp) expenseEditor.open(exp);
+});
 
 payToggle.addEventListener("click", () => {
   payOpen = !payOpen;
@@ -428,6 +480,13 @@ projectSummaryCards.addEventListener("click", (e) => {
     if (exp) expenseEditor.open(exp);
     return;
   }
+  if (btn.dataset.action === "toggle-expenses") {
+    const pid = btn.dataset.projectId;
+    if (openExpenseLists.has(pid)) openExpenseLists.delete(pid);
+    else openExpenseLists.add(pid);
+    render();
+    return;
+  }
   const { action, id } = btn.dataset;
   const d = dueDates.find((x) => x.id === id);
   if (action === "complete-duedate") setItemCompleted(id, true);
@@ -435,7 +494,7 @@ projectSummaryCards.addEventListener("click", (e) => {
   if (action === "edit-duedate" && d && canManage(d)) itemEditor.open(d);
   if (action === "delete-duedate" && d && canManage(d)) deleteItem(d);
   if (action === "add-subtask") {
-    itemEditor.open(null, { mode: "subtask", projectId: btn.dataset.projectId, taskId: btn.dataset.taskId, personId: selectedPersonId });
+    itemEditor.open(null, { mode: "subtask", projectId: btn.dataset.projectId, personId: selectedPersonId });
   }
 });
 

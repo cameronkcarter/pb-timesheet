@@ -1,13 +1,13 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
-  formatCurrency, formatDate, dueLabel, showToast,
-  todayISO, toISODate, addDays, daysBetween, projectColor, hoursBarHtml, fmtHrs, closeOnBackdropClick, budgetBarHtml, dueItemHtml, sortProjects, esc, confirmDialog,
+  formatCurrency, formatDate, showToast,
+  todayISO, toISODate, addDays, daysBetween, projectColor, fmtHrs, closeOnBackdropClick, budgetBarHtml, sortProjects, subtaskActionsHtml, esc, confirmDialog,
   projectShortName,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, isSubtask, setItemCompleted, deleteItem } from "./subtasks.js";
 import {
-  billRateOf, billedAmount, assignedHours, assignmentRate, isInternal, taskBudgetUse,
+  billedAmount, assignedHours, assignmentRate, isInternal, taskBudgetUse,
 } from "./rates.js";
 import { createProjectEditor } from "./project-editor.js";
 import { createExpenseEditor, expenseLabel, expenseStatus, expenseQtyText, countsToward } from "./expenses.js";
@@ -28,11 +28,7 @@ let editMode = false;  // admins: edit assigned hours instead of seeing subtasks
 let selectedProjectId = null;
 let projectPicked = false; // until you pick one, the first (newest) project is selected
 let expandedTaskId = null;
-let openDotId = null;
-let showCompleted = false; // completed subtasks are hidden unless shown
-
-const PX_PER_DAY = 4;
-const LABEL_COL_WIDTH = 200;
+let showCompleted = false; // completed subtasks and past events are hidden unless shown
 
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
@@ -53,14 +49,7 @@ const editTimelineBtn = document.getElementById("editTimelineBtn");
 
 const ganttChart = document.getElementById("ganttChart");
 const ganttEmpty = document.getElementById("ganttEmpty");
-const ganttScroll = document.getElementById("ganttScroll");
-let userHasScrolledGantt = false;
-let isProgrammaticGanttScroll = false;
-ganttScroll.addEventListener("scroll", () => {
-  if (isProgrammaticGanttScroll) return;
-  userHasScrolledGantt = true;
-});
-const generalItemsEl = document.getElementById("generalItems");
+const schedList = document.getElementById("schedList");
 
 const timelineModal = document.getElementById("timelineModal");
 const timelineModalTitle = document.getElementById("timelineModalTitle");
@@ -88,24 +77,56 @@ function canComplete(d) {
   return canManage(d) || (d.personIds || []).includes(sessionPersonId);
 }
 
-// Subtasks (dated to-dos with people) on this project, optionally for one
-// task / one person, respecting "Show completed".
-function projectItems({ taskId, personId } = {}) {
+// Subtasks and events on this project by date, so overdue ones come first.
+// Completed subtasks and past events only with "Show completed", at the end.
+function scheduleItems() {
+  const today = todayISO();
+  const done = (d) => (isSubtask(d) ? !!d.completed : d.dueDate < today);
   return dueDates
-    .filter((d) => d.projectId === selectedProjectId && isSubtask(d) && (showCompleted || !d.completed))
-    .filter((d) => taskId === undefined || (d.taskId || null) === taskId)
-    .filter((d) => !personId || (d.personIds || []).includes(personId))
-    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
+    .filter((d) => d.projectId === selectedProjectId && d.dueDate && (showCompleted || !done(d)))
+    .sort((a, b) => (done(a) - done(b)) || (a.dueDate < b.dueDate ? -1 : 1));
 }
 
-function itemsListHtml(items, withWho = false) {
-  if (!items.length) return "";
-  return `<div class="due-list">${items.map((d) => dueItemHtml(d, {
-    canComplete: canComplete(d),
-    canEdit: canManage(d),
-    canDelete: canManage(d),
-    who: withWho ? (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean).join(", ") : "",
-  })).join("")}</div>`;
+// Under the timeline: one row per subtask or event (Due | Name | Task |
+// People | Edit ✓ ×), each once however many people share it.
+function renderSchedule() {
+  if (!selectedProjectId) return;
+  const items = scheduleItems();
+  const today = todayISO();
+  // "Nov 6", with the year when it isn't this year ("Jun 10 '27").
+  const short = (iso) => {
+    const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
+    const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return iso.slice(0, 4) === today.slice(0, 4) ? label : `${label} ’${iso.slice(2, 4)}`;
+  };
+  toggleCompletedBtn.textContent = showCompleted ? "Hide completed" : "Show completed";
+  if (!items.length) {
+    schedList.innerHTML = `<div class="empty">${showCompleted ? "No subtasks or events yet." : "Nothing coming up."}</div>`;
+    return;
+  }
+  schedList.innerHTML = `<div class="sched-row sched-head"><div>Due</div><div>Subtask</div><div>Task</div><div>People</div><div></div></div>
+    ${items.map((d) => {
+      const sub = isSubtask(d);
+      const done = sub ? d.completed : d.dueDate < today;
+      const task = tasks.find((t) => t.id === d.taskId);
+      const who = (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean).join(", ");
+      return `<div class="sched-row sched-item ${sub ? "" : "sched-event"} ${done ? "done" : ""}" data-item-id="${d.id}" data-task-id="${d.taskId || ""}">
+        <div class="sched-due ${!done && d.dueDate < today ? "overdue" : ""}">${short(d.dueDate)}</div>
+        <div class="sched-name"><span>${esc(d.title)}</span>${sub ? "" : '<span class="row-kind">Event</span>'}</div>
+        <div class="sched-task">${task ? esc(task.name) : sub ? "Whole project" : ""}</div>
+        <div class="sched-who">${esc(who)}</div>
+        <div class="tp-sub-actions">${subtaskActionsHtml(d, { canComplete: sub && canComplete(d), canManage: canManage(d) })}</div>
+      </div>`;
+    }).join("")}`;
+}
+
+// Point at rows in the list (a task's "2 due" chip, a dot on the chart).
+function flashScheduleRows(selector) {
+  const rows = [...schedList.querySelectorAll(selector)];
+  if (!rows.length) return false;
+  rows[0].scrollIntoView({ behavior: "smooth", block: "center" });
+  rows.forEach((r) => { r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash"); });
+  return true;
 }
 
 if (sessionPersonId) {
@@ -121,8 +142,8 @@ if (sessionPersonId) {
   Projects.listen((data) => { projects = data; renderAll(); });
   Tasks.listen((data) => { tasks = data; renderAll(); });
   Assignments.listen((data) => { assignments = data; renderAll(); });
-  TimeEntries.listen((data) => { timeEntries = data; renderBudget(); renderGantt(); });
-  DueDates.listen((data) => { dueDates = data; renderBudget(); renderGantt(); });
+  TimeEntries.listen((data) => { timeEntries = data; renderBudget(); });
+  DueDates.listen((data) => { dueDates = data; renderBudget(); renderGantt(); renderSchedule(); });
   Invoices.listen((data) => { invoices = data; });
   Expenses.listen((data) => { expenses = data; renderBudget(); });
 }
@@ -141,6 +162,7 @@ function renderAll() {
   renderProjectCards();
   renderBudget();
   renderGantt();
+  renderSchedule();
 }
 
 // ---------- Project picker ----------
@@ -187,8 +209,6 @@ function pickProject(id) {
   finishEditing();
   expandedTaskId = null;
   addingTaskId = null;
-  userHasScrolledGantt = false;
-  closeDotPopover();
   renderAll();
 }
 
@@ -232,12 +252,6 @@ function renderProjectStats(project) {
 // invoiced (dark), logged but not invoiced, and assigned but not logged yet.
 const ctx = () => ({ projects, people });
 
-function spentOnTask(taskId) {
-  return timeEntries
-    .filter((e) => e.taskId === taskId)
-    .reduce((sum, e) => sum + Number(e.hours || 0) * billRateOf(e, ctx()), 0);
-}
-
 function invoicedOnTask(taskId) {
   return billedAmount(timeEntries.filter((e) => e.taskId === taskId && e.invoiced), ctx());
 }
@@ -256,13 +270,58 @@ function loggedBy(taskId, personId) {
   return loggedHours(timeEntries.filter((e) => e.taskId === taskId && e.personId === personId));
 }
 
-// Budget not yet spent or handed out, in dollars (see taskBudgetUse).
-// hoursOverride ({ assignmentId: hours }) follows unsaved edits.
-function unassignedHtml(task, hoursOverride = {}) {
-  const open = taskBudgetUse(task, { projects, people, assignments, timeEntries }, hoursOverride).unassigned;
-  return open < -0.005
-    ? `<span class="hours-over-strong">Over by ${formatCurrency(-open)}</span>`
-    : formatCurrency(open);
+// Each person's share of a task's budget, in dollars at their bill rate:
+// what they've logged (spent) and their assigned hours not logged yet
+// (outstanding). Bars are drawn against the budget, or against everything
+// logged and assigned when that's more. hoursOverride ({ assignmentId: hours })
+// follows unsaved edits. Internal tasks have no budget, so no bars.
+function taskShares(task, hoursOverride = {}) {
+  const project = projects.find((p) => p.id === task.projectId);
+  if (isInternal(project)) return null;
+  const entries = timeEntries.filter((e) => e.taskId === task.id);
+  const taskAssignments = assignments.filter((a) => a.taskId === task.id);
+  const byPerson = {};
+  [...new Set([...taskAssignments.map((a) => a.personId), ...entries.map((e) => e.personId)])].forEach((pid) => {
+    const person = people.find((p) => p.id === pid);
+    const mine = entries.filter((e) => e.personId === pid);
+    const a = taskAssignments.find((x) => x.personId === pid);
+    const hours = a ? (a.id in hoursOverride ? hoursOverride[a.id] : assignedHours(a)) : 0;
+    const logged = loggedHours(mine);
+    const toGo = Math.max(0, hours - logged);
+    byPerson[pid] = { logged, toGo, spent: billedAmount(mine, { projects, people }), outstanding: toGo * assignmentRate(project, person) };
+  });
+  const use = taskBudgetUse(task, { projects, people, assignments, timeEntries }, hoursOverride);
+  return { ...use, byPerson, scale: Math.max(use.budget, use.committed) };
+}
+
+// One person's bar: solid for logged, lighter for assigned but not logged.
+// Their share of the budget as a percent goes in the last column.
+function shareCellHtml(shares, personId) {
+  const p = shares && shares.byPerson[personId];
+  if (!p || shares.scale <= 0) return "";
+  const pct = (n) => `${(n / shares.scale) * 100}%`;
+  return `<div class="tp-bar" title="${fmtHrs(p.logged)} hrs logged${p.toGo ? ` · ${fmtHrs(p.toGo)} hrs assigned, not logged yet` : ""}">
+      <div class="tp-bar-logged" style="width:${pct(p.spent)};"></div><div class="tp-bar-togo" style="width:${pct(p.outstanding)};"></div>
+    </div>`;
+}
+
+function sharePct(shares, personId) {
+  const p = shares && shares.byPerson[personId];
+  return p && shares.budget > 0 ? `${Math.round(((p.spent + p.outstanding) / shares.budget) * 100)}%` : "";
+}
+
+// Last row: budget nobody has yet, or how far over it is.
+function unassignedRowHtml(shares) {
+  if (!shares || shares.budget <= 0) return "";
+  const over = shares.unassigned < -0.005;
+  const cell = over
+    ? `<span class="hours-over-strong">Over by ${formatCurrency(-shares.unassigned)}</span>`
+    : `<div class="tp-bar"><div class="tp-bar-open" style="width:${(shares.unassigned / shares.scale) * 100}%;"></div></div>`;
+  return `<div class="tp-row tp-unassigned">
+      <div class="tp-name">Unassigned${over ? "" : ` <span class="tp-open-amt">${formatCurrency(shares.unassigned)}</span>`}</div><div></div><div></div><div></div>
+      <div class="tp-share ${over ? "over" : ""}">${cell}</div>
+      <div class="tp-tail"><span class="tp-pct">${over ? "" : `${Math.round((shares.unassigned / shares.budget) * 100)}%`}</span></div>
+    </div>`;
 }
 
 function renderBudget() {
@@ -299,17 +358,11 @@ function renderBudget() {
   editAssignmentsBtn.style.display = admin && !internal ? "" : "none";
   editAssignmentsBtn.textContent = editMode ? "Done editing" : "Edit staff & hours";
   editAssignmentsBtn.classList.toggle("active-toggle", editMode);
-  toggleCompletedBtn.style.display = editMode ? "none" : "";
   barLegend.style.display = internal ? "none" : "";
 
   thead.innerHTML = internal
     ? `<tr><th class="internal-task-col">Task</th><th colspan="4">Hours logged</th></tr>`
     : `<tr><th>Task</th><th class="c-money">Budget</th><th class="c-money">Spent</th><th class="c-bar">Progress</th><th class="c-money">Remaining</th></tr>`;
-
-  const general = editMode ? [] : projectItems({ taskId: null });
-  generalItemsEl.innerHTML = general.length
-    ? `<div class="summary-label" style="margin:16px 0 4px;">Project-wide subtasks</div>${itemsListHtml(general, true)}`
-    : "";
 
   // No tasks yet: say so, but still show the expense rows below.
   budgetEmpty.style.display = projectTasks.length ? "none" : "block";
@@ -336,7 +389,7 @@ function renderBudget() {
     }
     const open = dueDates.filter((d) => d.taskId === t.id && isSubtask(d) && !d.completed);
     const overdue = open.some((d) => d.dueDate < todayISO());
-    const dueChip = open.length ? `<span class="due-chip ${overdue ? "overdue" : ""}" title="Open subtasks on this task">${open.length} due</span>` : "";
+    const dueChip = open.length ? `<button type="button" class="due-chip ${overdue ? "overdue" : ""}" data-jump-task="${t.id}" title="Show this task's subtasks">${open.length} due</button>` : "";
     const closedPill = t.closed ? '<span class="pill">Closed</span>' : "";
     const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""} ${t.closed ? "task-closed" : ""}" data-task-row="${t.id}"><td><div class="task-cell" title="${esc(t.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${esc(t.name)}</span>${closedPill}${dueChip}</div></td>${cells}</tr>`;
     if (!expanded) return mainRow;
@@ -344,10 +397,11 @@ function renderBudget() {
   }).join("");
 
   budgetTbody.innerHTML = rows + (internal ? "" : expenseRowsHtml(project, totals, cols));
+  alignShareBars();
 
   // Someone was just added: put the cursor in their hours box.
   if (focusPersonId) {
-    const input = budgetTbody.querySelector(`.assign-row[data-person-id="${focusPersonId}"] .assignHours`);
+    const input = budgetTbody.querySelector(`.tp-row[data-person-id="${focusPersonId}"] .assignHours`);
     if (input) {
       focusPersonId = null;
       input.focus();
@@ -356,10 +410,28 @@ function renderBudget() {
   }
 }
 
+// The people under an open task have their share-of-budget bars in the
+// same place as the tasks' Progress bars above them: measure that column
+// and size the last two grid columns to match.
+const TP_GAP = 18;
+function alignShareBars() {
+  const ref = budgetTbody.querySelector("tr.task-row .progressCell .progress-bar");
+  if (!ref) return;
+  const bar = ref.getBoundingClientRect();
+  budgetTbody.querySelectorAll(".tp-list").forEach((list) => {
+    const box = list.getBoundingClientRect();
+    const tail = box.right - bar.right - TP_GAP;
+    if (bar.width <= 0 || tail < 30) return;
+    list.style.setProperty("--share-w", `${bar.width}px`);
+    list.style.setProperty("--tail-w", `${tail}px`);
+  });
+}
+window.addEventListener("resize", alignShareBars);
+
 // ---------- Expenses in the Budget table ----------
 // Under the tasks: Tasks subtotal, Project expenses, one row per
 // subconsultant, Expenses subtotal and the grand Total. Expense rows open to
-// list what was recorded, with "+ Record expense" / "+ Record invoice".
+// list what was recorded, with "+ Expense" / "+ Sub invoice".
 function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = "") {
   const remaining = budget - spent;
   return `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
@@ -420,29 +492,31 @@ function expenseListHtml(g) {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
   const canRecordSub = isAdmin() || isPmOf(project.id);
   const addBtn = g.sub
-    ? (canRecordSub ? `<button class="link-btn" data-action="add-expense" data-kind="sub" data-sub-id="${g.sub.id}">+ Record invoice</button>` : "")
-    : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Record expense</button>`;
+    ? (canRecordSub ? `<button class="link-btn" data-action="add-expense" data-kind="sub" data-sub-id="${g.sub.id}">+ Sub invoice</button>` : "")
+    : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Expense</button>`;
   if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">Nothing recorded yet.</div>${addBtn}`;
   const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `<table class="expense-list">
-    <thead><tr><th>Date</th><th>Description</th>${g.sub ? "" : "<th>Paid by</th><th class=\"num\">Quantity</th>"}<th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${items.map((e) => {
+  // Laid out like subtasks: a header, then the rows in a tinted band.
+  const kind = g.sub ? "tp-exp-sub" : "";
+  return `<div class="tp-exp ${kind}">
+    <div class="tp-exp-row tp-head"><div>Description</div><div>Date</div>${g.sub ? "" : "<div>Paid by</div><div>Quantity</div>"}<div>Amount</div><div>Status</div><div></div></div>
+    <div class="tp-subs">${items.map((e) => {
       const [status, cls] = expenseStatus(e);
       const payer = people.find((p) => p.id === e.personId);
       const canReimburse = isAdmin() && e.personId && e.approved && !e.reimbursed;
-      return `<tr>
-        <td>${shortDate(e.date)}</td>
-        <td>${esc(g.sub ? e.description || "—" : expenseLabel(e, project))}${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</td>
-        ${g.sub ? "" : `<td>${payer ? esc(payer.name) : "Company"}</td><td class="num">${expenseQtyText(e) || "—"}</td>`}
-        <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
-        <td><span class="pay-status ${cls}">${status}</span></td>
-        <td class="num expense-actions">
+      return `<div class="tp-exp-row tp-sub ${e.invoiced ? "done" : ""}">
+        <div class="tp-sub-name"><span>${esc(g.sub ? e.description || "—" : expenseLabel(e, project))}</span>${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</div>
+        <div class="tp-due">${shortDate(e.date)}</div>
+        ${g.sub ? "" : `<div>${payer ? esc(payer.name) : "Company"}</div><div class="tp-dim">${expenseQtyText(e) || "—"}</div>`}
+        <div class="tp-num"><strong>${formatCurrency(e.amount)}</strong></div>
+        <div><span class="pay-status ${cls}">${status}</span></div>
+        <div class="tp-sub-actions">
           ${canReimburse ? `<button class="link-btn" data-action="reimburse-expense" data-id="${e.id}">Mark reimbursed</button>` : ""}
           ${canEditExpense(e) && !e.invoiced ? `<button class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
-        </td>
-      </tr>`;
-    }).join("")}</tbody>
-  </table>${addBtn}`;
+        </div>
+      </div>`;
+    }).join("")}</div>
+  </div>${addBtn}`;
 }
 
 const expenseEditor = createExpenseEditor({
@@ -472,13 +546,12 @@ async function handleExpenseAction(btn) {
   }
 }
 
-// Who's on a task: each person's hours bar and their subtasks for it.
+// Who's on a task: each person's hours and share of the budget.
 function taskPeopleHtml(task) {
   // Internal tasks have no assigned hours, just hours logged.
   const internal = isInternal(projects.find((p) => p.id === task.projectId));
   const taskAssignments = assignments.filter((a) => a.taskId === task.id);
   const taskEntries = timeEntries.filter((e) => e.taskId === task.id);
-  const taskItems = projectItems({ taskId: task.id });
   // Anyone can close an internal task (e.g. a proposal that's been submitted)
   // so it drops off the Timesheet's task list; its hours stay.
   const closeBar = internal
@@ -486,14 +559,11 @@ function taskPeopleHtml(task) {
         <button class="link-btn" data-action="${task.closed ? "reopen-task" : "close-task"}" data-task-id="${task.id}">${task.closed ? "Reopen task" : "Close task"}</button></div>`
     : "";
   const personIds = [...new Set([
-    ...(internal ? people.filter((x) => !x.inactive).map((x) => x.id) : []),
     ...taskAssignments.map((a) => a.personId),
     ...taskEntries.map((e) => e.personId),
-    ...taskItems.flatMap((d) => d.personIds || []),
   ])];
   if (personIds.length === 0) {
-    return `<div class="empty">No one is assigned to this task yet.</div>
-      <button class="link-btn" data-action="quick-assign" data-task-id="${task.id}">+ Add subtask</button>`;
+    return `${closeBar}<div class="empty">${internal ? "No hours on this task yet." : "No one is assigned to this task yet."}</div>`;
   }
 
   const rows = personIds.map((pid) => {
@@ -505,33 +575,35 @@ function taskPeopleHtml(task) {
       assigned: assignment ? assignedHours(assignment) : 0,
       logged: loggedHours(taskEntries.filter((e) => e.personId === pid)),
       isAssigned: !!assignment,
-      items: taskItems.filter((d) => (d.personIds || []).includes(pid)),
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Same columns as "Edit staff & hours" (name | hours box | bar | ×), so
-  // switching modes doesn't move anything: the box and × columns are empty
-  // here, and subtasks sit under the bar.
-  const color = projectColor(task.projectId);
-  return `${closeBar}<div class="assign-list">${rows.map((r) => `<div class="assign-row people-row">
-      <div class="assign-name">
-        ${esc(r.name)}
-        <button class="link-btn assign-link" data-action="quick-assign" data-person-id="${r.personId}" data-task-id="${task.id}">+ Add subtask</button>
-      </div>
-      <div></div>
-      <div class="assign-bar">
-        ${internal
-          ? `<div class="hours-logged-only">${r.logged ? `${fmtHrs(r.logged)} hrs` : "—"}</div>`
-          : r.isAssigned || r.logged ? hoursBarHtml(r.logged, r.assigned, color) : '<div class="empty" style="padding:0; font-size:12px;">No hours assigned</div>'}
-        ${itemsListHtml(r.items)}
-      </div>
-      <div></div>
-    </div>`).join("")}</div>`;
+  // Like the Dashboard: one row per person with plain numbers (Assigned,
+  // Logged, Remaining — remaining stops at 0) and a bar for their share of
+  // the task's budget; then a row for the budget nobody has yet. Same columns as "Edit staff & hours" so switching modes
+  // doesn't move anything. Internal tasks only have hours logged.
+  const shares = taskShares(task);
+  return `${closeBar}<div class="tp-list ${internal ? "tp-internal" : ""}" style="--c:${projectColor(task.projectId)};">
+    ${tpHeadHtml(internal)}
+    ${rows.map((r) => `<div class="tp-row tp-person">
+      <div class="tp-name">${esc(r.name)}</div>
+      <div class="tp-num ${r.isAssigned ? "" : "tp-dim"}">${internal ? "" : r.isAssigned ? fmtHrs(r.assigned) : "—"}</div>
+      <div class="tp-num">${fmtHrs(r.logged)}</div>
+      <div class="tp-num ${r.isAssigned ? "" : "tp-dim"}">${internal ? "" : r.isAssigned ? fmtHrs(Math.max(0, r.assigned - r.logged)) : "—"}</div>
+      <div class="tp-share">${shareCellHtml(shares, r.personId)}</div>
+      <div class="tp-tail"><span class="tp-pct">${sharePct(shares, r.personId)}</span></div>
+    </div>`).join("")}
+    ${unassignedRowHtml(shares)}
+  </div>`;
+}
+
+function tpHeadHtml(internal) {
+  return `<div class="tp-row tp-head"><div>Person</div><div>${internal ? "" : "Assigned"}</div><div>Logged</div><div>${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Share of budget"}</div><div></div></div>`;
 }
 
 // ---------- Edit assignments (admins) ----------
 // Each person on the task gets an hours box (saves itself a moment after
-// typing), the assigned-vs-logged bar and a remove button; "+ Add person"
+// typing), their logged and remaining hours and a remove button; "+ Add person"
 // adds someone. Unassigned updates as you type.
 let addingTaskId = null;    // task whose "Add person" chips are showing
 let focusPersonId = null;   // just added: focus their hours box once it appears
@@ -539,16 +611,18 @@ let renderDeferred = false; // skip re-rendering while someone is editing hours
 const saveTimers = {};      // assignmentId -> pending auto-save
 const SAVE_DELAY_MS = 800;
 
-function assignRowHtml(a, color) {
+function assignRowHtml(a, shares) {
   const person = people.find((p) => p.id === a.personId);
   const project = projects.find((p) => p.id === a.projectId);
   const hours = assignedHours(a);
   const logged = loggedBy(a.taskId, a.personId);
-  return `<div class="assign-row" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-logged="${logged}">
-    <div class="assign-name">${person ? esc(person.name) : "—"}<div class="empty" style="padding:0; font-size:12px; font-weight:400;">${person ? `Bill ${formatCurrency(assignmentRate(project, person))}/hr` : ""}</div></div>
-    <div class="assign-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" /> hrs <span class="saved-tick"></span></div>
-    <div class="assign-bar">${hoursBarHtml(logged, hours, color)}</div>
-    <button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button>
+  return `<div class="tp-row tp-person" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-logged="${logged}">
+    <div class="tp-name">${person ? esc(person.name) : "—"}<div class="tp-rate">${person ? `Bill ${formatCurrency(assignmentRate(project, person))}/hr` : ""}</div></div>
+    <div class="tp-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" aria-label="Assigned hours" /><span class="saved-tick"></span></div>
+    <div class="tp-num">${fmtHrs(logged)}</div>
+    <div class="tp-num tp-remaining">${fmtHrs(Math.max(0, hours - logged))}</div>
+    <div class="tp-share">${shareCellHtml(shares, a.personId)}</div>
+    <div class="tp-tail"><span class="tp-pct">${sharePct(shares, a.personId)}</span><button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button></div>
   </div>`;
 }
 
@@ -558,7 +632,7 @@ function addPersonHtml(task) {
     .sort((a, b) => a.name.localeCompare(b.name));
   if (available.length === 0) return "";
   if (addingTaskId !== task.id) {
-    return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Add person</button>`;
+    return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Person</button>`;
   }
   // Tap someone to add them (0 hrs); their hours box is then ready to type in.
   const project = projects.find((pr) => pr.id === task.projectId);
@@ -574,35 +648,40 @@ function addPersonHtml(task) {
 }
 
 function assignEditorHtml(task) {
-  const color = projectColor(task.projectId);
+  const shares = taskShares(task);
   const rows = assignments.filter((a) => a.taskId === task.id)
     .sort((a, b) => (people.find((p) => p.id === a.personId)?.name || "").localeCompare(people.find((p) => p.id === b.personId)?.name || ""))
-    .map((a) => assignRowHtml(a, color)).join("");
-  return `<div class="assign-list">
-    <div class="assign-summary">Unassigned budget <strong class="unassignedCell">${unassignedHtml(task)}</strong></div>
-    ${rows || '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
+    .map((a) => assignRowHtml(a, shares)).join("");
+  return `<div class="tp-list" style="--c:${projectColor(task.projectId)};">
+    ${rows ? tpHeadHtml(false) + rows : '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
+    ${unassignedRowHtml(shares)}
     ${addPersonHtml(task)}
   </div>`;
 }
 
-// Redraw a task's people bars and Unassigned cell from the hours boxes as
+// Redraw a task's Remaining hours and budget bars from the hours boxes as
 // they're being edited (before the save lands).
 function liveUpdateTask(detailRow) {
   if (!detailRow) return;
   const task = tasks.find((t) => t.id === detailRow.dataset.taskId);
-  const color = projectColor(task.projectId);
   const override = {};
-  detailRow.querySelectorAll(".assign-row[data-assignment-id]").forEach((row) => {
+  detailRow.querySelectorAll(".tp-row[data-assignment-id]").forEach((row) => {
     const value = Number(row.querySelector(".assignHours").value);
     const hours = isNaN(value) || value < 0 ? 0 : value;
     override[row.dataset.assignmentId] = hours;
-    row.querySelector(".assign-bar").innerHTML = hoursBarHtml(Number(row.dataset.logged || 0), hours, color);
+    row.querySelector(".tp-remaining").textContent = fmtHrs(Math.max(0, hours - Number(row.dataset.logged || 0)));
   });
   const mainRow = budgetTbody.querySelector(`tr.task-row[data-task-row="${task.id}"]`);
   if (!mainRow) return;
   const use = taskBudgetUse(task, { projects, people, assignments, timeEntries }, override);
-  const cell = detailRow.querySelector(".unassignedCell");
-  if (cell) cell.innerHTML = unassignedHtml(task, override);
+  const shares = taskShares(task, override);
+  detailRow.querySelectorAll(".tp-row[data-person-id]").forEach((row) => {
+    row.querySelector(".tp-share").innerHTML = shareCellHtml(shares, row.dataset.personId);
+    row.querySelector(".tp-pct").textContent = sharePct(shares, row.dataset.personId);
+  });
+  const open = detailRow.querySelector(".tp-unassigned");
+  if (open) open.outerHTML = unassignedRowHtml(shares);
+  alignShareBars();
   const progressCell = mainRow.querySelector(".progressCell");
   if (progressCell) progressCell.innerHTML = budgetBarHtml(use.spent, use.committed, use.budget, false, invoicedOnTask(task.id));
 }
@@ -700,6 +779,11 @@ async function handleAssignAction(btn) {
 }
 
 budgetTbody.addEventListener("click", async (e) => {
+  const chip = e.target.closest("[data-jump-task]");
+  if (chip) {
+    flashScheduleRows(`.sched-item[data-task-id="${chip.dataset.jumpTask}"]`);
+    return;
+  }
   const btn = e.target.closest("button[data-action]");
   if (btn) {
     if (["open-add", "cancel-add", "remove-assignment", "add-assignment"].includes(btn.dataset.action)) {
@@ -752,17 +836,14 @@ editAssignmentsBtn.addEventListener("click", () => {
 });
 editTimelineBtn.addEventListener("click", () => openTimelineModal(selectedProjectId));
 
-// ---------- Timeline (Gantt) for the selected project ----------
-function closeDotPopover() {
-  openDotId = null;
-  document.querySelectorAll(".gantt-dot-popover").forEach((el) => el.remove());
-}
+// ---------- Timeline for the selected project ----------
+// The whole project fitted to the card's width, no scrolling.
+const GANTT_LABEL_W = { wide: 212, narrow: 116 }; // label column + gap, as in style.css
 
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".gantt-dot") && !e.target.closest(".gantt-dot-popover")) {
-    closeDotPopover();
-  }
-});
+function monthStart(iso, add = 0) {
+  const d = new Date(iso + "T00:00:00");
+  return toISODate(new Date(d.getFullYear(), d.getMonth() + add, 1));
+}
 
 function renderGantt() {
   const project = projects.find((p) => p.id === selectedProjectId);
@@ -772,7 +853,9 @@ function renderGantt() {
     return;
   }
 
-  const projectTasks = selectedProjectTasks();
+  // In date order, undated tasks last.
+  const projectTasks = selectedProjectTasks()
+    .sort((a, b) => (a.startDate || a.endDate || "9").localeCompare(b.startDate || b.endDate || "9"));
   const scheduledTasks = projectTasks.filter((t) => t.startDate && t.endDate);
   const projectDueDates = dueDates.filter((d) => d.dueDate && d.projectId === project.id);
 
@@ -787,93 +870,60 @@ function renderGantt() {
   ganttEmpty.style.display = "none";
 
   const today = todayISO();
-  const allStarts = scheduledTasks.map((t) => t.startDate);
-  const allEnds = scheduledTasks.map((t) => t.endDate);
-  const allDueDates = projectDueDates.map((d) => d.dueDate);
-  const rangeStartRaw = [...allStarts, ...allDueDates, today].sort()[0];
-  const rangeEndRaw = [...allEnds, ...allDueDates, today].sort().slice(-1)[0];
-  const rangeStart = toISODate(addDays(rangeStartRaw + "T00:00:00", -4));
-  const rangeEnd = toISODate(addDays(rangeEndRaw + "T00:00:00", 14));
+  const dates = [...scheduledTasks.flatMap((t) => [t.startDate, t.endDate]), ...projectDueDates.map((d) => d.dueDate), today].sort();
+  const rangeStart = toISODate(addDays(dates[0] + "T00:00:00", -4));
+  const rangeEnd = toISODate(addDays(dates[dates.length - 1] + "T00:00:00", 10));
+  const width = ganttChart.clientWidth || 800;
+  const trackW = width - (width < 520 ? GANTT_LABEL_W.narrow : GANTT_LABEL_W.wide);
   const totalDays = Math.max(1, daysBetween(rangeStart, rangeEnd));
-  const timelineWidth = totalDays * PX_PER_DAY;
+  const pct = (iso) => (daysBetween(rangeStart, iso) / totalDays) * 100;
 
-  function xFor(dateStr) {
-    return daysBetween(rangeStart, dateStr) * PX_PER_DAY;
-  }
-
+  // A line every month; labels every month, or every 2/3/6/12 when they'd
+  // crowd. The first label and each January carry the year.
+  const monthPx = (trackW * 30.4) / totalDays;
+  const every = [1, 2, 3, 6, 12].find((n) => n * monthPx >= 56) || 12;
   const ticks = [];
-  let cursor = new Date(rangeStart + "T00:00:00");
-  cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const endDateObj = new Date(rangeEnd + "T00:00:00");
-  while (cursor <= endDateObj) {
-    const iso = toISODate(cursor);
-    ticks.push({ x: xFor(iso), label: cursor.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) });
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-  }
-  const todayX = xFor(today);
-  const todayInRange = todayX >= 0 && todayX <= timelineWidth;
-
-  function dotHtml(d) {
-    const dx = xFor(d.dueDate);
-    const assignment = isSubtask(d);
-    const kind = assignment ? "gantt-dot-assignment" : "gantt-dot-event";
-    const hollow = assignment ? d.completed : d.dueDate < today;
-    return `<div class="gantt-dot ${kind} ${hollow ? "gantt-dot-hollow" : ""}" style="left:${dx}px;" data-dot-id="${d.id}" title="${esc(d.title)} — ${formatDate(d.dueDate)}"></div>`;
+  for (let m = monthStart(rangeStart, rangeStart.endsWith("-01") ? 0 : 1); m < rangeEnd; m = monthStart(m, 1)) {
+    const d = new Date(m + "T00:00:00");
+    let label = "";
+    if (d.getMonth() % every === 0) {
+      label = d.toLocaleDateString("en-US", { month: "short" });
+      if (d.getMonth() === 0 || !ticks.some((t) => t.label)) label += " \u2019" + String(d.getFullYear()).slice(2);
+    }
+    ticks.push({ x: pct(m), label });
   }
 
-  const rulerHtml = `<div class="gantt-ruler" style="width:${timelineWidth}px;">
-    ${ticks.map((t) => `<div class="gantt-tick" style="left:${t.x}px;">${t.label}</div>`).join("")}
-  </div>`;
+  const dotHtml = (d) => {
+    const sub = isSubtask(d);
+    const hollow = sub ? d.completed : d.dueDate < today;
+    return `<button type="button" class="gantt-dot ${sub ? "gantt-dot-assignment" : "gantt-dot-event"} ${hollow ? "gantt-dot-hollow" : ""}"
+      style="left:${pct(d.dueDate)}%;" data-dot-id="${d.id}" title="${esc(d.title)} · ${formatDate(d.dueDate)}" aria-label="${esc(d.title)}"></button>`;
+  };
+  const barHtml = (t) => {
+    if (!t.startDate || !t.endDate) return "";
+    const left = pct(t.startDate);
+    return `<div class="gantt-bar" style="left:${left}%; width:max(4px, ${pct(t.endDate) - left}%);"
+      title="${esc(t.name)} · ${formatDate(t.startDate)} – ${formatDate(t.endDate)}"></div>`;
+  };
 
-  const projectRemaining = projectTasks.reduce((s, t) => s + (Number(t.budget || 0) - spentOnTask(t.id)), 0);
-  const projectDotsHtml = projectDueDates.filter((d) => !d.taskId).map(dotHtml).join("");
-  const canEditTimeline = isAdmin();
-
-  const taskRowsHtml = projectTasks.map((t) => {
-    const hasDates = t.startDate && t.endDate;
-    const barHtml = hasDates
-      ? `<div class="gantt-bar" style="left:${xFor(t.startDate)}px; width:${Math.max(4, xFor(t.endDate) - xFor(t.startDate))}px;"></div>`
-      : "";
-    const dotsHtml = projectDueDates.filter((d) => d.taskId === t.id).map(dotHtml).join("");
-    const remaining = Number(t.budget || 0) - spentOnTask(t.id);
-    return `<div class="gantt-row">
-      <div class="gantt-label-col gantt-task-label">${esc(t.name)}</div>
-      <div class="gantt-track" style="width:${timelineWidth}px;">${barHtml}${dotsHtml}</div>
-      <div class="gantt-remaining-col">${isInternal(project) ? "" : formatCurrency(remaining)}</div>
-    </div>`;
-  }).join("");
-
-  const projectRowHtml = `<div class="gantt-row gantt-project-row">
-      <div class="gantt-label-col ${canEditTimeline ? "gantt-project-clickable" : ""}" ${canEditTimeline ? `data-edit-timeline="${project.id}" title="Click to edit task dates"` : ""}>${esc(project.name)}</div>
-      <div class="gantt-track" style="width:${timelineWidth}px;">${projectDotsHtml}</div>
-      <div class="gantt-remaining-col gantt-project-remaining">${isInternal(project) ? "Internal" : formatCurrency(projectRemaining)}</div>
-    </div>
-    ${taskRowsHtml}`;
-
-  const monthLinesHtml = ticks.map((t) =>
-    `<div class="gantt-month-line" style="left:${LABEL_COL_WIDTH + t.x}px;"></div>`
-  ).join("");
-  const todayLineHtml = todayInRange
-    ? `<div class="gantt-today-line" style="left:${LABEL_COL_WIDTH + todayX}px;"></div>`
-    : "";
+  const row = (label, track, cls = "") => `<div class="gantt-row ${cls}"><div class="gantt-label-col">${label}</div><div class="gantt-track">${track}</div></div>`;
+  const projectLabel = isAdmin()
+    ? `<span class="gantt-project-clickable" data-edit-timeline="${project.id}" title="Edit task dates">Whole project</span>`
+    : "Whole project";
+  const projectDots = projectDueDates.filter((d) => !d.taskId).map(dotHtml).join("");
 
   ganttChart.innerHTML = `<div class="gantt-inner">
-    <div class="gantt-row gantt-header-row">
-      <div class="gantt-label-col">Task</div>
-      ${rulerHtml}
-      <div class="gantt-remaining-col">Remaining</div>
+    <div class="gantt-grid">
+      ${ticks.map((t) => `<div class="gantt-month-line" style="left:${t.x}%;"></div>`).join("")}
+      <div class="gantt-today-line" style="left:${pct(today)}%;"><span>Today</span></div>
     </div>
-    ${projectRowHtml}
-    ${monthLinesHtml}
-    ${todayLineHtml}
+    ${row("", ticks.map((t) => (t.label ? `<div class="gantt-tick" style="left:${t.x}%;">${t.label}</div>` : "")).join(""), "gantt-header-row")}
+    ${projectDots ? row(projectLabel, projectDots, "gantt-project-row") : ""}
+    ${projectTasks.map((t) => row(`<span title="${esc(t.name)}">${esc(t.name)}</span>`, barHtml(t) + projectDueDates.filter((d) => d.taskId === t.id).map(dotHtml).join(""))).join("")}
   </div>`;
-
-  if (!userHasScrolledGantt && todayInRange) {
-    isProgrammaticGanttScroll = true;
-    ganttScroll.scrollLeft = Math.max(0, todayX - 60);
-    requestAnimationFrame(() => { isProgrammaticGanttScroll = false; });
-  }
 }
+
+window.addEventListener("resize", renderGantt);
 
 ganttEmpty.addEventListener("click", (e) => {
   const link = e.target.closest("[data-edit-timeline]");
@@ -882,55 +932,35 @@ ganttEmpty.addEventListener("click", (e) => {
   openTimelineModal(link.dataset.editTimeline);
 });
 
+// A dot points at its row in the list below (showing completed ones if
+// it's one of those).
 ganttChart.addEventListener("click", (e) => {
   const projectLabel = e.target.closest("[data-edit-timeline]");
   if (projectLabel) {
     openTimelineModal(projectLabel.dataset.editTimeline);
     return;
   }
-
   const dot = e.target.closest(".gantt-dot");
   if (!dot) return;
-  e.stopPropagation();
-  const id = dot.dataset.dotId;
-  if (openDotId === id) {
-    closeDotPopover();
-    return;
+  const selector = `.sched-item[data-item-id="${dot.dataset.dotId}"]`;
+  if (!flashScheduleRows(selector) && !showCompleted) {
+    showCompleted = true;
+    renderSchedule();
+    flashScheduleRows(selector);
   }
-  closeDotPopover();
-  openDotId = id;
-  const d = dueDates.find((dd) => dd.id === id);
-  if (!d) return;
-  const names = (d.personIds || []).map((pid) => people.find((p) => p.id === pid)?.name).filter(Boolean);
-  const task = tasks.find((t) => t.id === d.taskId);
-  const manageable = canManage(d);
-  const popover = document.createElement("div");
-  popover.className = "gantt-dot-popover";
-  popover.innerHTML = `
-    <div class="gantt-dot-popover-title">${esc(d.title)}</div>
-    ${task ? `<div>${esc(task.name)}</div>` : ""}
-    <div>${formatDate(d.dueDate)} <span class="empty" style="padding:0;">(${dueLabel(d.dueDate)})</span></div>
-    ${names.length > 0 ? `<div>Assigned: ${names.map(esc).join(", ")}</div>` : ""}
-    ${manageable ? `<div class="gantt-dot-popover-actions">
-      <button class="small secondary" data-action="edit-duedate" data-id="${d.id}">Edit</button>
-    </div>` : ""}
-  `;
-  const rect = dot.getBoundingClientRect();
-  popover.style.left = `${rect.left + window.scrollX}px`;
-  popover.style.top = `${rect.bottom + window.scrollY + 6}px`;
-  document.body.appendChild(popover);
 });
 
-document.body.addEventListener("click", async (e) => {
-  const btn = e.target.closest(".gantt-dot-popover button");
-  if (!btn) return;
-  e.stopPropagation();
-  const { action, id } = btn.dataset;
-  closeDotPopover();
-  await handleDueDateAction(action, id);
+// Hovering a row in the list lights up its dot.
+schedList.addEventListener("mouseover", (e) => {
+  const item = e.target.closest(".sched-item");
+  ganttChart.querySelectorAll(".gantt-dot.hot").forEach((el) => el.classList.remove("hot"));
+  if (item) ganttChart.querySelector(`.gantt-dot[data-dot-id="${item.dataset.itemId}"]`)?.classList.add("hot");
+});
+schedList.addEventListener("mouseleave", () => {
+  ganttChart.querySelectorAll(".gantt-dot.hot").forEach((el) => el.classList.remove("hot"));
 });
 
-generalItemsEl.addEventListener("click", async (e) => {
+schedList.addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-action]");
   if (btn) await handleItemAction(btn);
 });
@@ -968,12 +998,13 @@ const itemEditor = createItemEditor({
 
 document.getElementById("openAddEvent").addEventListener("click", () =>
   itemEditor.open(null, { mode: "event", projectId: selectedProjectId }));
+document.getElementById("openAddSubtask").addEventListener("click", () =>
+  itemEditor.open(null, { mode: "subtask", projectId: selectedProjectId }));
 
 const toggleCompletedBtn = document.getElementById("toggleCompletedBtn");
 toggleCompletedBtn.addEventListener("click", () => {
   showCompleted = !showCompleted;
-  toggleCompletedBtn.textContent = showCompleted ? "Hide completed subtasks" : "Show completed subtasks";
-  renderBudget();
+  renderSchedule();
 });
 
 // ---------- Timeline (task dates) edit modal ----------

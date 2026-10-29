@@ -121,13 +121,38 @@ export function formatShortMDY(date) {
 }
 
 let toastTimer;
-export function showToast(message) {
+// A subtask's buttons at the right of its row: Edit, then ✓ to mark it
+// complete (↺ to reopen a completed one), then × to delete.
+export function subtaskActionsHtml(d, { canComplete = true, canManage = false } = {}) {
+  const btn = (action, title, symbol, cls = "") => `<button type="button" class="icon-btn sub-act ${cls}" data-action="${action}" data-id="${d.id}" title="${title}" aria-label="${title}">${symbol}</button>`;
+  return [
+    canManage && !d.completed ? `<button type="button" class="link-btn" data-action="edit-duedate" data-id="${d.id}">Edit</button>` : "",
+    canComplete ? (d.completed ? btn("reopen-duedate", "Reopen", "&#8634;") : btn("complete-duedate", "Mark complete", "&#10003;", "sub-act-done")) : "",
+    canManage ? btn("delete-duedate", "Delete", "&times;") : "",
+  ].join("");
+}
+
+// showToast("Marked complete.", { action: "Undo", onAction }) adds a button
+// and stays up longer so there's time to use it.
+export function showToast(message, { action, onAction } = {}) {
   const el = document.getElementById("toast");
   if (!el) return;
   el.textContent = message;
+  if (action) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "toast-action";
+    btn.textContent = action;
+    btn.addEventListener("click", () => {
+      el.classList.remove("show");
+      onAction();
+    });
+    el.append(btn);
+  }
+  el.classList.toggle("has-action", !!action);
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
+  toastTimer = setTimeout(() => el.classList.remove("show"), action ? 6000 : 2500);
 }
 
 // Project order everywhere: client projects newest first (most recently
