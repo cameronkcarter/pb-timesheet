@@ -246,7 +246,9 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
             <td class="num">${view === "pending" ? `<button type="button" class="small due-btn due-complete" data-action="approve-person" data-key="${esc(r.key)}">${r.entries.length > 1 ? `Approve (${r.entries.length})` : "Approve"}</button>` : ""}</td>
             <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
           </tr>
-          ${open ? r.entries.map(entryRowHtml).join("") : ""}`;
+          ${open ? r.entries.map(entryRowHtml).join("") : ""}
+          ${open && r.entries.some((e) => !e.isExpense)
+            ? `<tr class="appr-hint"><td colspan="6">Click ${byTask() ? "hours or a note" : "a task, hours or note"} to edit.</td></tr>` : ""}`;
         }).join("")}
       </tbody>`).join("")}
     </table></div>`;

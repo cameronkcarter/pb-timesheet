@@ -1632,7 +1632,24 @@ input[type="text"].item-name {
   background: #fff;
 }
 
-input[type="text"].item-name:focus {
+/* Expense description: wraps like a sentence instead of cutting off. */
+textarea.item-name.item-text {
+  display: block;
+  width: 100%;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.45;
+  padding: 11px 14px;
+  border: 1.5px solid #d9cfe0;
+  border-radius: 10px;
+  background: #fff;
+  resize: none;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+input[type="text"].item-name:focus,
+textarea.item-name.item-text:focus {
   outline: none;
   border-color: var(--navy-light);
   box-shadow: 0 0 0 3px rgba(122, 57, 147, 0.15);
@@ -3429,6 +3446,7 @@ select.analytics-select {
   font-size: 13px;
 }
 .appr-table .appr-inline-hours { width: 64px; text-align: right; }
+.appr-table tr.appr-hint td { padding: 4px 8px 10px; font-size: 12px; color: var(--text-muted); font-style: italic; border-top: none; }
 
 .appr-split {
   display: inline-flex;

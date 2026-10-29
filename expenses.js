@@ -74,7 +74,7 @@ const MARKUP = `
         <select id="expenseSub" class="item-select"></select>
       </div>
       <label for="expenseDescription" class="item-label">Description</label>
-      <input type="text" id="expenseDescription" class="item-name" placeholder="e.g. Mileage to site visit" autocomplete="off" />
+      <textarea id="expenseDescription" class="item-name item-text" rows="1" placeholder="e.g. Mileage to site visit" autocomplete="off"></textarea>
 
       <div class="item-label">Details</div>
       <div class="row-group">
@@ -252,20 +252,32 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     deleteBtn.style.display = record ? "" : "none";
     saveBtn.textContent = record ? "Save changes" : kind === "sub" ? "Add invoice" : "Add expense";
     modal.style.display = "flex";
+    fitDescription();
     description.focus();
+  }
+
+  // The description wraps and grows to fit, so a long one is all visible.
+  function fitDescription() {
+    description.style.height = "auto";
+    description.style.height = `${description.scrollHeight + 3}px`;
   }
 
   function close() { modal.style.display = "none"; }
 
   projectSelect.addEventListener("change", () => { if (kind === "sub") fillSubs(projectSelect.value); updateReceipt(); });
   category.addEventListener("change", () => { applyCategory(true); updateReceipt(); });
-  description.addEventListener("input", updateReceipt);
+  description.addEventListener("input", () => { fitDescription(); updateReceipt(); });
   quantity.addEventListener("input", updateCost);
   rate.addEventListener("input", updateCost);
   $("expenseClose").addEventListener("click", close);
   $("expenseCancel").addEventListener("click", close);
   closeOnBackdropClick(modal, close);
-  description.addEventListener("keydown", (e) => { if (e.key === "Enter") saveBtn.click(); });
+  // One line of text that wraps: Enter saves rather than adding a line.
+  description.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    saveBtn.click();
+  });
 
   deleteBtn.addEventListener("click", async () => {
     if (!editing || !(await confirmDialog("This can't be undone.", { title: "Delete this expense?", confirmText: "Delete", danger: true }))) return;
