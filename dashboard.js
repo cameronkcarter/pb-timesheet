@@ -223,7 +223,7 @@ function render() {
       ...projectItems.filter((d) => d.taskId).map((d) => d.taskId),
     ])];
     const projectTasks = taskIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
     const loggedOn = (taskId) => sumHours(projectEntries.filter((e) => e.taskId === taskId));
     const assignedOn = (taskId) => {

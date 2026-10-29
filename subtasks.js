@@ -105,7 +105,7 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
     const anyTask = mode === "event" || !!(me && me.isAdmin) || !!(project && (project.internal || project.pmPersonId === sessionPersonId));
     return tasks.filter((t) => t.projectId === projectId && (t.id === keepTaskId || (!t.closed && (anyTask
       || assignments.some((a) => a.taskId === t.id && a.personId === sessionPersonId)))))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   }
 
   function fillTasks(projectId, selectedTaskId) {

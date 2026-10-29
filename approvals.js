@@ -123,7 +123,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
           hours: sumHours(entries),
           entries,
         };
-      }).sort((x, y) => (x.closed - y.closed) || x.name.localeCompare(y.name));
+      }).sort((x, y) => (x.closed - y.closed) || x.name.localeCompare(y.name, undefined, { numeric: true }));
       const entries = rows.flatMap((r) => r.entries);
       return { project: projects.find((p) => p.id === projectId), projectId, hours: sumHours(entries), entries, rows };
     }).sort((x, y) => order.indexOf(x.projectId) - order.indexOf(y.projectId));
@@ -162,7 +162,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
     if (!byTask()) {
       // Any task on the same project.
       const choices = tasks.filter((t) => t.projectId === e.projectId && (!t.closed || t.id === e.taskId))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
       taskCell = field === "task"
         ? `<td><select class="appr-inline" aria-label="Task">${choices.map((t) =>
             `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></td>`

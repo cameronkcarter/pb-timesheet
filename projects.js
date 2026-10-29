@@ -261,7 +261,7 @@ function invoicedOnTask(taskId) {
 // Closed tasks (internal projects, e.g. a finished proposal) sort last.
 function selectedProjectTasks() {
   return tasks.filter((t) => t.projectId === selectedProjectId)
-    .sort((a, b) => (!!a.closed - !!b.closed) || a.name.localeCompare(b.name));
+    .sort((a, b) => (!!a.closed - !!b.closed) || a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
 
 function loggedHours(entries) {
@@ -870,9 +870,8 @@ function renderGantt() {
     return;
   }
 
-  // In date order, undated tasks last.
-  const projectTasks = selectedProjectTasks()
-    .sort((a, b) => (a.startDate || a.endDate || "9").localeCompare(b.startDate || b.endDate || "9"));
+  // Same order as Tasks & Budget.
+  const projectTasks = selectedProjectTasks();
   const scheduledTasks = projectTasks.filter((t) => t.startDate && t.endDate);
   const projectDueDates = dueDates.filter((d) => d.dueDate && d.projectId === project.id);
 
@@ -1029,7 +1028,7 @@ toggleCompletedBtn.addEventListener("click", () => {
 function openTimelineModal(projectId) {
   const project = projects.find((p) => p.id === projectId);
   const projectTasks = tasks.filter((t) => t.projectId === projectId)
-    .sort((a, b) => (!!a.closed - !!b.closed) || a.name.localeCompare(b.name));
+    .sort((a, b) => (!!a.closed - !!b.closed) || a.name.localeCompare(b.name, undefined, { numeric: true }));
 
   timelineModalTitle.textContent = project ? `Edit Timeline — ${project.name}` : "Edit Timeline";
   timelineModalRows.innerHTML = projectTasks.length ? `

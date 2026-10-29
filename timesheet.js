@@ -270,7 +270,7 @@ function selectedProjectIsInternal() {
 // tasks (e.g. finished proposals) are hidden unless an entry being edited
 // is on one.
 function myTaskOptions() {
-  const byName = (a, b) => a.task.name.localeCompare(b.task.name);
+  const byName = (a, b) => a.task.name.localeCompare(b.task.name, undefined, { numeric: true });
   const open = tasks.filter((t) => t.projectId === selectedProjectId && (!t.closed || t.id === selectedTaskId));
   if (selectedProjectIsInternal()) {
     return open.map((task) => ({ assignment: null, task, internal: true })).sort(byName);
@@ -635,7 +635,7 @@ function renderList() {
     ${projectIds.map((pid) => {
       const project = projects.find((p) => p.id === pid);
       const pEntries = month.filter((e) => e.projectId === pid);
-      const taskIds = [...new Set(pEntries.map((e) => e.taskId))].sort((a, b) => taskName(a).localeCompare(taskName(b)));
+      const taskIds = [...new Set(pEntries.map((e) => e.taskId))].sort((a, b) => taskName(a).localeCompare(taskName(b), undefined, { numeric: true }));
       return `<tbody>
         <tr class="appr-group"><td colspan="6"><span class="pay-dot" style="--c:${projectColor(pid)};"></span><strong>${project ? esc(project.name) : "—"}</strong> <span class="appr-muted">${fmtHrs(sumHrs(pEntries))} hrs</span></td></tr>
         ${taskIds.map((tid) => {

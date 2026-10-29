@@ -93,6 +93,14 @@ export function createProjectEditor({ getData, onSaved }) {
     modalTaskTotal.textContent = `${formatCurrency(total)} total budget`;
   }
 
+  // New tasks are numbered: "Task N: " after the highest number so far.
+  function nextTaskName() {
+    const nums = [...modalTaskRows.querySelectorAll(".modalTaskName")]
+      .map((i) => Number((i.value.match(/^Task\s*(\d+)/i) || [])[1]) || 0);
+    return `Task ${Math.max(0, ...nums) + 1}: `;
+  }
+  const isBareTaskName = (name) => /^Task\s*\d+:?$/i.test(name);
+
   function taskRowHtml(taskId, name, budget, startDate, endDate) {
     return `<div class="modal-task-row task-edit-grid" data-task-id="${taskId || ""}">
       <input type="text" class="modalTaskName" placeholder="Task name" value="${esc(name || "")}" />
@@ -139,11 +147,11 @@ export function createProjectEditor({ getData, onSaved }) {
     modalProjectPm.value = project ? project.pmPersonId || "" : "";
 
     const projectTasks = project
-      ? tasks.filter((t) => t.projectId === project.id).sort((a, b) => a.name.localeCompare(b.name))
+      ? tasks.filter((t) => t.projectId === project.id).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
       : [];
     modalTaskRows.innerHTML = projectTasks.length > 0
       ? projectTasks.map((t) => taskRowHtml(t.id, t.name, t.budget, t.startDate, t.endDate)).join("")
-      : taskRowHtml();
+      : taskRowHtml(null, "Task 1: ");
     expenseBudget.value = project && project.expenseBudget ? project.expenseBudget : "";
     subRows.innerHTML = (project?.subconsultants || []).map(subRowHtml).join("");
     updateSubTotal();
@@ -353,8 +361,10 @@ This can't be undone.`, { title: `Merge into "${target.name}"?`, confirmText: "M
     if (btn) setModalType(btn.dataset.value);
   });
   $("modalAddTaskRow").addEventListener("click", () => {
-    modalTaskRows.insertAdjacentHTML("beforeend", taskRowHtml());
-    modalTaskRows.lastElementChild.querySelector(".modalTaskName").focus();
+    modalTaskRows.insertAdjacentHTML("beforeend", taskRowHtml(null, nextTaskName()));
+    const input = modalTaskRows.lastElementChild.querySelector(".modalTaskName");
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
     updateTaskTotal();
   });
   modalTaskRows.addEventListener("input", (e) => {
@@ -441,7 +451,7 @@ This can't be undone.`, { title: `Merge into "${target.name}"?`, confirmText: "M
         const taskBudget = internal ? 0 : Number(row.querySelector(".modalTaskBudget").value) || 0;
         const startDate = row.querySelector(".modalTaskStart").value || null;
         const endDate = row.querySelector(".modalTaskEnd").value || null;
-        if (!taskName) continue;
+        if (!taskName || (!taskId && isBareTaskName(taskName))) continue;
         if (taskId) {
           await Tasks.update(taskId, { name: taskName, budget: taskBudget, startDate, endDate });
         } else {

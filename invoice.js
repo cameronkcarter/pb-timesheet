@@ -209,7 +209,7 @@ function workRowsFor(project, entries) {
       hours: Number(e.hours || 0),
       note: e.note || "",
     })),
-  })).sort((a, b) => a.task.localeCompare(b.task));
+  })).sort((a, b) => a.task.localeCompare(b.task, undefined, { numeric: true }));
 }
 
 function invoiceRows() {
