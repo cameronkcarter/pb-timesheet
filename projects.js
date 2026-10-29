@@ -453,14 +453,16 @@ function expenseRowsHtml(project, taskTotals, cols) {
     })),
   ];
   const exp = { budget: 0, spent: 0, invoiced: 0 };
-  const groupRows = groups.map((g) => {
+  // Expense and sub rows: striped like the tasks, in a warm tint so they
+  // read as their own section.
+  const groupRows = groups.map((g, i) => {
     const spent = sum(g.items);
     const invoiced = sum(g.items.filter((e) => e.invoiced));
     exp.budget += g.budget;
     exp.spent += spent;
     exp.invoiced += invoiced;
     const expanded = expandedTaskId === g.key;
-    const row = `<tr class="task-row expense-row ${expanded ? "expanded" : ""}" data-task-row="${g.key}">
+    const row = `<tr class="task-row expense-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""}" data-task-row="${g.key}">
       <td><div class="task-cell" title="${esc(g.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${g.sub ? `<span class="row-kind">Sub</span>` : ""}${esc(g.name)}</span></div></td>
       ${moneyCells({ budget: g.budget, spent, invoiced })}</tr>`;
     return expanded ? row + `<tr><td colspan="${cols}" class="accordion-cell">${expenseListHtml(g)}</td></tr>` : row;
@@ -498,19 +500,23 @@ function expenseListHtml(g) {
     : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Expense</button>`;
   if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">Nothing recorded yet.</div>${addBtn}`;
   const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  // Laid out like subtasks: a header, then the rows in a tinted band.
+  // Laid out like subtasks: a header, then the rows in a tinted band. Project
+  // expenses: Description | Type | Date | Paid by | Amount (quantity × rate
+  // under it) | Status; the description gets the spare room.
   const kind = g.sub ? "tp-exp-sub" : "";
   return `<div class="tp-exp ${kind}">
-    <div class="tp-exp-row tp-head"><div>Description</div><div>Date</div>${g.sub ? "" : "<div>Paid by</div><div>Quantity</div>"}<div>Amount</div><div>Status</div><div></div></div>
+    <div class="tp-exp-row tp-head"><div>Description</div>${g.sub ? "" : "<div>Type</div>"}<div>Date</div>${g.sub ? "" : "<div>Paid by</div>"}<div>Amount</div><div>Status</div><div></div></div>
     <div class="tp-subs">${items.map((e) => {
       const [status, cls] = expenseStatus(e);
       const payer = people.find((p) => p.id === e.personId);
       const canReimburse = isAdmin() && e.personId && e.approved && !e.reimbursed;
+      const qty = g.sub ? "" : expenseQtyText(e);
       return `<div class="tp-exp-row tp-sub ${e.invoiced ? "done" : ""}">
-        <div class="tp-sub-name"><span>${esc(g.sub ? e.description || "—" : expenseLabel(e, project))}</span>${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</div>
+        <div class="tp-sub-name"><span>${esc(e.description || "—")}</span>${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</div>
+        ${g.sub ? "" : `<div class="tp-exp-type">${esc(e.category || "—")}</div>`}
         <div class="tp-due">${shortDate(e.date)}</div>
-        ${g.sub ? "" : `<div>${payer ? esc(payer.name) : "Company"}</div><div class="tp-dim">${expenseQtyText(e) || "—"}</div>`}
-        <div class="tp-num"><strong>${formatCurrency(e.amount)}</strong></div>
+        ${g.sub ? "" : `<div>${payer ? esc(payer.name) : "Company"}</div>`}
+        <div class="tp-num"><strong>${formatCurrency(e.amount)}</strong>${qty ? `<div class="tp-exp-qty">${qty}</div>` : ""}</div>
         <div><span class="pay-status ${cls}">${status}</span></div>
         <div class="tp-sub-actions">
           ${canReimburse ? `<button class="link-btn" data-action="reimburse-expense" data-id="${e.id}">Mark reimbursed</button>` : ""}

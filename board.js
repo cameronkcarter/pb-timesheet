@@ -13,6 +13,9 @@ const NEW_DAYS = 30;
 const SHOW_NEW = 2;
 const EARLIER_MAX = 20;
 const MAX_LENGTH = 1000;
+// Outline thumbs-up (Tabler icons, MIT); filled when you've given one.
+const THUMB_SVG = `<svg class="mb-thumb-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M7 11v8a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-7a1 1 0 0 1 1 -1h3a4 4 0 0 0 4 -4v-1a2 2 0 0 1 4 0v5h3a2 2 0 0 1 2 2l-1 5a2 3 0 0 1 -2 2h-7a3 3 0 0 1 -3 -3" /></svg>`;
 
 export function createMessageBoard({ el, getData, sessionPersonId }) {
   let messages = [];
@@ -86,13 +89,13 @@ export function createMessageBoard({ el, getData, sessionPersonId }) {
           ${project ? `<a class="mb-project" href="projects.html?project=${esc(project.id)}" style="--c:${projectColor(project.id)};" title="${esc(project.name)}">${esc(projectShortName(project))}</a>` : ""}</div>
         <div class="mb-text">${esc(m.text)}</div>
         <div class="mb-foot">
-          <button type="button" class="mb-thumb ${iThumbed ? "on" : ""}" data-action="thumb" title="${thumbs.length ? esc(thumbs.map(personName).join(", ")) : "Thumbs up"}" aria-pressed="${iThumbed}">👍${thumbs.length ? ` <span>${thumbs.length}</span>` : ""}</button>
+          <button type="button" class="mb-thumb ${iThumbed ? "on" : ""}" data-action="thumb" title="${thumbs.length ? esc(thumbs.map(personName).join(", ")) : "Thumbs up"}" aria-pressed="${iThumbed}" aria-label="Thumbs up">${THUMB_SVG}${thumbs.length ? `<span>${thumbs.length}</span>` : ""}</button>
           ${seen}
           ${mine ? '<button type="button" class="link-btn" data-action="edit">Edit</button>' : ""}
           ${mine || me()?.isAdmin ? '<button type="button" class="link-btn mb-delete" data-action="delete">Delete</button>' : ""}
         </div>
       </div>
-      ${canDismiss ? '<button type="button" class="icon-btn mb-dismiss" data-action="dismiss" title="Dismiss" aria-label="Dismiss">&times;</button>' : ""}
+      ${canDismiss ? '<button type="button" class="mb-dismiss" data-action="dismiss" title="Hide it for you; it moves to Earlier">Dismiss</button>' : ""}
     </div>`;
   }
 
