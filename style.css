@@ -4245,3 +4245,24 @@ button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
   .tp-exp .tp-exp-row.tp-head { display: none; }
   .tp-exp .tp-exp-row > div:not(.tp-sub-name) { justify-self: start; }
 }
+
+/* Projects tab: a task's budget split by person. */
+.tp-split { max-width: 820px; margin: 0 0 14px; }
+.tp-split-bar {
+  position: relative;
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  background: #ebe5ef;
+  overflow: hidden;
+}
+.tp-seg { height: 100%; background: var(--pc); }
+.tp-seg + .tp-seg { box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.7); }
+.tp-seg.tp-seg-togo { background: color-mix(in srgb, var(--pc) 35%, #fff); }
+.tp-split-end { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--red); }
+.tp-split-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+.tp-split-key i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+.tp-key-solid { background: #8a8291; }
+.tp-key-light { background: #d6d1da; }
+.tp-split-left { margin-left: auto; font-weight: 600; color: var(--text); }
+.tp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--pc); margin-right: 8px; vertical-align: 1px; }
