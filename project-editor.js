@@ -52,6 +52,9 @@ export function createProjectEditor({ getData, onSaved }) {
 
   let editingId = null;
   let modalType = "rates";
+  // Numbered tasks ("Task 1: …"): on by default for client projects, off for
+  // internal ones (e.g. RFPs), until it's set by hand.
+  let numberTasksSet = false;
   let pendingTaskDeletions = new Set();
 
   // Keep the Google Sheet's Task Budgets tab current. Best-effort: if it
@@ -80,8 +83,26 @@ export function createProjectEditor({ getData, onSaved }) {
     expenseFields.style.display = type === "rates" ? "block" : "none";
     modalTaskRows.classList.toggle("internal", internal);
     modalTaskHead.classList.toggle("internal", internal);
+    if (!numberTasksSet) setNumbered(!internal);
     updateTaskTotal();
   }
+
+  // The "Task N:" prefix is a label in front of each name, numbered in row
+  // order, and is added to the name when saved.
+  const numberTasksBox = $("modalNumberTasks");
+  const stripTaskNumber = (name) => name.replace(/^Task\s*\d+\s*[:.\-–]?\s*/i, "");
+  function setNumbered(on) {
+    numberTasksBox.checked = on;
+    modalTaskRows.classList.toggle("numbered", on);
+    renumberTasks();
+  }
+  function renumberTasks() {
+    modalTaskRows.querySelectorAll(".task-num").forEach((el, i) => { el.textContent = `Task ${i + 1}:`; });
+  }
+  numberTasksBox.addEventListener("change", () => {
+    numberTasksSet = true;
+    setNumbered(numberTasksBox.checked);
+  });
 
   function updateTaskTotal() {
     const rows = [...modalTaskRows.querySelectorAll(".modal-task-row")];
@@ -93,17 +114,9 @@ export function createProjectEditor({ getData, onSaved }) {
     modalTaskTotal.textContent = `${formatCurrency(total)} total budget`;
   }
 
-  // New tasks are numbered: "Task N: " after the highest number so far.
-  function nextTaskName() {
-    const nums = [...modalTaskRows.querySelectorAll(".modalTaskName")]
-      .map((i) => Number((i.value.match(/^Task\s*(\d+)/i) || [])[1]) || 0);
-    return `Task ${Math.max(0, ...nums) + 1}: `;
-  }
-  const isBareTaskName = (name) => /^Task\s*\d+:?$/i.test(name);
-
   function taskRowHtml(taskId, name, budget, startDate, endDate) {
     return `<div class="modal-task-row task-edit-grid" data-task-id="${taskId || ""}">
-      <input type="text" class="modalTaskName" placeholder="Task name" value="${esc(name || "")}" />
+      <div class="task-name-cell"><span class="task-num"></span><input type="text" class="modalTaskName" placeholder="Task name" value="${esc(stripTaskNumber(name || ""))}" /></div>
       <div class="money-input col-budget"><span>$</span><input type="number" class="modalTaskBudget" placeholder="0" min="0" step="0.01" value="${budget || ""}" /></div>
       <input type="date" class="modalTaskStart" value="${startDate || ""}" title="Start (optional)" />
       <input type="date" class="modalTaskEnd" value="${endDate || ""}" title="End (optional)" />
@@ -151,10 +164,12 @@ export function createProjectEditor({ getData, onSaved }) {
       : [];
     modalTaskRows.innerHTML = projectTasks.length > 0
       ? projectTasks.map((t) => taskRowHtml(t.id, t.name, t.budget, t.startDate, t.endDate)).join("")
-      : taskRowHtml(null, "Task 1: ");
+      : taskRowHtml();
     expenseBudget.value = project && project.expenseBudget ? project.expenseBudget : "";
     subRows.innerHTML = (project?.subconsultants || []).map(subRowHtml).join("");
     updateSubTotal();
+    numberTasksSet = !!project && project.numberTasks !== undefined;
+    setNumbered(project && project.numberTasks !== undefined ? project.numberTasks : !(project && project.internal));
     setModalType(project ? (project.internal ? "internal" : "rates") : null);
     removeBtn.style.display = project ? "" : "none";
     $("modalMergeProject").style.display = project ? "" : "none";
@@ -361,10 +376,9 @@ This can't be undone.`, { title: `Merge into "${target.name}"?`, confirmText: "M
     if (btn) setModalType(btn.dataset.value);
   });
   $("modalAddTaskRow").addEventListener("click", () => {
-    modalTaskRows.insertAdjacentHTML("beforeend", taskRowHtml(null, nextTaskName()));
-    const input = modalTaskRows.lastElementChild.querySelector(".modalTaskName");
-    input.focus();
-    input.setSelectionRange(input.value.length, input.value.length);
+    modalTaskRows.insertAdjacentHTML("beforeend", taskRowHtml());
+    renumberTasks();
+    modalTaskRows.lastElementChild.querySelector(".modalTaskName").focus();
     updateTaskTotal();
   });
   modalTaskRows.addEventListener("input", (e) => {
@@ -387,6 +401,7 @@ This can't be undone.`, { title: `Merge into "${target.name}"?`, confirmText: "M
       pendingTaskDeletions.add(taskId);
     }
     row.remove();
+    renumberTasks();
     updateTaskTotal();
   });
   $("modalCancelProject").addEventListener("click", close);
@@ -425,6 +440,7 @@ This can't be undone.`, { title: `Merge into "${target.name}"?`, confirmText: "M
       shortName: modalProjectShortName.value.trim() || null,
       color: modalColor,
       internal,
+      numberTasks: numberTasksBox.checked,
       billAtPayRate: false,
       pmPersonId: modalProjectPm.value || null,
       expenseBudget: internal ? 0 : Number(expenseBudget.value) || 0,
@@ -445,13 +461,15 @@ This can't be undone.`, { title: `Merge into "${target.name}"?`, confirmText: "M
         projectId = ref.id;
       }
 
-      for (const row of modalTaskRows.querySelectorAll(".modal-task-row")) {
+      const numbered = numberTasksBox.checked;
+      for (const [i, row] of [...modalTaskRows.querySelectorAll(".modal-task-row")].entries()) {
         const taskId = row.dataset.taskId;
-        const taskName = row.querySelector(".modalTaskName").value.trim();
+        const bareName = stripTaskNumber(row.querySelector(".modalTaskName").value.trim());
+        const taskName = bareName && numbered ? `Task ${i + 1}: ${bareName}` : bareName;
         const taskBudget = internal ? 0 : Number(row.querySelector(".modalTaskBudget").value) || 0;
         const startDate = row.querySelector(".modalTaskStart").value || null;
         const endDate = row.querySelector(".modalTaskEnd").value || null;
-        if (!taskName || (!taskId && isBareTaskName(taskName))) continue;
+        if (!taskName) continue;
         if (taskId) {
           await Tasks.update(taskId, { name: taskName, budget: taskBudget, startDate, endDate });
         } else {

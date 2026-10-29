@@ -1282,6 +1282,29 @@ button.icon-btn.sheet-close {
   margin: 0;
 }
 
+/* Task name with its "Task N:" label when the project numbers its tasks. */
+.task-name-cell { display: flex; align-items: center; min-width: 0; }
+.task-name-cell input { flex: 1; min-width: 0; }
+.task-num { display: none; }
+#modalTaskRows.numbered .task-num {
+  display: block;
+  flex: none;
+  padding: 0 8px 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.task-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.task-foot .checkbox-label { margin: 0; font-size: 13px; color: var(--text-muted); }
+
 .modal-task-row input[type="date"] {
   padding: 8px 6px;
   font-size: 13px;
@@ -1309,7 +1332,7 @@ tr.stripe-row td {
     grid-template-columns: 1fr 1fr 34px;
     grid-template-areas: "name name x" "start end end";
   }
-  .modal-task-row .modalTaskName { grid-area: name; }
+  .modal-task-row .task-name-cell { grid-area: name; }
   .modal-task-row .col-budget { grid-area: budget; }
   .modal-task-row .modalTaskStart { grid-area: start; }
   .modal-task-row .modalTaskEnd { grid-area: end; }
