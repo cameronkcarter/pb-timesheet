@@ -175,21 +175,19 @@ function render() {
   }
 
   // Each card: three numbers (your hours logged, your hours remaining, the
-  // project's budget used), then a row per task with its end date, your
-  // logged and remaining hours and the task's budget used; its subtasks
-  // underneath in the same columns.
+  // project's budget used), then a row per task with your logged and
+  // remaining hours and the task's budget used; its subtasks underneath.
   // Remaining counts down from what's assigned and stops at 0. Staff see
   // budgets as percentages only, never dollars.
   const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
-  // Subtasks sit in the task grid: name, due date in the Due column, then
+  // Subtasks sit under their task: name with its due date after it, then
   // Edit / ✓ complete / × delete at the far right.
   const today = todayISO();
   const subtaskRow = (d) => {
     const overdue = !d.completed && d.dueDate < today;
     const due = d.completed ? `Done${d.completedDate ? " " + shortDate(String(d.completedDate)) : ""}` : shortDate(d.dueDate);
     return `<div class="pc-task pc-sub ${d.completed ? "done" : ""}">
-      <div class="pc-sub-name" title="${esc(d.title)}"><span>${esc(d.title)}</span></div>
-      <div class="pc-due ${overdue ? "overdue" : ""}">${due}</div>
+      <div class="pc-sub-name"><span>${esc(d.title)} <span class="due-inline ${overdue ? "overdue" : ""}">· ${due}</span></span></div>
       <div class="pc-sub-actions">${subtaskActionsHtml(d, { canManage: canManage(d) })}</div>
     </div>`;
   };
@@ -240,7 +238,6 @@ function render() {
       const pct = internal ? null : pctOf(billedAmount(timeEntries.filter((e) => e.taskId === task.id && !e.declined), { projects, people }), Number(task.budget || 0));
       return `<div class="pc-task">
         <div class="pc-task-name" title="${esc(task.name)}">${esc(task.name)}</div>
-        <div class="pc-due">${task.endDate ? shortDate(task.endDate) : ""}</div>
         <div class="pc-num">${fmtHrs(logged)}</div>
         <div class="pc-num ${assigned == null ? "pc-dim" : ""}">${internal ? "" : assigned == null ? "—" : fmtHrs(Math.max(0, assigned - logged))}</div>
         <div class="pc-budget">${pct != null ? `<div class="pc-bar"><div style="width:${Math.min(100, pct)}%; background:${color};"></div></div><span>${pct}%</span>` : ""}</div>
@@ -255,7 +252,7 @@ function render() {
       </div>
       ${metrics}
       ${taskRows ? `<div class="pc-tasks">
-        <div class="pc-task pc-task-head"><div>Task</div><div>Due</div><div class="pc-num">Logged</div><div class="pc-num">${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Task budget"}</div></div>
+        <div class="pc-task pc-task-head"><div>Task</div><div class="pc-num">Logged</div><div class="pc-num">${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Task budget"}</div></div>
         ${taskRows}
       </div>` : ""}
       ${generalItems.length ? `<div class="pc-tasks pc-general"><div class="pc-task"><div class="pc-task-name">Other subtasks</div></div>${itemsHtml(generalItems)}</div>` : ""}

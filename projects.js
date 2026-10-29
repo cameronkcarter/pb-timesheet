@@ -101,7 +101,7 @@ function projectItems({ taskId, personId } = {}) {
 function itemsListHtml(items, withWho = false) {
   if (!items.length) return "";
   // Same look as the Dashboard: a band of rows under the person, each with
-  // its name, due date (in the Due column) and Edit / ✓ / × at the right.
+  // its name and due date, then Edit / ✓ / × at the right.
   const today = todayISO();
   const short = (iso) => new Date(String(iso).slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `<div class="tp-subs">${items.map((d) => {
@@ -109,8 +109,7 @@ function itemsListHtml(items, withWho = false) {
     const overdue = !d.completed && d.dueDate < today;
     const due = d.completed ? `Done${d.completedDate ? " " + short(d.completedDate) : ""}` : short(d.dueDate);
     return `<div class="tp-row tp-sub ${d.completed ? "done" : ""}">
-      <div class="tp-sub-name" title="${esc(d.title)}"><span>${esc(d.title)}${who ? ` <span class="tp-sub-who">${esc(who)}</span>` : ""}</span></div>
-      <div class="tp-due ${overdue ? "overdue" : ""}">${due}</div>
+      <div class="tp-sub-name"><span>${esc(d.title)} <span class="due-inline ${overdue ? "overdue" : ""}">· ${due}</span>${who ? ` <span class="tp-sub-who">${esc(who)}</span>` : ""}</span></div>
       <div class="tp-sub-actions">${subtaskActionsHtml(d, { canComplete: canComplete(d), canManage: canManage(d) })}</div>
     </div>`;
   }).join("")}</div>`;
@@ -288,16 +287,20 @@ function taskShares(task, hoursOverride = {}) {
   return { ...use, byPerson, scale: Math.max(use.budget, use.committed) };
 }
 
-// One person's bar: solid for logged, lighter for assigned but not logged,
-// then their share of the budget as a percent.
+// One person's bar: solid for logged, lighter for assigned but not logged.
+// Their share of the budget as a percent goes in the last column.
 function shareCellHtml(shares, personId) {
   const p = shares && shares.byPerson[personId];
   if (!p || shares.scale <= 0) return "";
   const pct = (n) => `${(n / shares.scale) * 100}%`;
-  const share = shares.budget > 0 ? `${Math.round(((p.spent + p.outstanding) / shares.budget) * 100)}%` : "";
   return `<div class="tp-bar" title="${fmtHrs(p.logged)} hrs logged${p.toGo ? ` · ${fmtHrs(p.toGo)} hrs assigned, not logged yet` : ""}">
       <div class="tp-bar-logged" style="width:${pct(p.spent)};"></div><div class="tp-bar-togo" style="width:${pct(p.outstanding)};"></div>
-    </div><span class="tp-share-pct">${share}</span>`;
+    </div>`;
+}
+
+function sharePct(shares, personId) {
+  const p = shares && shares.byPerson[personId];
+  return p && shares.budget > 0 ? `${Math.round(((p.spent + p.outstanding) / shares.budget) * 100)}%` : "";
 }
 
 // Last row: budget nobody has yet, or how far over it is.
@@ -306,10 +309,11 @@ function unassignedRowHtml(shares) {
   const over = shares.unassigned < -0.005;
   const cell = over
     ? `<span class="hours-over-strong">Over by ${formatCurrency(-shares.unassigned)}</span>`
-    : `<div class="tp-bar"><div class="tp-bar-open" style="width:${(shares.unassigned / shares.scale) * 100}%;"></div></div><span class="tp-share-pct">${Math.round((shares.unassigned / shares.budget) * 100)}%</span>`;
+    : `<div class="tp-bar"><div class="tp-bar-open" style="width:${(shares.unassigned / shares.scale) * 100}%;"></div></div>`;
   return `<div class="tp-row tp-unassigned">
-      <div class="tp-name">Unassigned${over ? "" : ` <span class="tp-open-amt">${formatCurrency(shares.unassigned)}</span>`}</div><div></div><div></div><div></div><div></div>
-      <div class="tp-share ${over ? "over" : ""}">${cell}</div><div></div>
+      <div class="tp-name">Unassigned${over ? "" : ` <span class="tp-open-amt">${formatCurrency(shares.unassigned)}</span>`}</div><div></div><div></div><div></div>
+      <div class="tp-share ${over ? "over" : ""}">${cell}</div>
+      <div class="tp-tail"><span class="tp-pct">${over ? "" : `${Math.round((shares.unassigned / shares.budget) * 100)}%`}</span></div>
     </div>`;
 }
 
@@ -392,6 +396,7 @@ function renderBudget() {
   }).join("");
 
   budgetTbody.innerHTML = rows + (internal ? "" : expenseRowsHtml(project, totals, cols));
+  alignShareBars();
 
   // Someone was just added: put the cursor in their hours box.
   if (focusPersonId) {
@@ -403,6 +408,24 @@ function renderBudget() {
     }
   }
 }
+
+// The people under an open task have their share-of-budget bars in the
+// same place as the tasks' Progress bars above them: measure that column
+// and size the last two grid columns to match.
+const TP_GAP = 18;
+function alignShareBars() {
+  const ref = budgetTbody.querySelector("tr.task-row .progressCell .progress-bar");
+  if (!ref) return;
+  const bar = ref.getBoundingClientRect();
+  budgetTbody.querySelectorAll(".tp-list").forEach((list) => {
+    const box = list.getBoundingClientRect();
+    const tail = box.right - bar.right - TP_GAP;
+    if (bar.width <= 0 || tail < 30) return;
+    list.style.setProperty("--share-w", `${bar.width}px`);
+    list.style.setProperty("--tail-w", `${tail}px`);
+  });
+}
+window.addEventListener("resize", alignShareBars);
 
 // ---------- Expenses in the Budget table ----------
 // Under the tasks: Tasks subtotal, Project expenses, one row per
@@ -568,20 +591,19 @@ function taskPeopleHtml(task) {
     ${tpHeadHtml(internal)}
     ${rows.map((r) => `<div class="tp-row tp-person">
       <div class="tp-name">${esc(r.name)}</div>
-      <div></div>
       <div class="tp-num ${r.isAssigned ? "" : "tp-dim"}">${internal ? "" : r.isAssigned ? fmtHrs(r.assigned) : "—"}</div>
       <div class="tp-num">${fmtHrs(r.logged)}</div>
       <div class="tp-num ${r.isAssigned ? "" : "tp-dim"}">${internal ? "" : r.isAssigned ? fmtHrs(Math.max(0, r.assigned - r.logged)) : "—"}</div>
       <div class="tp-share">${shareCellHtml(shares, r.personId)}</div>
-      <div></div>
+      <div class="tp-tail"><span class="tp-pct">${sharePct(shares, r.personId)}</span></div>
     </div>${itemsListHtml(r.items)}`).join("")}
     ${unassignedRowHtml(shares)}
   </div>
   <button class="link-btn task-add-subtask" data-action="quick-assign" data-task-id="${task.id}">+ Subtask</button>`;
 }
 
-function tpHeadHtml(internal, edit = false) {
-  return `<div class="tp-row tp-head"><div>Person</div><div>${edit ? "" : "Due"}</div><div>${internal ? "" : "Assigned"}</div><div>Logged</div><div>${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Share of budget"}</div><div></div></div>`;
+function tpHeadHtml(internal) {
+  return `<div class="tp-row tp-head"><div>Person</div><div>${internal ? "" : "Assigned"}</div><div>Logged</div><div>${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Share of budget"}</div><div></div></div>`;
 }
 
 // ---------- Edit assignments (admins) ----------
@@ -601,12 +623,11 @@ function assignRowHtml(a, shares) {
   const logged = loggedBy(a.taskId, a.personId);
   return `<div class="tp-row tp-person" data-assignment-id="${a.id}" data-person-id="${a.personId}" data-logged="${logged}">
     <div class="tp-name">${person ? esc(person.name) : "—"}<div class="tp-rate">${person ? `Bill ${formatCurrency(assignmentRate(project, person))}/hr` : ""}</div></div>
-    <div class="tp-saved"><span class="saved-tick"></span></div>
-    <div class="tp-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" aria-label="Assigned hours" /></div>
+    <div class="tp-input"><input type="number" class="assignHours" data-id="${a.id}" min="0" step="0.5" value="${Math.round(hours * 100) / 100}" aria-label="Assigned hours" /><span class="saved-tick"></span></div>
     <div class="tp-num">${fmtHrs(logged)}</div>
     <div class="tp-num tp-remaining">${fmtHrs(Math.max(0, hours - logged))}</div>
     <div class="tp-share">${shareCellHtml(shares, a.personId)}</div>
-    <div class="tp-x"><button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button></div>
+    <div class="tp-tail"><span class="tp-pct">${sharePct(shares, a.personId)}</span><button class="icon-btn" data-action="remove-assignment" data-id="${a.id}" title="Remove from task" aria-label="Remove">&times;</button></div>
   </div>`;
 }
 
@@ -637,7 +658,7 @@ function assignEditorHtml(task) {
     .sort((a, b) => (people.find((p) => p.id === a.personId)?.name || "").localeCompare(people.find((p) => p.id === b.personId)?.name || ""))
     .map((a) => assignRowHtml(a, shares)).join("");
   return `<div class="tp-list" style="--c:${projectColor(task.projectId)};">
-    ${rows ? tpHeadHtml(false, true) + rows : '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
+    ${rows ? tpHeadHtml(false) + rows : '<div class="empty" style="padding:4px 0;">No one assigned yet.</div>'}
     ${unassignedRowHtml(shares)}
     ${addPersonHtml(task)}
   </div>`;
@@ -661,9 +682,11 @@ function liveUpdateTask(detailRow) {
   const shares = taskShares(task, override);
   detailRow.querySelectorAll(".tp-row[data-person-id]").forEach((row) => {
     row.querySelector(".tp-share").innerHTML = shareCellHtml(shares, row.dataset.personId);
+    row.querySelector(".tp-pct").textContent = sharePct(shares, row.dataset.personId);
   });
   const open = detailRow.querySelector(".tp-unassigned");
   if (open) open.outerHTML = unassignedRowHtml(shares);
+  alignShareBars();
   const progressCell = mainRow.querySelector(".progressCell");
   if (progressCell) progressCell.innerHTML = budgetBarHtml(use.spent, use.committed, use.budget, false, invoicedOnTask(task.id));
 }
