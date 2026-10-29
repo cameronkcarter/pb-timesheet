@@ -382,14 +382,13 @@ function cardFooterHtml(project) {
       ${internal ? "" : `<button type="button" class="link-btn" data-action="add-expense" data-project-id="${project.id}">+ Expense</button>`}
       ${summary}
     </div>
-    ${listOpen ? `<div class="due-list pc-expenses">${shown.map((e) => {
+    ${listOpen ? `<div class="pc-subs pc-expenses">${shown.map((e) => {
       const [status, cls] = expenseStatus(e);
-      return `<div class="due-item ${e.invoiced ? "done" : ""}">
-        <span class="due-mark" aria-hidden="true">${e.invoiced ? "&#10003;" : ""}</span>
-        <span class="due-title">${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span>
-        <span class="due-when">${shortDay(e.date)} &middot; ${formatCurrency(e.amount)}</span>
+      return `<div class="pc-exp-row ${e.invoiced ? "done" : ""}">
+        <div class="pc-sub-name" title="${esc(expenseLabel(e, project))}"><span>${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span></div>
+        <span class="pc-exp-when">${shortDay(e.date)} &middot; ${formatCurrency(e.amount)}</span>
         <span class="pay-status ${cls}">${status}</span>
-        ${!e.approved ? `<button type="button" class="link-btn due-edit" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
+        <span class="pc-exp-edit">${!e.approved ? `<button type="button" class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}</span>
       </div>`;
     }).join("")}</div>` : ""}`;
 }

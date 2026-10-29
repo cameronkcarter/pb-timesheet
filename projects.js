@@ -432,25 +432,27 @@ function expenseListHtml(g) {
     : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Expense</button>`;
   if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">Nothing recorded yet.</div>${addBtn}`;
   const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `<table class="expense-list">
-    <thead><tr><th>Date</th><th>Description</th>${g.sub ? "" : "<th>Paid by</th><th class=\"num\">Quantity</th>"}<th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${items.map((e) => {
+  // Laid out like subtasks: a header, then the rows in a tinted band.
+  const kind = g.sub ? "tp-exp-sub" : "";
+  return `<div class="tp-exp ${kind}">
+    <div class="tp-exp-row tp-head"><div>Description</div><div>Date</div>${g.sub ? "" : "<div>Paid by</div><div>Quantity</div>"}<div>Amount</div><div>Status</div><div></div></div>
+    <div class="tp-subs">${items.map((e) => {
       const [status, cls] = expenseStatus(e);
       const payer = people.find((p) => p.id === e.personId);
       const canReimburse = isAdmin() && e.personId && e.approved && !e.reimbursed;
-      return `<tr>
-        <td>${shortDate(e.date)}</td>
-        <td>${esc(g.sub ? e.description || "—" : expenseLabel(e, project))}${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</td>
-        ${g.sub ? "" : `<td>${payer ? esc(payer.name) : "Company"}</td><td class="num">${expenseQtyText(e) || "—"}</td>`}
-        <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
-        <td><span class="pay-status ${cls}">${status}</span></td>
-        <td class="num expense-actions">
+      return `<div class="tp-exp-row tp-sub ${e.invoiced ? "done" : ""}">
+        <div class="tp-sub-name"><span>${esc(g.sub ? e.description || "—" : expenseLabel(e, project))}</span>${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</div>
+        <div class="tp-due">${shortDate(e.date)}</div>
+        ${g.sub ? "" : `<div>${payer ? esc(payer.name) : "Company"}</div><div class="tp-dim">${expenseQtyText(e) || "—"}</div>`}
+        <div class="tp-num"><strong>${formatCurrency(e.amount)}</strong></div>
+        <div><span class="pay-status ${cls}">${status}</span></div>
+        <div class="tp-sub-actions">
           ${canReimburse ? `<button class="link-btn" data-action="reimburse-expense" data-id="${e.id}">Mark reimbursed</button>` : ""}
           ${canEditExpense(e) && !e.invoiced ? `<button class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
-        </td>
-      </tr>`;
-    }).join("")}</tbody>
-  </table>${addBtn}`;
+        </div>
+      </div>`;
+    }).join("")}</div>
+  </div>${addBtn}`;
 }
 
 const expenseEditor = createExpenseEditor({

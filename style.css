@@ -4006,7 +4006,16 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
 .pc-foot button.link-btn { margin: 0; padding: 0; font-size: 13px; }
 .pc-foot .pc-exp-toggle { margin-left: auto !important; color: var(--text-muted); font-weight: 500; }
 .pc-exp-toggle .chev.up { display: inline-block; transform: rotate(180deg); }
-.pc-expenses { margin-top: 6px; }
+.pc-expenses { margin-top: 8px; }
+/* Expense rows: same band, type and spacing as subtask rows. */
+.pc-exp-row { display: flex; align-items: center; gap: 14px; padding: 6px 0; font-size: 13px; }
+.pc-exp-row + .pc-exp-row { border-top: 1px solid #ece6f0; }
+.pc-exp-row .pc-sub-name { flex: 1; }
+.pc-exp-row.done .pc-sub-name span { color: var(--text-muted); }
+.pc-exp-when { color: var(--text-muted); white-space: nowrap; }
+.pc-exp-row .pay-status { margin: 0; }
+.pc-exp-edit { width: 28px; text-align: right; }
+.pc-exp-edit .link-btn { margin: 0; padding: 0; font-size: 12px; }
 
 @media (max-width: 600px) {
   .pc-metrics { gap: 8px; }
@@ -4119,12 +4128,12 @@ button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
 /* Dashboard: a task's subtasks sit in their own tinted band under it,
    one row each, due dates still in the Due column. */
 .pc-subs {
-  margin: 0 -10px 10px;
+  margin: 0 0 10px;
   padding: 4px 10px;
   background: #f8f5fa;
   border-radius: 8px;
 }
-.pc-subs .pc-task.pc-sub { margin-top: 0; padding: 6px 0; }
+.pc-subs .pc-task.pc-sub { margin-top: 0; padding: 6px 0; grid-template-columns: minmax(0, 1fr) 76px 64px 76px 170px; }
 .pc-subs .pc-task.pc-sub + .pc-task.pc-sub { border-top: 1px solid #ece6f0; }
 .pc-subs .pc-sub-name { border-left: none; padding-left: 14px; margin-left: 0; position: relative; }
 .pc-subs .pc-sub-name::before {
@@ -4205,4 +4214,34 @@ button.link-btn.task-add-subtask { margin: 8px 0 0; padding: 0; }
   .tp-name { white-space: normal; }
   .tp-input input { width: 52px; padding: 4px; }
   .tp-sub-name > span { white-space: normal; }
+}
+
+@media (max-width: 600px) {
+  .pc-subs .pc-task.pc-sub { grid-template-columns: minmax(0, 1fr) 52px 44px 42px; gap: 10px; }
+  .pc-exp-row { flex-wrap: wrap; row-gap: 4px; }
+  .pc-exp-row .pc-sub-name { flex-basis: 100%; }
+}
+
+/* Projects tab expenses: rows in a band, like subtasks. */
+.tp-exp .tp-sub-actions { white-space: nowrap; gap: 12px; }
+.tp-exp-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 52px 110px 100px 70px 116px 150px;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.tp-exp-sub .tp-exp-row { grid-template-columns: minmax(160px, 1fr) 52px 70px 116px 150px; }
+.tp-exp .tp-exp-row.tp-head { border-bottom: none; padding: 0 10px 6px; }
+.tp-exp .tp-subs { margin: 0 0 10px; }
+.tp-exp-row.tp-sub { padding: 7px 0; }
+.tp-exp-row.tp-sub + .tp-exp-row.tp-sub { border-top: 1px solid #e4dbea; }
+.tp-exp .tp-sub-actions { grid-column: auto; }
+.tp-exp .tp-sub-name > span { white-space: normal; }
+.tp-exp-row .pay-status { margin: 0; }
+
+@media (max-width: 700px) {
+  .tp-exp .tp-exp-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .tp-exp .tp-exp-row.tp-head { display: none; }
+  .tp-exp .tp-exp-row > div:not(.tp-sub-name) { justify-self: start; }
 }
