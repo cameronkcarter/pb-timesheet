@@ -29,8 +29,6 @@ let selectedProjectId = null;
 let projectPicked = false; // until you pick one, the first (newest) project is selected
 let expandedTaskId = null;
 let showCompleted = false; // completed subtasks and past events are hidden unless shown
-let ganttWhole = false;    // long projects: whole project instead of a few months
-let ganttWinStart = null;  // long projects: first of the month the window starts on
 
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
@@ -51,8 +49,6 @@ const editTimelineBtn = document.getElementById("editTimelineBtn");
 
 const ganttChart = document.getElementById("ganttChart");
 const ganttEmpty = document.getElementById("ganttEmpty");
-const ganttNav = document.getElementById("ganttNav");
-const ganttZoom = document.getElementById("ganttZoom");
 const schedList = document.getElementById("schedList");
 
 const timelineModal = document.getElementById("timelineModal");
@@ -213,8 +209,6 @@ function pickProject(id) {
   finishEditing();
   expandedTaskId = null;
   addingTaskId = null;
-  ganttWhole = false;
-  ganttWinStart = null;
   renderAll();
 }
 
@@ -843,9 +837,7 @@ editAssignmentsBtn.addEventListener("click", () => {
 editTimelineBtn.addEventListener("click", () => openTimelineModal(selectedProjectId));
 
 // ---------- Timeline for the selected project ----------
-// Fits the card's width, no scrolling. Projects longer than about 6 months
-// (3 on a phone) open on that many months around today, with ‹ Today › to
-// move a month at a time and "Whole project" to see all of it.
+// The whole project fitted to the card's width, no scrolling.
 const GANTT_LABEL_W = { wide: 212, narrow: 116 }; // label column + gap, as in style.css
 
 function monthStart(iso, add = 0) {
@@ -856,8 +848,6 @@ function monthStart(iso, add = 0) {
 function renderGantt() {
   const project = projects.find((p) => p.id === selectedProjectId);
   editTimelineBtn.style.display = project && isAdmin() ? "" : "none";
-  ganttNav.hidden = true;
-  ganttZoom.hidden = true;
   if (!project) {
     ganttChart.innerHTML = "";
     return;
@@ -884,38 +874,16 @@ function renderGantt() {
   const rangeStart = toISODate(addDays(dates[0] + "T00:00:00", -4));
   const rangeEnd = toISODate(addDays(dates[dates.length - 1] + "T00:00:00", 10));
   const width = ganttChart.clientWidth || 800;
-  const narrow = width < 520;
-  const trackW = width - (narrow ? GANTT_LABEL_W.narrow : GANTT_LABEL_W.wide);
-  const windowMonths = narrow ? 3 : 6;
-  const long = daysBetween(rangeStart, rangeEnd) > windowMonths * 33;
-
-  let viewStart = rangeStart;
-  let viewEnd = rangeEnd;
-  if (long) {
-    ganttZoom.hidden = false;
-    ganttZoom.textContent = ganttWhole ? `${windowMonths} months` : "Whole project";
-    if (!ganttWhole) {
-      const first = monthStart(rangeStart);
-      const last = monthStart(rangeEnd, 1 - windowMonths);
-      if (!ganttWinStart) ganttWinStart = monthStart(today, -1);
-      ganttWinStart = ganttWinStart < first ? first : ganttWinStart > last ? last : ganttWinStart;
-      viewStart = ganttWinStart;
-      viewEnd = monthStart(ganttWinStart, windowMonths);
-      ganttNav.hidden = false;
-      document.getElementById("ganttPrev").disabled = ganttWinStart <= first;
-      document.getElementById("ganttNext").disabled = ganttWinStart >= last;
-    }
-  }
-  const viewDays = Math.max(1, daysBetween(viewStart, viewEnd));
-  const pct = (iso) => (daysBetween(viewStart, iso) / viewDays) * 100;
-  const inView = (iso) => iso >= viewStart && iso <= viewEnd;
+  const trackW = width - (width < 520 ? GANTT_LABEL_W.narrow : GANTT_LABEL_W.wide);
+  const totalDays = Math.max(1, daysBetween(rangeStart, rangeEnd));
+  const pct = (iso) => (daysBetween(rangeStart, iso) / totalDays) * 100;
 
   // A line every month; labels every month, or every 2/3/6/12 when they'd
   // crowd. The first label and each January carry the year.
-  const monthPx = (trackW * 30.4) / viewDays;
+  const monthPx = (trackW * 30.4) / totalDays;
   const every = [1, 2, 3, 6, 12].find((n) => n * monthPx >= 56) || 12;
   const ticks = [];
-  for (let m = monthStart(viewStart, viewStart.endsWith("-01") ? 0 : 1); m < viewEnd; m = monthStart(m, 1)) {
+  for (let m = monthStart(rangeStart, rangeStart.endsWith("-01") ? 0 : 1); m < rangeEnd; m = monthStart(m, 1)) {
     const d = new Date(m + "T00:00:00");
     let label = "";
     if (d.getMonth() % every === 0) {
@@ -926,7 +894,6 @@ function renderGantt() {
   }
 
   const dotHtml = (d) => {
-    if (!inView(d.dueDate)) return "";
     const sub = isSubtask(d);
     const hollow = sub ? d.completed : d.dueDate < today;
     return `<button type="button" class="gantt-dot ${sub ? "gantt-dot-assignment" : "gantt-dot-event"} ${hollow ? "gantt-dot-hollow" : ""}"
@@ -934,10 +901,8 @@ function renderGantt() {
   };
   const barHtml = (t) => {
     if (!t.startDate || !t.endDate) return "";
-    const left = Math.max(0, pct(t.startDate));
-    const right = Math.min(100, pct(t.endDate));
-    if (right <= 0 || left >= 100) return "";
-    return `<div class="gantt-bar ${pct(t.startDate) < 0 ? "cut-l" : ""} ${pct(t.endDate) > 100 ? "cut-r" : ""}" style="left:${left}%; width:max(4px, ${right - left}%);"
+    const left = pct(t.startDate);
+    return `<div class="gantt-bar" style="left:${left}%; width:max(4px, ${pct(t.endDate) - left}%);"
       title="${esc(t.name)} · ${formatDate(t.startDate)} – ${formatDate(t.endDate)}"></div>`;
   };
 
@@ -946,12 +911,11 @@ function renderGantt() {
     ? `<span class="gantt-project-clickable" data-edit-timeline="${project.id}" title="Edit task dates">Whole project</span>`
     : "Whole project";
   const projectDots = projectDueDates.filter((d) => !d.taskId).map(dotHtml).join("");
-  const todayX = pct(today);
 
   ganttChart.innerHTML = `<div class="gantt-inner">
     <div class="gantt-grid">
       ${ticks.map((t) => `<div class="gantt-month-line" style="left:${t.x}%;"></div>`).join("")}
-      ${todayX >= 0 && todayX <= 100 ? `<div class="gantt-today-line" style="left:${todayX}%;"><span>Today</span></div>` : ""}
+      <div class="gantt-today-line" style="left:${pct(today)}%;"><span>Today</span></div>
     </div>
     ${row("", ticks.map((t) => (t.label ? `<div class="gantt-tick" style="left:${t.x}%;">${t.label}</div>` : "")).join(""), "gantt-header-row")}
     ${projectDots ? row(projectLabel, projectDots, "gantt-project-row") : ""}
@@ -959,10 +923,6 @@ function renderGantt() {
   </div>`;
 }
 
-document.getElementById("ganttPrev").addEventListener("click", () => { ganttWinStart = monthStart(ganttWinStart, -1); renderGantt(); });
-document.getElementById("ganttNext").addEventListener("click", () => { ganttWinStart = monthStart(ganttWinStart, 1); renderGantt(); });
-document.getElementById("ganttToday").addEventListener("click", () => { ganttWinStart = null; renderGantt(); });
-ganttZoom.addEventListener("click", () => { ganttWhole = !ganttWhole; renderGantt(); });
 window.addEventListener("resize", renderGantt);
 
 ganttEmpty.addEventListener("click", (e) => {

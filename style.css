@@ -478,9 +478,6 @@ th {
   background: #d9cbe0;
   border-radius: 6px;
 }
-.gantt-bar.cut-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.gantt-bar.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-
 button.gantt-dot {
   position: absolute;
   top: 50%;
@@ -501,38 +498,6 @@ button.gantt-dot.hot { transform: scale(1.45); box-shadow: 0 0 0 2px rgba(0, 0, 
 button.gantt-dot.gantt-dot-hollow { background: #fff; border-width: 2px; width: 10px; height: 10px; margin: -5px 0 0 -5px; }
 .gantt-dot-event.gantt-dot-hollow { border-color: var(--accent); }
 .gantt-dot-assignment.gantt-dot-hollow { border-color: #0f766e; }
-
-.gantt-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 10px;
-}
-.gantt-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
-.legend-dot-event { background: var(--accent); }
-.legend-dot-assignment { background: #0f766e; }
-.legend-bar { display: inline-block; width: 18px; height: 8px; border-radius: 4px; background: #d9cbe0; }
-
-/* ‹ Today › for long projects. */
-.gantt-nav { display: inline-flex; align-items: center; gap: 4px; }
-.gantt-nav[hidden], #ganttZoom[hidden] { display: none; }
-button.gantt-arrow {
-  width: 30px;
-  height: 30px;
-  margin: 0;
-  padding: 0;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--navy);
-  font-size: 20px;
-  line-height: 1;
-}
-button.gantt-arrow:hover:not(:disabled) { background: #f4eef7; }
-button.gantt-arrow:disabled { opacity: 0.35; cursor: default; }
 
 @media (max-width: 600px) {
   .gantt-inner { --label-w: 104px; }
@@ -4214,6 +4179,11 @@ button.declined-fix {
 .sched-header .row-actions { display: flex; align-items: center; gap: 8px; }
 .sched-header .row-actions button { margin: 0; }
 .sched-header .link-btn { margin: 0 6px 0 0; padding: 0; font-size: 13px; }
+/* + Event / + Subtask in the same colors as their dots. */
+.sched-header button.btn-event { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sched-header button.btn-subtask { background: #0f766e; border-color: #0f766e; color: #fff; }
+.sched-header button.btn-event:hover { background: #c2772a; border-color: #c2772a; }
+.sched-header button.btn-subtask:hover { background: #0b5e57; border-color: #0b5e57; }
 
 #schedList { background: #f1ebf5; border-radius: 8px; padding: 4px 12px; }
 #schedList > .empty { padding: 10px 0; }

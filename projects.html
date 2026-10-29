@@ -73,29 +73,18 @@
       <div class="budget-header">
         <h2 style="margin:0;">Timeline</h2>
         <div class="row-actions">
-          <div class="gantt-nav" id="ganttNav" hidden>
-            <button type="button" class="gantt-arrow" id="ganttPrev" aria-label="Earlier" title="Earlier">&#8249;</button>
-            <button type="button" class="secondary small" id="ganttToday">Today</button>
-            <button type="button" class="gantt-arrow" id="ganttNext" aria-label="Later" title="Later">&#8250;</button>
-          </div>
-          <button type="button" id="ganttZoom" class="secondary small" hidden>Whole project</button>
           <button id="editTimelineBtn" class="small btn-tint-purple" style="display:none;">Edit dates</button>
         </div>
-      </div>
-      <div class="gantt-legend">
-        <span><span class="legend-bar"></span>Task dates</span>
-        <span><span class="legend-dot legend-dot-assignment"></span>Subtask</span>
-        <span><span class="legend-dot legend-dot-event"></span>Event</span>
       </div>
       <div id="ganttEmpty" class="empty" style="display:none;">No task dates set for this project yet.</div>
       <div id="ganttChart" class="gantt-chart"></div>
 
       <div class="sched-header">
-        <h3>Subtasks &amp; events</h3>
+        <h3>Subtasks &amp; Events</h3>
         <div class="row-actions">
           <button type="button" id="toggleCompletedBtn" class="link-btn">Show completed</button>
-          <button type="button" id="openAddEvent" class="secondary small">+ Event</button>
-          <button type="button" id="openAddSubtask" class="small">+ Subtask</button>
+          <button type="button" id="openAddEvent" class="small btn-event">+ Event</button>
+          <button type="button" id="openAddSubtask" class="small btn-subtask">+ Subtask</button>
         </div>
       </div>
       <div id="schedList"></div>
