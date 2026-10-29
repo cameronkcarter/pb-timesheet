@@ -1025,29 +1025,50 @@ toggleCompletedBtn.addEventListener("click", () => {
 });
 
 // ---------- Timeline (task dates) edit modal ----------
+// One row per task, in the same order as Tasks & Budget.
 function openTimelineModal(projectId) {
   const project = projects.find((p) => p.id === projectId);
-  const projectTasks = tasks.filter((t) => t.projectId === projectId).sort((a, b) => a.name.localeCompare(b.name));
+  const projectTasks = tasks.filter((t) => t.projectId === projectId)
+    .sort((a, b) => (!!a.closed - !!b.closed) || a.name.localeCompare(b.name));
 
   timelineModalTitle.textContent = project ? `Edit Timeline — ${project.name}` : "Edit Timeline";
-  timelineModalRows.innerHTML = projectTasks.map((t) => `
-    <div class="timeline-task-row" data-task-id="${t.id}">
-      <div class="timeline-task-name">${esc(t.name)}</div>
-      <div class="timeline-task-dates">
-        <div>
-          <label>Start</label>
-          <input type="date" class="timelineStart" value="${t.startDate || ""}" />
-        </div>
-        <div>
-          <label>End</label>
-          <input type="date" class="timelineEnd" value="${t.endDate || ""}" />
-        </div>
-      </div>
-    </div>
-  `).join("") || `<div class="empty">This project has no tasks yet.</div>`;
+  timelineModalRows.innerHTML = projectTasks.length ? `
+    <div class="tl-table">
+      <div class="tl-head"><span>Task</span><span>Start</span><span>End</span><span class="tl-len">Length</span></div>
+      ${projectTasks.map((t) => `
+        <div class="tl-row" data-task-id="${t.id}">
+          <span class="tl-name" title="${esc(t.name)}">${esc(t.name)}</span>
+          <input type="date" class="timelineStart" aria-label="Start" value="${t.startDate || ""}" />
+          <input type="date" class="timelineEnd" aria-label="End" value="${t.endDate || ""}" />
+          <span class="tl-len"></span>
+        </div>`).join("")}
+    </div>` : `<div class="empty">This project has no tasks yet.</div>`;
+  timelineModalRows.querySelectorAll(".tl-row").forEach(updateTimelineRow);
+  updateTimelineSave();
 
   timelineModal.style.display = "flex";
 }
+
+// Length in days or weeks; an end before its start turns the row red.
+function updateTimelineRow(row) {
+  const start = row.querySelector(".timelineStart").value;
+  const end = row.querySelector(".timelineEnd").value;
+  const days = start && end ? daysBetween(start, end) + 1 : null;
+  row.classList.toggle("tl-bad", days !== null && days < 1);
+  row.querySelector(".tl-len").textContent = days === null ? "" : days < 1 ? "End is before start"
+    : days < 14 ? `${days} day${days === 1 ? "" : "s"}` : `${Math.round(days / 7)} wk`;
+}
+
+function updateTimelineSave() {
+  document.getElementById("modalSaveTimeline").disabled = !!timelineModalRows.querySelector(".tl-bad");
+}
+
+timelineModalRows.addEventListener("input", (e) => {
+  const row = e.target.closest(".tl-row");
+  if (!row) return;
+  updateTimelineRow(row);
+  updateTimelineSave();
+});
 
 function closeTimelineModal() {
   timelineModal.style.display = "none";
@@ -1058,6 +1079,7 @@ closeOnBackdropClick(timelineModal, closeTimelineModal);
 
 document.getElementById("modalSaveTimeline").addEventListener("click", async () => {
   const rows = [...timelineModalRows.querySelectorAll("[data-task-id]")];
+  if (timelineModalRows.querySelector(".tl-bad")) return;
   try {
     for (const row of rows) {
       const taskId = row.dataset.taskId;

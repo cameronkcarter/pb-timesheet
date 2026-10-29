@@ -504,35 +504,37 @@ button.gantt-dot.gantt-dot-hollow { background: #fff; border-width: 2px; width: 
   .gantt-label-col { font-size: 12px; }
 }
 
-.timeline-task-row {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.timeline-task-row:last-child {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-.timeline-task-name {
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-
-.timeline-task-dates {
-  display: flex;
+/* Edit Timeline: one row per task, Start and End columns. */
+.tl-table { max-height: 60vh; overflow-y: auto; }
+.tl-head, .tl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px 140px 72px;
   gap: 10px;
+  align-items: center;
 }
-
-.timeline-task-dates > div {
-  flex: 1;
+.tl-head {
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
 }
+.tl-row { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.tl-row:last-child { border-bottom: none; }
+.tl-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-row input[type="date"] { width: 100%; margin: 0; }
+.tl-len { font-size: 12px; color: var(--text-muted); text-align: right; }
+.tl-row.tl-bad input.timelineEnd { border-color: var(--red); background: #fdf0ee; }
+.tl-row.tl-bad .tl-len { color: var(--red); }
 
-.timeline-task-dates label {
-  margin-top: 0;
+@media (max-width: 600px) {
+  .tl-head { display: none; }
+  .tl-row { grid-template-columns: 1fr 1fr; row-gap: 6px; }
+  .tl-name { grid-column: 1 / -1; }
+  .tl-len { grid-column: 1 / -1; text-align: left; }
+  .tl-len:empty { display: none; }
 }
 
 tr.task-row {
