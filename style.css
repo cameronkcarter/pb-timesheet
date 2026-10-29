@@ -4236,6 +4236,8 @@ button.declined-fix {
 .sched-event .sched-name::before { background: var(--accent); }
 .sched-task, .sched-who { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sched-item .tp-sub-actions { grid-column: auto; }
+/* Events have no ✓: keep its space so Edit lines up with the subtasks'. */
+.sched-event .tp-sub-actions .link-btn { margin-right: 34px; }
 .sched-item.done .sched-name > span:first-child { text-decoration: line-through; color: var(--text-muted); font-weight: 400; }
 .sched-item.done .sched-name::before { background: #c9c2cf; }
 .sched-item.done .sched-due { color: var(--text-muted); }
