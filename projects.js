@@ -25,8 +25,10 @@ let expenses = [];
 let navChecked = false;
 let othersOpen = false; // the "Other projects" list is open
 let editMode = false;  // admins: edit assigned hours instead of seeing subtasks
-let selectedProjectId = null;
-let projectPicked = false; // until you pick one, the first (newest) project is selected
+// ?project=<id> (e.g. from a Message Board post) opens that project;
+// otherwise the first (newest) is selected until you pick one.
+let selectedProjectId = new URLSearchParams(location.search).get("project");
+let projectPicked = !!selectedProjectId;
 let expandedTaskId = null;
 let showCompleted = false; // completed subtasks and past events are hidden unless shown
 

@@ -4264,3 +4264,108 @@ button.due-chip:hover { filter: brightness(0.95); text-decoration: underline; }
   .sched-task { grid-area: meta; }
   .sched-who { display: none; }
 }
+
+/* ---------- Dashboard: Message Board ----------
+   Under the hours and pay boxes. One line when there's nothing new;
+   otherwise up to two posts, each: initials, name · to · when · project,
+   the text, then a thumbs-up (and, for the author, who's seen it). */
+.mb-card { padding: 14px 20px; }
+.mb-card[hidden] { display: none; }
+.mb-card.mb-quiet { padding: 10px 20px; }
+.mb-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mb-head h3 { margin: 0; font-size: 16px; }
+.mb-count { font-size: 13px; color: var(--text-muted); }
+.mb-head .mb-earlier-btn { margin: 0 0 0 auto; padding: 0; font-size: 13px; }
+.mb-head .mb-new { margin: 0; }
+.mb-head .mb-earlier-btn + .mb-new { margin-left: 4px; }
+.mb-head .mb-count + .mb-new { margin-left: auto; }
+
+.mb-post {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.mb-head + .mb-post, .mb-compose + .mb-post { margin-top: 10px; }
+.mb-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #efe5f4;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mb-direct .mb-avatar { background: #fbefe2; color: #9a5a16; }
+.mb-meta { font-size: 13px; color: var(--text-muted); }
+.mb-meta b { color: var(--text); font-weight: 600; }
+.mb-to { color: #9a5a16; font-weight: 600; }
+.mb-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 14%, #fff);
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: none;
+}
+.mb-project::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.mb-project:hover { background: color-mix(in srgb, var(--c) 24%, #fff); }
+.mb-text { margin: 4px 0 8px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mb-foot { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.mb-foot .link-btn { margin: 0; padding: 0; font-size: 12px; color: var(--text-muted); }
+.mb-foot .link-btn:hover { color: var(--navy); }
+.mb-foot .mb-delete:hover { color: var(--red); }
+button.mb-thumb {
+  margin: 0;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+button.mb-thumb span { font-size: 12px; font-weight: 600; }
+button.mb-thumb:hover { background: #f6f1f9; }
+button.mb-thumb.on { border-color: #cdb6dc; background: #f1e8f7; color: var(--navy); }
+.mb-seen { color: var(--text-muted); cursor: default; }
+button.mb-dismiss { align-self: start; font-size: 18px; }
+.mb-more { margin: 2px 0 0 44px; padding: 0; font-size: 13px; }
+.mb-earlier { margin-top: 10px; }
+.mb-earlier .mb-post { opacity: 0.85; }
+
+.mb-compose { margin-top: 12px; }
+textarea.mb-input {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  overflow: hidden;
+  border: 1.5px solid #d9cfe0;
+  border-radius: 10px;
+}
+textarea.mb-input:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(122, 57, 147, 0.15); }
+.mb-compose-row { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+.mb-compose-row label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; }
+.mb-compose-row select { margin: 0; padding: 4px 8px; font-size: 13px; max-width: 200px; }
+.mb-compose-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
+.mb-compose-actions button { margin: 0; }
+
+@media (max-width: 600px) {
+  .mb-card { padding: 12px 14px; }
+  .mb-post { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; }
+  .mb-avatar { width: 28px; height: 28px; font-size: 11px; }
+  .mb-more { margin-left: 38px; }
+}

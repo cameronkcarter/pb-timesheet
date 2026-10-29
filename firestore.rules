@@ -85,6 +85,37 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    // Message Board. Posts to everyone (toPersonId null) are read by all
+    // staff; a post to one person only by them and its author. You post as
+    // yourself; the author can edit or delete their post (admins can delete
+    // any); anyone who can see a post can add or remove only themselves from
+    // its thumbs-ups and dismissals.
+    match /messages/{id} {
+      function canSee(data) {
+        return data.toPersonId == null
+          || data.toPersonId == myPersonId()
+          || data.authorPersonId == myPersonId();
+      }
+      function onlyMeChanged(field) {
+        let before = resource.data.get(field, []).toSet();
+        let after = request.resource.data.get(field, []).toSet();
+        return after.difference(before).hasOnly([myPersonId()])
+          && before.difference(after).hasOnly([myPersonId()]);
+      }
+
+      allow read: if isStaff() && canSee(resource.data);
+      allow create: if isStaff()
+        && request.resource.data.authorPersonId == myPersonId()
+        && request.resource.data.get("thumbsBy", []).size() == 0
+        && request.resource.data.get("dismissedBy", []).size() == 0;
+      allow update: if isStaff() && canSee(resource.data) && (
+        (resource.data.authorPersonId == myPersonId()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["text", "projectId", "toPersonId", "editedAt"]))
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["thumbsBy", "dismissedBy"])
+          && onlyMeChanged("thumbsBy") && onlyMeChanged("dismissedBy")));
+      allow delete: if isAdmin() || (isStaff() && resource.data.authorPersonId == myPersonId());
+    }
+
     // Project expenses (staff add their own; admins/PMs approve, record
     // subconsultant invoices, invoice them and mark them reimbursed).
     match /expenses/{id} {

@@ -8,6 +8,7 @@ import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName 
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
 import { createExpenseEditor, expenseLabel, expenseStatus } from "./expenses.js";
 import { createApprovals, canApprove } from "./approvals.js";
+import { createMessageBoard } from "./board.js";
 
 const selectedPersonId = requireSession();
 
@@ -91,7 +92,16 @@ approvalToggle.addEventListener("click", () => {
   renderApprovals();
 });
 
+// ---------- Message Board ----------
+// Posts to everyone or one person, under the hours and pay boxes (see board.js).
+const board = selectedPersonId ? createMessageBoard({
+  el: document.getElementById("messageBoard"),
+  getData: () => ({ people, projects }),
+  sessionPersonId: selectedPersonId,
+}) : null;
+
 function render() {
+  board?.render();
   renderApprovals();
   const personId = selectedPersonId;
   const person = people.find((p) => p.id === personId);

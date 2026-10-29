@@ -8,6 +8,7 @@ import {
   doc,
   onSnapshot,
   query,
+  where,
   orderBy,
   writeBatch,
   serverTimestamp,
@@ -219,6 +220,45 @@ export const DueDates = {
   add: (data) => add("dueDates", { taskId: null, completed: false, completedDate: null, ...data }),
   update: (id, data) => update("dueDates", id, data),
   remove: (id) => remove("dueDates", id),
+};
+
+// Message Board posts:
+// { authorPersonId, toPersonId (null = everyone), projectId (optional), text,
+//   postedAt, editedAt (ISO), thumbsBy: [personIds], dismissedBy: [personIds] }
+// A post to one person is private to them and its author (see
+// firestore.rules), so posts are read with three queries — to everyone, to
+// me, by me — rather than the whole collection. onError(err) if they can't be
+// read at all (e.g. the rules aren't deployed yet).
+export const Messages = {
+  listen(myPersonId, cb, onError = () => {}) {
+    const mine = (m) => !m.toPersonId || m.toPersonId === myPersonId || m.authorPersonId === myPersonId;
+    if (isTestMode()) return listenTest("messages", (list) => cb(list.filter(mine)));
+    const parts = [[], [], []];
+    const unsubs = [];
+    let cancelled = false;
+    authReady.then(() => {
+      if (cancelled) return;
+      const ref = collection(db, "messages");
+      [
+        query(ref, where("toPersonId", "==", null)),
+        query(ref, where("toPersonId", "==", myPersonId)),
+        query(ref, where("authorPersonId", "==", myPersonId)),
+      ].forEach((q, i) => {
+        unsubs.push(onSnapshot(q, (snap) => {
+          parts[i] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          const byId = new Map(parts.flat().map((m) => [m.id, m]));
+          cb([...byId.values()]);
+        }, onError));
+      });
+    });
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  },
+  add: (data) => add("messages", { toPersonId: null, projectId: null, thumbsBy: [], dismissedBy: [], editedAt: null, ...data }),
+  update: (id, data) => update("messages", id, data),
+  remove: (id) => remove("messages", id),
 };
 
 // Invoice documents look like:
