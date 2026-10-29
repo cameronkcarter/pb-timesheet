@@ -607,6 +607,7 @@ function tpHeadHtml(internal) {
 // adds someone. Unassigned updates as you type.
 let addingTaskId = null;    // task whose "Add person" chips are showing
 let focusPersonId = null;   // just added: focus their hours box once it appears
+let justAdded = [];         // people added since "+ Person" was opened
 let renderDeferred = false; // skip re-rendering while someone is editing hours
 const saveTimers = {};      // assignmentId -> pending auto-save
 const SAVE_DELAY_MS = 800;
@@ -630,11 +631,16 @@ function addPersonHtml(task) {
   const assignedIds = assignments.filter((a) => a.taskId === task.id).map((a) => a.personId);
   const available = people.filter((p) => !p.inactive && !assignedIds.includes(p.id))
     .sort((a, b) => a.name.localeCompare(b.name));
-  if (available.length === 0) return "";
+  if (available.length === 0) {
+    // Everyone's on it: just Done, if they were being added.
+    return addingTaskId === task.id ? `<div class="person-picker"><span class="appr-muted">Everyone's on this task.</span>
+      <button type="button" class="link-btn" data-action="cancel-add">Done</button></div>` : "";
+  }
   if (addingTaskId !== task.id) {
     return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Person</button>`;
   }
-  // Tap someone to add them (0 hrs); their hours box is then ready to type in.
+  // Tap people to add them (0 hrs each); Done puts the cursor in the first
+  // one's hours box.
   const project = projects.find((pr) => pr.id === task.projectId);
   const initials = (name) => String(name).split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return `<div class="person-picker">
@@ -752,10 +758,14 @@ async function handleAssignAction(btn) {
   finishEditing();
   if (action === "open-add") {
     addingTaskId = btn.dataset.taskId;
+    justAdded = [];
     renderBudget();
   }
   if (action === "cancel-add") {
+    // Done: start on the first new person's hours.
     addingTaskId = null;
+    focusPersonId = justAdded[0] || null;
+    justAdded = [];
     renderBudget();
   }
   if (action === "remove-assignment") {
@@ -767,12 +777,12 @@ async function handleAssignAction(btn) {
   if (action === "add-assignment") {
     const { personId, taskId, projectId } = btn.dataset;
     if (assignments.some((x) => x.taskId === taskId && x.personId === personId)) return;
-    addingTaskId = null;
-    focusPersonId = personId;
+    // The chips stay open so several people can be added in a row.
+    justAdded.push(personId);
     try {
       await Assignments.add({ projectId, taskId, personId, hours: 0 });
     } catch (err) {
-      focusPersonId = null;
+      justAdded = justAdded.filter((x) => x !== personId);
       showToast("Error: " + err.message);
     }
   }
