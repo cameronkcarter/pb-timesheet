@@ -472,9 +472,10 @@ function startFormEdit(entry) {
   isDirty = true;
   renderLogForm();
   renderDay(true);
-  // Bring Log hours to the top of the window, so it's clear that's where the
-  // entry opened.
-  const top = document.querySelector(".day-log").getBoundingClientRect().top + window.scrollY - 12;
+  // Bring the day (its entries, then Log hours with the entry in it) to the
+  // top of the window, making room below it when the page is too short.
+  const top = dayCard.getBoundingClientRect().top + window.scrollY - 12;
+  document.body.style.minHeight = `${top + window.innerHeight}px`;
   window.scrollTo({ top, behavior: "smooth" });
   entryHours.focus({ preventScroll: true });
 }
@@ -694,6 +695,7 @@ function resetForm() {
 
 function clearForm() {
   resetForm();
+  document.body.style.minHeight = "";
   renderLogForm();
   renderDay(true);
 }
