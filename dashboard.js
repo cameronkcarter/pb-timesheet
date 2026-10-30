@@ -262,7 +262,6 @@ function render() {
       </div>
       ${open ? `<div class="pc-body">
         ${taskRows ? `<div class="pc-tasks">
-          <div class="pc-task pc-task-head"><div>Task</div><div>Your hours</div><div class="pc-budget">${internal ? "" : "Budget used"}</div></div>
           ${taskRows}
         </div>` : ""}
         ${generalItems.length ? `<div class="pc-tasks pc-general"><div class="pc-task"><div class="pc-task-name">Other subtasks</div></div>${itemsHtml(generalItems)}</div>` : ""}

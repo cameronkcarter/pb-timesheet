@@ -3535,12 +3535,7 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   border-top: 1px solid var(--border);
   font-size: 14px;
 }
-.pc-task.pc-task-head {
-  border-top: none;
-  padding: 0 0 4px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
+.pc-tasks > .pc-task:first-child { border-top: none; }
 .pc-task-name { font-weight: 600; line-height: 1.35; }
 .pc-hours { min-width: 0; }
 .pc-budget { text-align: right; white-space: nowrap; }
@@ -3586,7 +3581,6 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   .pc-body { padding: 0 14px 12px; }
   .pc-head .pc-hours,
   .pc-task .pc-hours { grid-column: 1 / -1; grid-row: 2; }
-  .pc-task-head > :nth-child(2) { display: none; }
   .pc-sub-name span { white-space: normal; }
 }
 
