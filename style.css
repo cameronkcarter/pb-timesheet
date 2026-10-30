@@ -912,7 +912,11 @@ button.ts-task-more:hover { background: #f6f1f8; }
 .ts-task-new { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .ts-task-new input { margin: 0; max-width: 320px; }
 .ts-task-new button { margin: 0; }
-.ts-entry-line { display: flex; gap: 8px; margin-top: 12px; }
+/* Hours | Notes headers over the inputs, styled like the task headers. */
+.ts-entry-head { display: flex; gap: 8px; margin-top: 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
+.ts-entry-head span { padding-left: 10px; }
+.ts-entry-head span:first-child { flex: 0 0 76px; box-sizing: border-box; }
+.ts-entry-line { display: flex; gap: 8px; margin-top: 4px; }
 .ts-entry-line #entryHours { flex: 0 0 76px; }
 .ts-entry-line #entryNote { flex: 1; min-width: 0; }
 .ts-entry-line button { margin: 0; white-space: nowrap; }
