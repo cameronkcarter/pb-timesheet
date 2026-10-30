@@ -41,6 +41,7 @@ const projectHeadMeta = document.getElementById("projectHeadMeta");
 const projectStats = document.getElementById("projectStats");
 const otherProjectsEl = document.getElementById("otherProjects");
 const budgetHeading = document.getElementById("budgetHeading");
+const budgetEditTip = document.getElementById("budgetEditTip");
 const budgetTbody = document.querySelector("#budgetTable tbody");
 const budgetEmpty = document.getElementById("budgetEmpty");
 const barLegend = document.getElementById("barLegend");
@@ -306,6 +307,7 @@ function renderBudget() {
     pm ? `PM: ${pm.name}` : "",
   ].filter(Boolean).join(" · ");
   budgetHeading.textContent = internal ? "Tasks" : "Tasks & Budget";
+  budgetEditTip.hidden = internal || !canEditHours(project.id);
   editProjectBtn.style.display = admin ? "" : "none";
   barLegend.style.display = internal ? "none" : "";
 

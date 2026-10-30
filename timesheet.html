@@ -29,21 +29,21 @@
   <div class="card ts-card">
     <div class="cal-header">
       <div class="cal-nav">
-        <button id="calPrev" class="secondary small" aria-label="Previous">&lsaquo;</button>
-        <button id="calNext" class="secondary small" aria-label="Next">&rsaquo;</button>
+        <button id="calPrev" class="secondary small" aria-label="Earlier">&lsaquo;</button>
         <span id="calLabel" class="cal-label"></span>
-        <button id="calToday" class="secondary small">Today</button>
+        <button id="calNext" class="secondary small" aria-label="Later">&rsaquo;</button>
+        <button type="button" id="calBack" class="link-btn" hidden>Back to today</button>
       </div>
-      <div class="segmented segmented-small" id="calMode" role="radiogroup" aria-label="Show">
-        <button type="button" data-value="week" role="radio">Week</button>
-        <button type="button" data-value="month" role="radio">Month</button>
-      </div>
+      <button type="button" id="calMode" class="link-btn"></button>
     </div>
     <div id="calendar" class="cal-grid"></div>
   </div>
 
   <div class="card ts-card" id="dayCard">
-    <h2 id="dayHeading" class="day-heading"></h2>
+    <div class="card-head">
+      <h2 id="dayHeading"></h2>
+      <span class="edit-tip" id="dayEditTip"><span aria-hidden="true">&#9998;</span> Click a task, note or hours to change it</span>
+    </div>
     <div id="dayEntries"></div>
 
     <div class="day-log">
@@ -66,7 +66,10 @@
   </div>
 
   <div class="card ts-card">
-    <h2 id="listTitle"></h2>
+    <div class="card-head">
+      <h2>Your entries <span id="listTitle" class="day-total"></span></h2>
+      <span class="edit-tip" id="listEditTip"><span aria-hidden="true">&#9998;</span> Open a task, then click hours or a note to change it</span>
+    </div>
     <div id="listView"></div>
   </div>
 </main>

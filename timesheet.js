@@ -7,7 +7,7 @@ import {
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { assignedHours, isInternal } from "./rates.js";
 
-// Three cards: a calendar of your hours (a week, or the whole month), the
+// Three cards: a calendar of your hours (two weeks, or the whole month), the
 // selected day (its entries, editable in place, and a form to log more), and
 // the month's hours by project and task, each task opening to its entries
 // (also editable in place).
@@ -26,7 +26,7 @@ let navChecked = false;
 let isDirty = false;
 let selectedDay = todayISO();
 let calAnchor = selectedDay; // a day in the week or month the calendar shows
-let calMode = "week";        // or "month"
+let calMode = "weeks";       // last week and this one, or "month"
 let showOtherTasks = false;  // tasks on the project you're not assigned to
 let addingTask = false;      // the "+ New task" box on internal projects
 let openListKey = null;      // "<projectId>|<taskId>" open in the list
@@ -41,7 +41,8 @@ if (/^\d{4}-\d{2}-\d{2}$/.test(linkedDay || "")) {
 
 const calendarEl = document.getElementById("calendar");
 const calLabel = document.getElementById("calLabel");
-const calModeEl = document.getElementById("calMode");
+const calModeBtn = document.getElementById("calMode");
+const calBackBtn = document.getElementById("calBack");
 
 const dayCard = document.getElementById("dayCard");
 const dayHeading = document.getElementById("dayHeading");
@@ -57,7 +58,9 @@ const entryNote = document.getElementById("entryNote");
 const existingHint = document.getElementById("existingHint");
 const submitEntry = document.getElementById("submitEntry");
 
+const dayEditTip = document.getElementById("dayEditTip");
 const listTitle = document.getElementById("listTitle");
+const listEditTip = document.getElementById("listEditTip");
 const listView = document.getElementById("listView");
 
 const sumHrs = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
@@ -108,29 +111,36 @@ function myEntriesOn(iso) {
   return myEntries().filter((e) => e.date === iso);
 }
 
-// Only what you can act on shows: declined (fix it) and invoiced or paid
-// (locked). Pending and approved look the same.
 function statusPill(e) {
   if (e.paid) return '<span class="pill green">Paid</span>';
   if (e.invoiced) return '<span class="pill blue">Invoiced</span>';
-  if (e.declined && !e.approved) return '<span class="pill red">Declined</span>';
-  return "";
+  if (e.approved) return '<span class="pill teal">Approved</span>';
+  if (e.declined) return '<span class="pill red">Declined</span>';
+  return '<span class="pill orange">Pending Approval</span>';
+}
+
+// The day's entries show only what you can act on: declined (fix it) and
+// invoiced or paid (locked).
+function flagPill(e) {
+  return e.paid || e.invoiced || (e.declined && !e.approved) ? statusPill(e) : "";
 }
 
 // ---------- Calendar ----------
-// Sunday to Saturday, weekends narrow. Each day shows its total hours and a
-// thin bar split by project (hover a piece for the project).
+// Last week and this one (or the whole month), Sunday to Saturday with
+// weekends narrow. Each day shows its total hours and a thin bar split by
+// project (hover a piece for the project).
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function weekLabel(start) {
-  const last = addDays(start, 6);
+// "Oct 18 – 31, 2026" for the days from start up to (not including) end.
+function rangeLabel(start, end) {
+  const last = addDays(end, -1);
   const fmt = (d, opts) => d.toLocaleDateString("en-US", opts);
   if (start.getFullYear() !== last.getFullYear()) {
     const full = { month: "short", day: "numeric", year: "numeric" };
     return `${fmt(start, full)} – ${fmt(last, full)}`;
   }
-  const end = start.getMonth() === last.getMonth() ? last.getDate() : fmt(last, { month: "short", day: "numeric" });
-  return `${fmt(start, { month: "short", day: "numeric" })} – ${end}, ${last.getFullYear()}`;
+  const lastText = start.getMonth() === last.getMonth() ? last.getDate() : fmt(last, { month: "short", day: "numeric" });
+  return `${fmt(start, { month: "short", day: "numeric" })} – ${lastText}, ${last.getFullYear()}`;
 }
 
 function projectBarHtml(entries) {
@@ -150,20 +160,18 @@ function renderCalendar() {
   const anchor = new Date(calAnchor + "T00:00:00");
   let start;
   let end;
-  if (calMode === "week") {
-    start = getWeekStart(calAnchor);
-    end = addDays(start, 7);
-    calLabel.textContent = weekLabel(start);
+  if (calMode === "weeks") {
+    start = addDays(getWeekStart(calAnchor), -7);
+    end = addDays(start, 14);
+    calLabel.textContent = rangeLabel(start, end);
   } else {
     const first = firstOfMonth(anchor);
     start = getWeekStart(toISODate(first));
     end = addDays(getWeekStart(toISODate(addDays(addMonths(first, 1), -1))), 7);
     calLabel.textContent = formatMonthLabel(first);
   }
-  calModeEl.querySelectorAll("button").forEach((b) => {
-    b.classList.toggle("on", b.dataset.value === calMode);
-    b.setAttribute("aria-checked", b.dataset.value === calMode);
-  });
+  calModeBtn.textContent = calMode === "weeks" ? "Show month" : "Show 2 weeks";
+  calBackBtn.hidden = today >= toISODate(start) && today < toISODate(end) && selectedDay === today;
 
   const month = monthKey(anchor);
   const cells = WEEKDAYS.map((d) => `<div class="cal-weekday">${d}</div>`);
@@ -190,8 +198,8 @@ function selectDay(iso) {
 }
 
 function setCalMode(mode) {
-  // Into a week: the selected day's, if it's in the month shown.
-  if (mode === "week" && selectedDay.startsWith(monthKey(new Date(calAnchor + "T00:00:00")))) calAnchor = selectedDay;
+  // Into two weeks: the selected day's, if it's in the month shown.
+  if (mode === "weeks" && selectedDay.startsWith(monthKey(new Date(calAnchor + "T00:00:00")))) calAnchor = selectedDay;
   calMode = mode;
   try { localStorage.setItem("pb_timesheet_cal", mode); } catch (_) { /* no storage */ }
   renderCalendar();
@@ -200,7 +208,7 @@ function setCalMode(mode) {
 
 function shiftCalendar(n) {
   const anchor = new Date(calAnchor + "T00:00:00");
-  calAnchor = toISODate(calMode === "week" ? addDays(anchor, 7 * n) : addMonths(anchor, n));
+  calAnchor = toISODate(calMode === "weeks" ? addDays(anchor, 7 * n) : addMonths(anchor, n));
   renderCalendar();
   renderList();
 }
@@ -209,13 +217,10 @@ calendarEl.addEventListener("click", (e) => {
   const day = e.target.closest(".cal-day");
   if (day) selectDay(day.dataset.date);
 });
-calModeEl.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-value]");
-  if (btn && btn.dataset.value !== calMode) setCalMode(btn.dataset.value);
-});
+calModeBtn.addEventListener("click", () => setCalMode(calMode === "weeks" ? "month" : "weeks"));
 document.getElementById("calPrev").addEventListener("click", () => shiftCalendar(-1));
 document.getElementById("calNext").addEventListener("click", () => shiftCalendar(1));
-document.getElementById("calToday").addEventListener("click", () => selectDay(todayISO()));
+calBackBtn.addEventListener("click", () => selectDay(todayISO()));
 
 // ---------- The selected day's entries ----------
 // Task, note and hours are edited in place and save when you leave the box
@@ -241,6 +246,7 @@ function renderDay() {
   if (!selectedPersonId) return;
   const entries = myEntriesOn(selectedDay);
   dayHeading.innerHTML = `${esc(dayLabel(selectedDay))}${entries.length ? ` <span class="day-total">— ${fmtHrs(sumHrs(entries))} hrs logged</span>` : ""}`;
+  dayEditTip.hidden = !entries.some((e) => !isLocked(e));
   if (editingIn(dayEntries)) return;
   if (entries.length === 0) {
     dayEntries.innerHTML = `<div class="empty day-empty">Nothing logged this day yet.</div>`;
@@ -250,8 +256,7 @@ function renderDay() {
       <colgroup><col class="c-project" /><col class="c-task" /><col /><col class="c-hours" /><col class="c-x" /></colgroup>
       <thead><tr><th>Project</th><th>Task</th><th>Note</th><th class="num">Hours</th><th></th></tr></thead>
       <tbody>${entries.map(dayRowHtml).join("")}</tbody>
-    </table></div>
-    ${entries.some((e) => !isLocked(e)) ? `<div class="edit-hint">Click a task, note or hours to change it.</div>` : ""}`;
+    </table></div>`;
 }
 
 function dayRowHtml(e) {
@@ -260,7 +265,7 @@ function dayRowHtml(e) {
   const projectCell = `<td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>`;
   if (isLocked(e)) {
     return `<tr data-entry-id="${e.id}">${projectCell}
-      <td><div class="day-task">${task ? esc(task.name) : "—"}</div>${statusPill(e)}</td>
+      <td><div class="day-task">${task ? esc(task.name) : "—"}</div>${flagPill(e)}</td>
       <td><div class="day-note">${esc(e.note || "")}</div></td>
       <td class="num day-hours">${fmtHrs(Number(e.hours || 0))}</td><td></td>
     </tr>`;
@@ -270,7 +275,7 @@ function dayRowHtml(e) {
     <td>
       <select class="ts-edit day-task" data-field="taskId" aria-label="Task" title="Click to change">
         ${options.map((t) => `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
-      </select>${statusPill(e)}
+      </select>${flagPill(e)}
     </td>
     <td>${noteInput(e)}${declineNote(e)}</td>
     <td class="num">${hoursInput(e)}</td>
@@ -436,30 +441,22 @@ function loggedOnTask(taskId, exceptEntryId = null) {
   return sumHrs(myEntries().filter((e) => e.taskId === taskId && e.id !== exceptEntryId));
 }
 
-// One row per task (click to pick it): your hours on it as a bar (one scale
-// for the project, like the Projects tab) and "logged / assigned".
+// One card per task (click to pick it): your hours on it as a bar with
+// logged / left under it (one scale for the project, like the Dashboard and
+// Projects tab), then the hours you're assigned.
 function taskRowHtml(c, scale) {
   const active = c.task.id === selectedTaskId;
   const logged = loggedOnTask(c.task.id);
   const assigned = c.assignment ? assignedHours(c.assignment, { projects, people }) : 0;
-  let bar = "";
-  let text;
-  if (c.internal) {
-    text = `${fmtHrs(logged)} hrs logged`;
-  } else if (!c.assignment) {
-    text = logged ? `${fmtHrs(logged)} hrs · not assigned` : "Not assigned";
-  } else if (assigned <= 0) {
-    text = logged ? `${fmtHrs(logged)} hrs · none assigned` : "No hours assigned";
-  } else {
-    bar = hoursBarHtml(assigned, logged, scale, { label: false });
-    text = `${fmtHrs(logged)} / ${fmtHrs(assigned)} hrs`;
-  }
-  const over = assigned > 0 && logged - assigned > 0.005;
+  let hours;
+  if (c.internal) hours = `<div class="hb-label"><b>${fmtHrs(logged)} hrs logged</b></div>`;
+  else if (!c.assignment) hours = `<div class="hb-label">Not assigned${logged ? ` · <b>${fmtHrs(logged)} hrs logged</b>` : ""}</div>`;
+  else hours = hoursBarHtml(assigned, logged, scale);
   return `<button type="button" class="ts-task ${active ? "on" : ""} ${!c.internal && !c.assignment ? "unassigned" : ""}"
       data-task-id="${c.task.id}" role="radio" aria-checked="${active}">
     <span class="ts-task-name">${esc(c.task.name)}</span>
-    <span class="ts-task-bar">${bar}</span>
-    <span class="ts-task-hrs ${over ? "hb-over-txt" : ""}">${text}</span>
+    <span class="ts-task-bar">${hours}</span>
+    <span class="ts-task-hrs">${c.assignment ? `${fmtHrs(assigned)} hrs` : ""}</span>
   </button>`;
 }
 
@@ -475,7 +472,7 @@ function renderTaskRows(options) {
     logged: c.assignment ? loggedOnTask(c.task.id) : 0,
   })));
   const internal = selectedProjectIsInternal();
-  const rows = [`<div class="ts-task-head"><span>Task</span><span>${internal ? "" : "Your hours"}</span><span>${internal ? "You've logged" : "Logged / assigned"}</span></div>`,
+  const rows = [`<div class="ts-task-head"><span>Task — click one to log hours</span><span>Your hours</span><span>${internal ? "" : "Assigned"}</span></div>`,
     ...shown.map((c) => taskRowHtml(c, scale))];
   if (others.length && mine.length) {
     rows.push(`<button type="button" class="ts-task-more" data-action="other-tasks">
@@ -650,7 +647,8 @@ function renderList() {
   const anchor = new Date(calAnchor + "T00:00:00");
   const mine = myEntries();
   const month = mine.filter((e) => e.date.startsWith(monthKey(anchor)));
-  listTitle.innerHTML = `${esc(formatMonthLabel(anchor))}${month.length ? ` <span class="day-total">— ${fmtHrs(sumHrs(month))} hrs</span>` : ""}`;
+  listTitle.textContent = `— ${formatMonthLabel(anchor)}${month.length ? ` · ${fmtHrs(sumHrs(month))} hrs` : ""}`;
+  listEditTip.hidden = !month.some((e) => !isLocked(e));
   if (!month.length) {
     listView.innerHTML = `<div class="empty">Nothing logged in ${esc(formatMonthLabel(anchor))}.</div>`;
     return;
@@ -693,8 +691,7 @@ function renderList() {
         }).join("")}
       </tbody>`;
     }).join("")}
-  </table></div>
-  <div class="edit-hint">Click a task to see its entries, then click hours or a note to change it.</div>`;
+  </table></div>`;
 }
 
 listView.addEventListener("click", (e) => {

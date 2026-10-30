@@ -586,6 +586,24 @@ h1.login-title {
 
 /* ---------- Timesheet ---------- */
 .ts-card h2 { margin: 0; font-size: 16px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 8px; }
+
+/* "Click to change" tip, top right of a panel with things to edit in place. */
+.edit-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f3eaf7;
+  border: 1px solid #e4d3ee;
+  color: var(--civic-purple);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.edit-tip[hidden] { display: none; }
+.appr-head .edit-tip { margin-left: auto; }
 .day-total { font-weight: 400; color: var(--text-muted); }
 
 /* Calendar: a week (or month), Sunday to Saturday with narrow weekends. */
@@ -598,7 +616,9 @@ h1.login-title {
 }
 .cal-nav { display: flex; align-items: center; gap: 6px; }
 .cal-nav button.small { min-width: 32px; font-size: 14px; margin: 0; }
-.cal-label { font-weight: 700; font-size: 16px; margin: 0 6px; min-width: 150px; }
+.cal-label { font-weight: 700; font-size: 16px; margin: 0 4px; min-width: 150px; text-align: center; }
+.cal-header button.link-btn { margin: 0; font-weight: 600; }
+.cal-header button.link-btn[hidden] { display: none; }
 
 .cal-swatch {
   display: inline-block;
@@ -675,7 +695,6 @@ h1.login-title {
 }
 
 /* The selected day: its entries, edited in place (borderless until hover). */
-.day-heading { margin-bottom: 8px !important; }
 .day-table { table-layout: fixed; }
 .day-table col.c-project { width: 140px; }
 .day-table col.c-task { width: 30%; }
@@ -687,7 +706,6 @@ h1.login-title {
 td.day-x { white-space: nowrap; }
 td.day-x .saved-tick { margin-right: 4px; }
 .day-table tr.flash td { background: #fbf2e6; transition: background 0.4s; }
-.edit-hint { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
 .ts-edit {
   margin: 0;
   padding: 4px 6px !important;
@@ -735,31 +753,34 @@ div.day-note { font-size: 13px; padding: 4px 7px 0; }
   background: #fcfbfd;
 }
 .day-log-title { font-size: 14px; font-weight: 700; }
-.ts-tasks { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
-button.ts-task {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(60px, 160px) 120px;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  margin: 0;
-  padding: 7px 10px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 500;
-  text-align: left;
-}
-button.ts-task:hover { background: #f6f1f8; }
-button.ts-task.on { background: #f3eaf7; border-color: var(--navy); }
-button.ts-task.unassigned .ts-task-name { color: var(--text-muted); }
+.ts-tasks { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+/* Task cards: Task | your hours (bar, logged / left under it) | assigned. */
+button.ts-task,
 .ts-task-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(60px, 160px) 120px;
-  gap: 12px;
-  padding: 0 11px 2px;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 240px) 70px;
+  gap: 16px;
+  align-items: center;
+}
+button.ts-task {
+  width: 100%;
+  margin: 0;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(38, 31, 18, 0.05);
+}
+button.ts-task:hover { border-color: var(--navy-light); background: #fdfbfe; }
+button.ts-task.on { background: #f3eaf7; border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy); }
+button.ts-task.unassigned { border-style: dashed; }
+button.ts-task.unassigned .ts-task-name { color: var(--text-muted); }
+.ts-task-head {
+  padding: 0 15px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -767,8 +788,9 @@ button.ts-task.unassigned .ts-task-name { color: var(--text-muted); }
   color: var(--text-muted);
 }
 .ts-task-head span:last-child { text-align: right; }
-.ts-task-hrs { font-size: 12px; color: var(--text-muted); text-align: right; white-space: nowrap; }
-.ts-task .hb-bar { height: 8px; }
+.ts-task .hb-label { font-weight: 400; }
+.ts-task-hrs { font-size: 13px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ts-task .hb-bar { height: 10px; }
 button.ts-task-more {
   align-self: flex-start;
   margin: 2px 0 0;
@@ -789,7 +811,7 @@ button.ts-task-more:hover { background: #f6f1f8; }
 #existingHint.warn { margin-top: 8px; }
 
 /* The month's hours: like Approvals, entries open under their task. */
-.list-table { margin-top: 6px; }
+.list-table { margin-top: 0; }
 .list-table col.c-x { width: 64px; }
 .list-table .appr-task .pill { font-size: 11px; padding: 1px 7px; }
 .list-table .appr-note .pill { font-size: 11px; padding: 1px 7px; margin-right: 4px; }
@@ -803,8 +825,8 @@ button.ts-task-more:hover { background: #f6f1f8; }
   .day-table col.c-x { width: 40px; }
   td.day-x .saved-tick { display: none; }
   button.ts-task,
-  .ts-task-head { grid-template-columns: minmax(0, 1fr) 100px; }
-  .ts-task-bar,
+  .ts-task-head { grid-template-columns: minmax(0, 1fr) 56px; gap: 4px 10px; }
+  button.ts-task .ts-task-bar { grid-column: 1 / -1; grid-row: 2; }
   .ts-task-head span:nth-child(2) { display: none; }
   .ts-entry-line { flex-wrap: wrap; }
   .ts-entry-line #entryNote { flex-basis: calc(100% - 84px); }
