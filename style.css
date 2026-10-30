@@ -3655,14 +3655,14 @@ button.declined-fix {
 .tp-unit { font-size: 12px; font-weight: 400; color: var(--text-muted); }
 .tp-assigned input.assignHours {
   width: 62px; margin: 0; padding: 4px 6px; text-align: right;
-  font: inherit; font-weight: 600; background: transparent;
-  border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+  font: inherit; font-weight: 600; background: #fff;
+  border: 1px solid #d9cfe0; border-radius: 6px; cursor: text;
   -moz-appearance: textfield;
 }
 .tp-assigned input.assignHours::-webkit-inner-spin-button,
 .tp-assigned input.assignHours::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.tp-assigned input.assignHours:hover { border-color: var(--border); background: #fff; }
-.tp-assigned input.assignHours:focus { border-color: var(--navy); background: #fff; cursor: text; outline: none; }
+.tp-assigned input.assignHours:hover { border-color: var(--navy-light); }
+.tp-assigned input.assignHours:focus { border-color: var(--navy); outline: none; }
 .tp-assigned .saved-tick { position: absolute; right: 0; top: 100%; font-weight: 400; }
 .tp-open-amt { font-size: 13px; color: var(--text-muted); }
 .tp-unassigned .hours-over-strong { font-size: 13px; }
