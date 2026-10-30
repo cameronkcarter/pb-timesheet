@@ -185,11 +185,10 @@ function render() {
     return;
   }
 
-  // Each card: your hours on the whole project as one bar (logged / left of
-  // what you're assigned) with the project's budget used beside it, then a
-  // row per task with your hours bar (one scale per card, like the Projects
-  // tab) and the task's budget used; its subtasks underneath. Staff see
-  // budgets as percentages only, never dollars.
+  // Each card: a row per task with your hours bar (one scale per card, like
+  // the Projects tab) and the task's budget used, its subtasks underneath,
+  // then a Total row: your hours logged and left, and the project's budget
+  // used. Staff see budgets as percentages only, never dollars.
   const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
   // Subtasks sit under their task: name with its due date after it, then
   // Edit / ✓ complete / × delete at the far right.
@@ -229,15 +228,9 @@ function render() {
       const a = myAssignments.find((x) => x.taskId === taskId);
       return a ? assignedHours(a, { projects, people }) : null;
     };
-    const assignedTotal = myAssignments.reduce((s, a) => s + assignedHours(a, { projects, people }), 0);
-    const loggedTotal = sumHours(projectEntries);
+    const leftTotal = myAssignments.reduce((s, a) => s + Math.max(0, assignedHours(a, { projects, people }) - loggedOn(a.taskId)), 0);
     const projectBudget = tasks.filter((t) => t.projectId === projectId).reduce((s, t) => s + Number(t.budget || 0), 0);
     const budgetPct = pctOf(billedAmount(timeEntries.filter((e) => e.projectId === projectId && !e.declined), { projects, people }), projectBudget);
-
-    const summary = internal ? "" : `<div class="pc-summary">
-      <div class="pc-summary-hours">${hoursBarHtml(assignedTotal, loggedTotal, Math.max(1, assignedTotal, loggedTotal))}</div>
-      <div class="pc-summary-budget">${budgetPct != null ? `<b>${budgetPct}%</b> budget used` : ""}</div>
-    </div>`;
 
     const rows = projectTasks.map((task) => ({ task, logged: loggedOn(task.id), assigned: assignedOn(task.id) || 0 }));
     const scale = hoursScale(rows);
@@ -249,6 +242,11 @@ function render() {
         <div class="pc-budget">${budgetHtml(pct)}</div>
       </div>${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}`;
     }).join("");
+    const totalRow = internal || rows.length < 2 ? "" : `<div class="pc-task pc-total">
+        <div class="pc-task-name">Total</div>
+        <div class="pc-hours"><span class="hb-label"><b>${fmtHrs(sumHours(projectEntries))} logged</b> · ${fmtHrs(leftTotal)} left</span></div>
+        <div class="pc-budget">${budgetHtml(budgetPct)}</div>
+      </div>`;
     const generalItems = projectItems.filter((d) => !d.taskId);
 
     return `<div class="card project-card-v2" style="--c:${color};">
@@ -256,10 +254,10 @@ function render() {
         <h2><span class="cal-swatch"></span>${esc(project.name)}</h2>
         <div class="pc-meta">${esc([project.client || (internal ? "Internal" : ""), pm ? `PM ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>
       </div>
-      ${summary}
       ${taskRows ? `<div class="pc-tasks">
         <div class="pc-task pc-task-head"><div>Task</div><div>Your hours</div><div class="pc-budget">${internal ? "" : "Budget used"}</div></div>
         ${taskRows}
+        ${totalRow}
       </div>` : ""}
       ${generalItems.length ? `<div class="pc-tasks pc-general"><div class="pc-task"><div class="pc-task-name">Other subtasks</div></div>${itemsHtml(generalItems)}</div>` : ""}
       ${cardFooterHtml(project)}

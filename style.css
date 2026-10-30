@@ -3496,26 +3496,11 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
 .project-card-v2 .pc-head h2 { margin: 0; }
 .pc-meta { margin: 2px 0 0 22px; font-size: 13px; color: var(--text-muted); }
 .pc-meta:empty { display: none; }
-/* Your hours on the project (one bar) with its budget used beside it. */
-.pc-summary {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-top: 14px;
-  padding: 12px 14px;
-  background: #faf7fb;
-  border-radius: 8px;
-}
-.pc-summary-hours { flex: 1; min-width: 0; }
-.pc-summary .hb-bar { height: 14px; }
-.pc-summary .hb-label { font-size: 13px; }
-.pc-summary-budget { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.pc-summary-budget b { font-size: 20px; color: var(--text); }
 .pc-tasks { margin-top: 16px; }
 /* Task | your hours bar | budget used */
 .pc-task {
   display: grid;
-  grid-template-columns: minmax(0, 240px) minmax(0, 1fr) 84px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 84px;
   gap: 20px;
   align-items: center;
   padding: 9px 0;
@@ -3528,8 +3513,12 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   font-size: 12px;
   color: var(--text-muted);
 }
-.pc-task-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-task-name { font-weight: 600; line-height: 1.35; }
 .pc-hours { min-width: 0; }
+/* Total: like the Total row on the Projects tab, numbers only. */
+.pc-task.pc-total { border-top: 2px solid var(--border); }
+.pc-total .hb-label { margin: 0; font-size: 13px; }
+.pc-total .pc-pct { font-weight: 700; color: var(--text); }
 .pc-budget { text-align: right; white-space: nowrap; }
 .pc-pct { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 /* Subtasks: indented under their task, same columns, no divider between. */
@@ -3567,11 +3556,9 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
 .pc-exp-edit .link-btn { margin: 0; padding: 0; font-size: 12px; }
 
 @media (max-width: 600px) {
-  .pc-summary { gap: 12px; padding: 10px 12px; }
   .pc-task { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
   .pc-task .pc-hours { grid-column: 1 / -1; grid-row: 2; }
   .pc-task-head > :nth-child(2) { display: none; }
-  .pc-task-name { white-space: normal; }
   .pc-sub-name span { white-space: normal; }
 }
 
