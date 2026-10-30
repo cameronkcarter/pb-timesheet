@@ -10,6 +10,7 @@ import {
   billedAmount, assignedHours, assignmentRate, isInternal, taskBudgetUse,
 } from "./rates.js";
 import { createProjectEditor } from "./project-editor.js";
+import { notify, notifyEntries } from "./notifications.js";
 import { createExpenseEditor, expenseStatus, expenseQtyText, countsToward } from "./expenses.js";
 
 const sessionPersonId = requireSession();
@@ -477,6 +478,7 @@ async function handleExpenseAction(btn) {
     try {
       await Expenses.update(id, { reimbursed: true, reimbursedDate: new Date().toISOString() });
       showToast("Marked reimbursed.");
+      notifyEntries([{ ...e, isExpense: true }], { by: sessionPersonId, data: { people, projects }, verb: "reimbursed" });
     } catch (err) { showToast("Error: " + err.message); }
   }
 }
@@ -694,6 +696,12 @@ async function handleAssignAction(btn) {
     justAdded.push(personId);
     try {
       await Assignments.add({ projectId, taskId, personId, hours: 0 });
+      const task = tasks.find((t) => t.id === taskId);
+      const project = projects.find((p) => p.id === projectId);
+      notify({
+        to: personId, by: sessionPersonId, projectId, link: "timesheet.html",
+        text: `${currentPerson()?.name || "Someone"} added you to ${task?.name || "a task"} on ${project ? projectShortName(project) : "a project"}`,
+      });
     } catch (err) {
       justAdded = justAdded.filter((x) => x !== personId);
       showToast("Error: " + err.message);

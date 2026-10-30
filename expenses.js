@@ -3,6 +3,7 @@
 // created here so every page gets the same popup.
 import { Expenses, Settings } from "./db.js";
 import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO, confirmDialog } from "./util.js";
+import { notifyEntries } from "./notifications.js";
 
 // Expense categories are set by admins (Admin > Expense categories, saved as
 // settings/app.expenseCategories). Each is { name, unit, rate, receipt }:
@@ -327,6 +328,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     try {
       if (editing) await Expenses.update(editing.id, data);
       else await Expenses.add({ ...data, createdByPersonId: sessionPersonId });
+      if (editing) notifyEntries([{ ...editing, ...data, isExpense: true }], { by: sessionPersonId, data: getData(), verb: "edited" });
       close();
       showToast(editing ? "Expense updated." : kind === "sub" ? "Invoice recorded."
         : info(data.category)?.receipt ? "Expense added. Remember to email the receipt." : "Expense added.");

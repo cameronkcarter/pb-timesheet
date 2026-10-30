@@ -18,6 +18,7 @@ import { TimeEntries, Expenses } from "./db.js";
 import { esc, fmtHrs, showToast, projectColor, sortProjects, formatCurrency, dateRange, entryDate } from "./util.js";
 import { expenseLabel, createExpenseEditor } from "./expenses.js";
 import { assignedHours, isInternal, isBillable } from "./rates.js";
+import { notifyEntries, unnotify } from "./notifications.js";
 
 const sumHours = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
@@ -262,6 +263,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
       if (hourIds.length) await TimeEntries.approve(hourIds);
       if (expenseIds.length) await Expenses.approve(expenseIds);
       showToast(message);
+      notifyEntries(items, { by: sessionPersonId, data: getData(), verb: "approved" });
     } catch (err) {
       showToast("Error: " + err.message);
     }
@@ -318,9 +320,18 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
     render();
     try {
       await TimeEntries.update(id, { [key]: value });
+      const sent = notifyEntries([entry], {
+        by: sessionPersonId, data: getData(), verb: "edited",
+        what: field === "hours" ? "your hours" : field === "note" ? "your note" : `your ${fmtHrs(Number(entry.hours || 0))} hrs`,
+        after: field === "hours" ? `: ${fmtHrs(Number(entry.hours))} → ${fmtHrs(value)}`
+          : field === "note" ? "" : `: moved to ${getData().tasks.find((t) => t.id === value)?.name || "another task"}`,
+      });
       showToast(message, {
         action: "Undo",
-        onAction: () => TimeEntries.update(id, before).catch((err) => showToast("Error: " + err.message)),
+        onAction: () => {
+          sent.then(unnotify);
+          TimeEntries.update(id, before).catch((err) => showToast("Error: " + err.message));
+        },
       });
     } catch (err) {
       showToast("Error: " + err.message);
@@ -367,6 +378,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
       try {
         await TimeEntries.update(btn.dataset.id, { approved: true, approvedDate: new Date().toISOString(), billable });
         showToast(billable ? "Approved." : "Approved, no charge to the client.");
+        notifyEntries([getData().timeEntries.find((x) => x.id === btn.dataset.id)], { by: sessionPersonId, data: getData(), verb: "approved" });
       } catch (err) {
         showToast("Error: " + err.message);
       }
@@ -380,6 +392,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
         editing = null;
         render();
         showToast("Declined — sent back to their Timesheet.");
+        notifyEntries([item], { by: sessionPersonId, data: getData(), verb: "declined", after: reason ? `: “${reason}”` : "" });
       } catch (err) {
         showToast("Error: " + err.message);
       }
@@ -393,6 +406,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
         await (item.isExpense ? Expenses : TimeEntries).update(item.id,
           item.isExpense ? { approved: false, approvedDate: null } : { approved: false, approvedDate: null, billable: true });
         showToast("Moved back to Pending.");
+        notifyEntries([item], { by: sessionPersonId, data: getData(), verb: "moved", after: " back to pending" });
       } catch (err) {
         showToast("Error: " + err.message);
       }

@@ -82,6 +82,82 @@ nav a.active {
   white-space: nowrap;
 }
 
+/* Notifications: the bell beside your name, and its list. */
+.notif { position: relative; }
+.notif-bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0 4px 0 -6px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #c7d1db;
+  cursor: pointer;
+}
+.notif-bell:hover, .notif-bell[aria-expanded="true"] { background: var(--navy-light); color: #fff; }
+.notif-count {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #e0573f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-sizing: border-box;
+}
+.notif-count[hidden], .notif-panel[hidden] { display: none; }
+.notif-panel {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  z-index: 1000;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(40, 20, 50, 0.18);
+  overflow: hidden;
+}
+.notif-head { padding: 12px 14px 8px; font-weight: 700; font-size: 14px; color: var(--text); }
+.notif-list { max-height: 420px; overflow-y: auto; }
+nav .notif-panel a.notif-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0ebf3;
+  border-radius: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: normal;
+}
+nav .notif-panel a.notif-item:hover { background: #f7f2fa; color: var(--text); }
+nav .notif-panel a.notif-item.unread { background: #f3ecf7; }
+nav .notif-panel a.notif-item.unread .notif-text::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 6px 1px 0;
+  border-radius: 50%;
+  background: var(--navy);
+}
+.notif-time { color: #8a7f92; font-size: 12px; white-space: nowrap; }
+.notif-empty { padding: 4px 14px 14px; color: #8a7f92; font-size: 13px; line-height: 1.4; }
+
 main {
   max-width: 1000px;
   margin: 0 auto;
@@ -3090,6 +3166,11 @@ button.appr-unapprove:hover { color: var(--red); background: #fff; }
     font-size: 13px;
   }
   .nav-user-name { display: none; }
+  /* The bell sits at the right end of the logo row. */
+  nav .brand { order: -2; flex-basis: calc(100% - 44px); }
+  .notif { order: -1; }
+  .notif-bell { width: 34px; height: 34px; margin: 0; }
+  .notif-panel { top: 40px; }
 }
 .appr-card .appr-table col.c-task { width: 20%; }
 .appr-card .appr-table col.c-date { width: 112px; }

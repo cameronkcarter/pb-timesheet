@@ -164,4 +164,6 @@ export function renderNavUserName(person) {
   if (!el) return;
   if (!person) { el.textContent = ""; return; }
   el.textContent = person.name;
+  // Loaded here (not imported above) since notifications.js uses this file.
+  import("./notifications.js").then((m) => m.mountBell(person)).catch((err) => console.warn(err));
 }

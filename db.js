@@ -261,6 +261,30 @@ export const Messages = {
   remove: (id) => remove("messages", id),
 };
 
+// Notifications (see notifications.js):
+// { personId (to), byPersonId, projectId, text, link, at (ISO), read }
+// Each person reads only their own (see firestore.rules). onError(err) if
+// they can't be read at all (e.g. the rules aren't deployed yet).
+export const Notifications = {
+  listen(personId, cb, onError = () => {}) {
+    if (isTestMode()) return listenTest("notifications", (list) => cb(list.filter((n) => n.personId === personId)));
+    let unsub = null;
+    let cancelled = false;
+    authReady.then(() => {
+      if (cancelled) return;
+      unsub = onSnapshot(query(collection(db, "notifications"), where("personId", "==", personId)),
+        (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
+    });
+    return () => {
+      cancelled = true;
+      if (unsub) unsub();
+    };
+  },
+  add: (data) => add("notifications", data),
+  update: (id, data) => update("notifications", id, data),
+  remove: (id) => remove("notifications", id),
+};
+
 // Invoice documents look like:
 // { projectId, projectName, invoiceNumber, date, dueDate, periodLabel,
 //   periodStart, periodEnd, taskRows, laborRows, feeTotal, billedTotal,

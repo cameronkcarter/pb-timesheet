@@ -123,6 +123,21 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isStaff() && resource.data.authorPersonId == myPersonId());
     }
 
+    // Notifications (the bell in the top bar). You read, mark read and clear
+    // your own. Admins and a project's manager send them about that project's
+    // hours, expenses and tasks, as themselves, and can take one back (Undo).
+    match /notifications/{id} {
+      allow read: if isStaff() && resource.data.personId == myPersonId();
+      allow create: if isStaff()
+        && request.resource.data.byPersonId == myPersonId()
+        && request.resource.data.read == false
+        && (isAdmin() || isPmOf(request.resource.data.projectId));
+      allow update: if isStaff() && resource.data.personId == myPersonId()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["read"]);
+      allow delete: if isStaff()
+        && (resource.data.personId == myPersonId() || resource.data.byPersonId == myPersonId());
+    }
+
     // Project expenses (staff add their own; admins/PMs approve, record
     // subconsultant invoices, invoice them and mark them reimbursed).
     match /expenses/{id} {
