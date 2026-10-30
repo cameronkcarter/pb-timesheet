@@ -243,7 +243,7 @@ function render() {
       const pct = internal ? null : pctOf(billedAmount(timeEntries.filter((e) => e.taskId === task.id && !e.declined), { projects, people }), Number(task.budget || 0));
       return `<div class="pc-task">
         <div class="pc-task-name" title="${esc(task.name)}">${esc(task.name)}</div>
-        <div class="pc-hours">${internal ? `<span class="hb-label"><b>${fmtHrs(logged)} logged</b></span>` : hoursBarHtml(assigned, logged, scale)}</div>
+        <div class="pc-hours">${internal ? `<span class="hb-label"><b>${fmtHrs(logged)} hrs logged</b></span>` : hoursBarHtml(assigned, logged, scale)}</div>
         <div class="pc-budget">${budgetHtml(pct)}</div>
       </div>${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}`;
     }).join("");
@@ -257,7 +257,7 @@ function render() {
           <h2><span class="pc-chev" aria-hidden="true">&#9656;</span><span class="cal-swatch"></span>${esc(project.name)}${chip}</h2>
           <div class="pc-meta">${esc([project.client || (internal ? "Internal" : ""), pm ? `PM ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>
         </div>
-        <div class="pc-hours">${internal ? `<span class="hb-label"><b>${fmtHrs(loggedTotal)} logged</b></span>` : hoursBarHtml(assignedTotal, loggedTotal, Math.max(1, assignedTotal, loggedTotal))}</div>
+        <div class="pc-hours">${internal ? `<span class="hb-label"><b>${fmtHrs(loggedTotal)} hrs logged</b></span>` : hoursBarHtml(assignedTotal, loggedTotal, Math.max(1, assignedTotal, loggedTotal))}</div>
         <div class="pc-budget">${budgetPct != null ? `<b>${budgetPct}%</b><small>budget</small>` : ""}</div>
       </div>
       ${open ? `<div class="pc-body">
