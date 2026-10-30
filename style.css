@@ -4078,6 +4078,8 @@ button.declined-fix {
 .tp-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tp-rate { font-size: 12px; font-weight: 400; color: var(--text-muted); }
 .tp-num { font-variant-numeric: tabular-nums; }
+.tp-num.tp-remaining { font-weight: 700; }
+.tp-row.tp-head > :nth-child(4) { color: var(--text); }
 .tp-dim { color: var(--text-muted); }
 .tp-input input { width: 72px; margin: 0; padding: 5px 8px; }
 .tp-x { display: flex; justify-content: flex-end; }
