@@ -41,8 +41,8 @@ if (/^\d{4}-\d{2}-\d{2}$/.test(linkedDay || "")) {
 
 const calendarEl = document.getElementById("calendar");
 const calLabel = document.getElementById("calLabel");
-const calModeBtn = document.getElementById("calMode");
-const calBackBtn = document.getElementById("calBack");
+const calModeEl = document.getElementById("calMode");
+const calTodayBtn = document.getElementById("calToday");
 
 const dayCard = document.getElementById("dayCard");
 const dayHeading = document.getElementById("dayHeading");
@@ -170,8 +170,11 @@ function renderCalendar() {
     end = addDays(getWeekStart(toISODate(addDays(addMonths(first, 1), -1))), 7);
     calLabel.textContent = formatMonthLabel(first);
   }
-  calModeBtn.textContent = calMode === "weeks" ? "Show month" : "Show 2 weeks";
-  calBackBtn.hidden = today >= toISODate(start) && today < toISODate(end) && selectedDay === today;
+  calModeEl.querySelectorAll("button").forEach((b) => {
+    b.classList.toggle("on", b.dataset.value === calMode);
+    b.setAttribute("aria-checked", b.dataset.value === calMode);
+  });
+  calTodayBtn.hidden = today >= toISODate(start) && today < toISODate(end) && selectedDay === today;
 
   const month = monthKey(anchor);
   const cells = WEEKDAYS.map((d) => `<div class="cal-weekday">${d}</div>`);
@@ -191,9 +194,11 @@ function renderCalendar() {
   calendarEl.innerHTML = cells.join("");
 }
 
-function selectDay(iso) {
+// Picking a day in the calendar leaves it where it is; anywhere else (Jump
+// to today, a link) also brings that day into view.
+function selectDay(iso, { moveCalendar = true } = {}) {
   selectedDay = iso;
-  calAnchor = iso;
+  if (moveCalendar) calAnchor = iso;
   renderAll();
 }
 
@@ -215,12 +220,15 @@ function shiftCalendar(n) {
 
 calendarEl.addEventListener("click", (e) => {
   const day = e.target.closest(".cal-day");
-  if (day) selectDay(day.dataset.date);
+  if (day) selectDay(day.dataset.date, { moveCalendar: false });
 });
-calModeBtn.addEventListener("click", () => setCalMode(calMode === "weeks" ? "month" : "weeks"));
+calModeEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-value]");
+  if (btn && btn.dataset.value !== calMode) setCalMode(btn.dataset.value);
+});
 document.getElementById("calPrev").addEventListener("click", () => shiftCalendar(-1));
 document.getElementById("calNext").addEventListener("click", () => shiftCalendar(1));
-calBackBtn.addEventListener("click", () => selectDay(todayISO()));
+calTodayBtn.addEventListener("click", () => selectDay(todayISO()));
 
 // ---------- The selected day's entries ----------
 // Task, note and hours are edited in place and save when you leave the box
@@ -240,7 +248,7 @@ const isLocked = (e) => e.invoiced || e.paid;
 const declineNote = (e) => (e.declined && !e.approved && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : "");
 const noteInput = (e) => `<input type="text" class="ts-edit day-note" data-field="note" value="${esc(e.note || "")}" placeholder="Add a note" aria-label="Note" title="Click to change" />`;
 const hoursInput = (e) => `<input type="number" class="ts-edit day-hours" data-field="hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" title="Click to change" />`;
-const deleteBtn = (e) => `<span class="saved-tick"></span><button type="button" class="icon-btn" data-delete-entry="${e.id}" title="Delete" aria-label="Delete entry">&times;</button>`;
+const deleteBtn = (e) => `<button type="button" class="icon-btn" data-delete-entry="${e.id}" title="Delete" aria-label="Delete entry">&times;</button>`;
 
 function renderDay() {
   if (!selectedPersonId) return;
@@ -320,14 +328,18 @@ async function saveEdit(el) {
     return revert("You already have hours on that task this day — change that entry instead.");
   }
   if (String(entry[field] ?? "") === String(value)) return;
+  // Undo puts the old value (and any decline) back. An entry that was
+  // approved stays sent for approval again.
+  const before = {
+    [field]: field === "hours" ? Number(entry.hours || 0) : entry[field] || "",
+    declined: !!entry.declined, declineReason: entry.declineReason || null,
+  };
   try {
     await TimeEntries.update(entry.id, { [field]: value, ...approvalFields(entry.projectId) });
-    const tick = row.querySelector(".saved-tick");
-    if (tick) {
-      tick.textContent = "Saved";
-      tick.classList.add("show");
-      setTimeout(() => tick.classList.remove("show"), 1200);
-    }
+    showToast("Entry updated.", {
+      action: "Undo",
+      onAction: () => TimeEntries.update(entry.id, before).catch((err) => showToast("Error: " + err.message)),
+    });
   } catch (err) {
     revert("Error: " + err.message);
   }
@@ -472,7 +484,7 @@ function renderTaskRows(options) {
     logged: c.assignment ? loggedOnTask(c.task.id) : 0,
   })));
   const internal = selectedProjectIsInternal();
-  const rows = [`<div class="ts-task-head"><span>Task — click one to log hours</span><span>Your hours</span><span>${internal ? "" : "Assigned"}</span></div>`,
+  const rows = [`<div class="ts-task-head"><span>Task — click to log hours</span><span>Your hours</span><span>${internal ? "" : "Assigned"}</span></div>`,
     ...shown.map((c) => taskRowHtml(c, scale))];
   if (others.length && mine.length) {
     rows.push(`<button type="button" class="ts-task-more" data-action="other-tasks">

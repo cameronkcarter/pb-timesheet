@@ -176,7 +176,7 @@ export function fmtHrs(n) {
 }
 
 // A person's hours as a bar as long as the larger of assigned and logged:
-// dark for logged, light for what's left, red for hours logged past what was
+// dark for logged, light for what's remaining, red for hours logged past what was
 // assigned, with a label under it (unless label is false). Bars drawn with the
 // same scale (the longest in a list, see hoursScale) compare by length.
 export function hoursBarHtml(assigned, logged, scale, { label: withLabel = true } = {}) {
@@ -186,7 +186,7 @@ export function hoursBarHtml(assigned, logged, scale, { label: withLabel = true 
   const total = done + left + over;
   const pct = (n) => `${total ? (n / total) * 100 : 0}%`;
   const label = total === 0 ? `<span class="hb-none">No hours assigned</span>`
-    : `<b>${fmtHrs(logged)} hrs logged</b> · ${over ? `<span class="hb-over-txt">${fmtHrs(over)} over</span>` : `${fmtHrs(left)} left`}`;
+    : `<b>${fmtHrs(logged)} hrs logged</b> · ${over ? `<span class="hb-over-txt">${fmtHrs(over)} over</span>` : `${fmtHrs(left)} remaining`}`;
   return `<div class="hb-bar" style="width:${(total / scale) * 100}%;">
       <span class="hb-logged" style="width:${pct(done)};"></span><span class="hb-left" style="width:${pct(left)};"></span><span class="hb-over" style="width:${pct(over)};"></span>
     </div>${withLabel ? `<div class="hb-label">${label}</div>` : ""}`;

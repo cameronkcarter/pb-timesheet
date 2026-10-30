@@ -606,7 +606,8 @@ h1.login-title {
 .appr-head .edit-tip { margin-left: auto; }
 .day-total { font-weight: 400; color: var(--text-muted); }
 
-/* Calendar: a week (or month), Sunday to Saturday with narrow weekends. */
+/* Calendar: two weeks (or a month), Sunday to Saturday with narrow
+   weekends; up/down arrows beside it move a week (or month) at a time. */
 .cal-header {
   display: flex;
   justify-content: space-between;
@@ -614,11 +615,12 @@ h1.login-title {
   gap: 12px;
   flex-wrap: wrap;
 }
-.cal-nav { display: flex; align-items: center; gap: 6px; }
-.cal-nav button.small { min-width: 32px; font-size: 14px; margin: 0; }
-.cal-label { font-weight: 700; font-size: 16px; margin: 0 4px; min-width: 150px; text-align: center; }
-.cal-header button.link-btn { margin: 0; font-weight: 600; }
-.cal-header button.link-btn[hidden] { display: none; }
+.cal-tools { display: flex; align-items: center; gap: 8px; }
+.cal-tools button.small { margin: 0; white-space: nowrap; }
+.cal-tools button[hidden] { display: none; }
+.cal-body { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; margin-top: 12px; }
+.cal-arrows { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding-top: 18px; }
+.cal-arrows button.small { margin: 0; width: 34px; height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; }
 
 .cal-swatch {
   display: inline-block;
@@ -634,7 +636,6 @@ h1.login-title {
   display: grid;
   grid-template-columns: minmax(0, 0.6fr) repeat(5, minmax(0, 1fr)) minmax(0, 0.6fr);
   gap: 4px;
-  margin-top: 12px;
 }
 .cal-weekday {
   font-size: 11px;
@@ -688,6 +689,8 @@ h1.login-title {
 
 @media (max-width: 600px) {
   .cal-grid { gap: 2px; }
+  .cal-body { grid-template-columns: 28px minmax(0, 1fr); gap: 4px; }
+  .cal-arrows button.small { width: 28px; height: 30px; }
   .cal-day { min-height: 50px; padding: 3px 4px; }
   .cal-day.selected { padding: 2px 3px; }
   .cal-hrs { font-size: 14px; }
@@ -704,7 +707,6 @@ h1.login-title {
 .day-project { padding-top: 13px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-table .pill { margin: 2px 0 0 7px; font-size: 11px; padding: 1px 7px; }
 td.day-x { white-space: nowrap; }
-td.day-x .saved-tick { margin-right: 4px; }
 .day-table tr.flash td { background: #fbf2e6; transition: background 0.4s; }
 .ts-edit {
   margin: 0;
@@ -823,7 +825,6 @@ button.ts-task-more:hover { background: #f6f1f8; }
   .table-scroll table.day-table { min-width: 540px; }
   .day-table col.c-project { width: 96px; }
   .day-table col.c-x { width: 40px; }
-  td.day-x .saved-tick { display: none; }
   button.ts-task,
   .ts-task-head { grid-template-columns: minmax(0, 1fr) 56px; gap: 4px 10px; }
   button.ts-task .ts-task-bar { grid-column: 1 / -1; grid-row: 2; }

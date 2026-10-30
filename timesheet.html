@@ -28,21 +28,28 @@
 
   <div class="card ts-card">
     <div class="cal-header">
-      <div class="cal-nav">
-        <button id="calPrev" class="secondary small" aria-label="Earlier">&lsaquo;</button>
-        <span id="calLabel" class="cal-label"></span>
-        <button id="calNext" class="secondary small" aria-label="Later">&rsaquo;</button>
-        <button type="button" id="calBack" class="link-btn" hidden>Back to today</button>
+      <h2 id="calLabel"></h2>
+      <div class="cal-tools">
+        <button type="button" id="calToday" class="secondary small" hidden>Jump to today</button>
+        <div class="segmented segmented-small" id="calMode" role="radiogroup" aria-label="Show">
+          <button type="button" data-value="weeks" role="radio">Week</button>
+          <button type="button" data-value="month" role="radio">Month</button>
+        </div>
       </div>
-      <button type="button" id="calMode" class="link-btn"></button>
     </div>
-    <div id="calendar" class="cal-grid"></div>
+    <div class="cal-body">
+      <div class="cal-arrows">
+        <button type="button" id="calPrev" class="secondary small" aria-label="Earlier" title="Earlier"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" id="calNext" class="secondary small" aria-label="Later" title="Later"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div id="calendar" class="cal-grid"></div>
+    </div>
   </div>
 
   <div class="card ts-card" id="dayCard">
     <div class="card-head">
       <h2 id="dayHeading"></h2>
-      <span class="edit-tip" id="dayEditTip"><span aria-hidden="true">&#9998;</span> Click a task, note or hours to change it</span>
+      <span class="edit-tip" id="dayEditTip"><span aria-hidden="true">&#9998;</span> Click a task, note or hours to edit</span>
     </div>
     <div id="dayEntries"></div>
 
@@ -68,7 +75,7 @@
   <div class="card ts-card">
     <div class="card-head">
       <h2>Your entries <span id="listTitle" class="day-total"></span></h2>
-      <span class="edit-tip" id="listEditTip"><span aria-hidden="true">&#9998;</span> Open a task, then click hours or a note to change it</span>
+      <span class="edit-tip" id="listEditTip"><span aria-hidden="true">&#9998;</span> Open a task, then click hours or a note to edit</span>
     </div>
     <div id="listView"></div>
   </div>
