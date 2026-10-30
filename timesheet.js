@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
-  todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, dateRange, entryDate,
+  todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, confirmDialog, dateRange, entryDate,
   firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, projectShortName, sortProjects, esc,
   hoursBarHtml, hoursScale,
 } from "./util.js";
@@ -246,8 +246,15 @@ function editingIn(container) {
 
 const isLocked = (e) => e.invoiced || e.paid;
 const declineNote = (e) => (e.declined && !e.approved && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : "");
-const noteInput = (e) => `<input type="text" class="ts-edit day-note" data-field="note" value="${esc(e.note || "")}" placeholder="Add a note" aria-label="Note" title="Click to change" />`;
-const hoursInput = (e) => `<input type="number" class="ts-edit day-hours" data-field="hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" title="Click to change" />`;
+// Notes grow to show in full (see fitNotes); Enter saves rather than adding a line.
+const noteInput = (e) => `<textarea class="ts-edit day-note" data-field="note" rows="1" placeholder="Add a note" aria-label="Note" title="Click to edit">${esc(e.note || "")}</textarea>`;
+function fitNotes(container) {
+  container.querySelectorAll("textarea.day-note").forEach((t) => {
+    t.style.height = "auto";
+    t.style.height = `${t.scrollHeight + 2}px`;
+  });
+}
+const hoursInput = (e) => `<input type="number" class="ts-edit day-hours" data-field="hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" title="Click to edit" />`;
 const deleteBtn = (e) => `<button type="button" class="icon-btn" data-delete-entry="${e.id}" title="Delete" aria-label="Delete entry">&times;</button>`;
 
 function renderDay() {
@@ -265,6 +272,7 @@ function renderDay() {
       <thead><tr><th>Project</th><th>Task</th><th>Note</th><th class="num">Hours</th><th></th></tr></thead>
       <tbody>${entries.map(dayRowHtml).join("")}</tbody>
     </table></div>`;
+  fitNotes(dayEntries);
 }
 
 function dayRowHtml(e) {
@@ -281,7 +289,7 @@ function dayRowHtml(e) {
   const options = tasks.filter((t) => t.projectId === e.projectId && (!t.closed || t.id === e.taskId)).sort(byTaskName);
   return `<tr data-entry-id="${e.id}">${projectCell}
     <td>
-      <select class="ts-edit day-task" data-field="taskId" aria-label="Task" title="Click to change">
+      <select class="ts-edit day-task" data-field="taskId" aria-label="Task" title="Click to edit">
         ${options.map((t) => `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
       </select>${flagPill(e)}
     </td>
@@ -350,7 +358,13 @@ async function saveEdit(el) {
     if (e.target.matches(".ts-edit")) saveEdit(e.target);
   });
   container.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && e.target.matches("input.ts-edit")) e.target.blur();
+    if (e.key === "Enter" && e.target.matches("input.ts-edit, textarea.ts-edit")) {
+      e.preventDefault();
+      e.target.blur();
+    }
+  });
+  container.addEventListener("input", (e) => {
+    if (e.target.matches("textarea.day-note")) fitNotes(e.target.parentElement);
   });
   container.addEventListener("focusout", () => {
     setTimeout(() => {
@@ -361,12 +375,13 @@ async function saveEdit(el) {
       }
     });
   });
-  // Delete right away, with Undo (which adds it back; an approved entry
-  // comes back sent for approval again).
+  // Delete after a confirm, with Undo (which adds it back; an approved
+  // entry comes back sent for approval again).
   container.addEventListener("click", async (e) => {
     const delBtn = e.target.closest("[data-delete-entry]");
     const entry = delBtn && timeEntries.find((x) => x.id === delBtn.dataset.deleteEntry);
     if (!entry) return;
+    if (!(await confirmDialog("", { title: "Delete this entry?", confirmText: "Delete", danger: true }))) return;
     const { id, createdAt, ...data } = entry;
     if (data.approved && !isInternal(projects.find((p) => p.id === data.projectId))) {
       Object.assign(data, { approved: false, approvedDate: null });
@@ -381,6 +396,12 @@ async function saveEdit(el) {
       showToast("Error: " + err.message);
     }
   });
+});
+
+// Notes re-fit when the page width changes.
+window.addEventListener("resize", () => {
+  fitNotes(dayEntries);
+  fitNotes(listView);
 });
 
 // ---------- Log hours for the selected day ----------
@@ -714,6 +735,7 @@ function renderList() {
       </tbody>`;
     }).join("")}
   </table></div>`;
+  fitNotes(listView);
 }
 
 listView.addEventListener("click", (e) => {

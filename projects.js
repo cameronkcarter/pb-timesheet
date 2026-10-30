@@ -539,7 +539,7 @@ function taskHoursHtml(task) {
   const assignedCell = (r) => {
     if (!r.a) return `<span class="tp-dim">—</span>`;
     if (!canEdit) return `${fmtHrs(r.assigned)} <span class="tp-unit">hrs</span>`;
-    return `<input type="number" class="assignHours" data-id="${r.a.id}" min="0" step="0.5" value="${Math.round(r.assigned * 100) / 100}" aria-label="Assigned hours for ${esc(r.name)}" title="Click to change" /><span class="tp-unit">hrs</span><span class="saved-tick"></span>`;
+    return `<input type="number" class="assignHours" data-id="${r.a.id}" min="0" step="0.5" value="${Math.round(r.assigned * 100) / 100}" aria-label="Assigned hours for ${esc(r.name)}" title="Click to edit" /><span class="tp-unit">hrs</span><span class="saved-tick"></span>`;
   };
   return `<div class="tp-list tp-hours">
     ${rows.length ? `<div class="tp-row tp-head"><div>Person</div><div>Hours</div><div class="tp-assigned">Assigned</div><div></div></div>` : ""}

@@ -720,7 +720,15 @@ td.day-x { white-space: nowrap; }
 .ts-edit:focus { border-color: var(--navy) !important; background: #fff !important; cursor: text; outline: none; }
 select.ts-edit { appearance: none; -webkit-appearance: none; font-weight: 500; text-overflow: ellipsis; }
 select.ts-edit:hover, select.ts-edit:focus { appearance: auto; -webkit-appearance: auto; }
-input.ts-edit.day-note { font-size: 13px; }
+textarea.ts-edit.day-note {
+  display: block;
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.4;
+  font-family: inherit;
+}
 input.ts-edit.day-hours { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 input.ts-edit.day-hours::-webkit-inner-spin-button,
 input.ts-edit.day-hours::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
