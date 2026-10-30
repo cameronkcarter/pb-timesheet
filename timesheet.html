@@ -49,6 +49,7 @@
     <div class="day-log">
       <div class="day-log-title">Log hours</div>
       <div id="projectCards" class="project-chips ts-project-chips"></div>
+      <div id="projectSelected" class="ts-project-selected" hidden></div>
       <div id="projectCardsEmpty" class="empty" style="display:none;">No projects assigned to you yet.</div>
       <div id="noAssignmentsEmpty" class="empty" style="display:none;">You're not assigned to any tasks on this project yet.</div>
 
@@ -65,11 +66,7 @@
   </div>
 
   <div class="card ts-card">
-    <div class="ts-list-head">
-      <h2 id="listTitle"></h2>
-      <input type="text" id="listSearch" placeholder="Search notes" aria-label="Search your entries" />
-    </div>
-    <div id="listFilters" class="project-chips ts-project-chips"></div>
+    <h2 id="listTitle"></h2>
     <div id="listView"></div>
   </div>
 </main>
