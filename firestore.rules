@@ -7,9 +7,10 @@ rules_version = '2';
 // - Staff can read what the app shows them, log and edit their own hours
 //   (until invoiced, at their own pay rate), manage subtasks, and add or
 //   close tasks on internal projects (e.g. one per proposal).
-// - A project's manager (its pmPersonId), admin or not, can approve, decline,
-//   edit, move between tasks and mark "Don't bill" the hours and expenses on
-//   that project, until they're invoiced.
+// - A project's manager (its pmPersonId), admin or not, can set who's on its
+//   tasks and their hours, and approve, decline, edit, move between tasks and
+//   mark "No charge" the hours and expenses on that project, until they're
+//   invoiced.
 // - Admins can do everything else: people, projects, tasks, assignments,
 //   approvals and invoices.
 // - Anyone not on the list (or not signed in) gets nothing.
