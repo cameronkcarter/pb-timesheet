@@ -2,6 +2,7 @@ import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, 
 import {
   formatCurrency, esc, fmtHrs,
   todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, sortProjects, subtaskActionsHtml,
+  hoursBarHtml, hoursScale,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -184,10 +185,10 @@ function render() {
     return;
   }
 
-  // Each card: three numbers (your hours logged, your hours remaining, the
-  // project's budget used), then a row per task with your logged and
-  // remaining hours and the task's budget used; its subtasks underneath.
-  // Remaining counts down from what's assigned and stops at 0. Staff see
+  // Each card: your hours on the whole project as one bar (logged / left of
+  // what you're assigned) with the project's budget used beside it, then a
+  // row per task with your hours bar (one scale per card, like the Projects
+  // tab) and the task's budget used; its subtasks underneath. Staff see
   // budgets as percentages only, never dollars.
   const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
   // Subtasks sit under their task: name with its due date after it, then
@@ -203,9 +204,7 @@ function render() {
   };
   const itemsHtml = (items) => (items.length ? `<div class="pc-subs">${items.sort(byDue).map(subtaskRow).join("")}</div>` : "");
   const pctOf = (spent, budget) => (budget > 0 ? Math.round((spent / budget) * 100) : null);
-  const metric = (label, value, sub = "") => `<div class="pc-metric"><div class="pc-metric-label">${label}</div>
-    <div class="pc-metric-value">${value}</div>${sub ? `<div class="pc-metric-sub">${sub}</div>` : ""}</div>`;
-  const hrs = (n) => `${fmtHrs(n)} <span class="pc-unit">hrs</span>`;
+  const budgetHtml = (pct) => (pct != null ? `<span class="pc-pct">${pct}%</span>` : "");
 
   projectSummaryCards.innerHTML = myProjectIds.map((projectId) => {
     const project = projects.find((p) => p.id === projectId);
@@ -231,26 +230,23 @@ function render() {
       return a ? assignedHours(a, { projects, people }) : null;
     };
     const assignedTotal = myAssignments.reduce((s, a) => s + assignedHours(a, { projects, people }), 0);
-    const remainingTotal = myAssignments.reduce((s, a) => s + Math.max(0, assignedHours(a, { projects, people }) - loggedOn(a.taskId)), 0);
+    const loggedTotal = sumHours(projectEntries);
     const projectBudget = tasks.filter((t) => t.projectId === projectId).reduce((s, t) => s + Number(t.budget || 0), 0);
     const budgetPct = pctOf(billedAmount(timeEntries.filter((e) => e.projectId === projectId && !e.declined), { projects, people }), projectBudget);
 
-    const metrics = internal ? "" : `<div class="pc-metrics">
-      ${metric("Logged", hrs(sumHours(projectEntries)))}
-      ${metric("Remaining", assignedTotal > 0 ? hrs(remainingTotal) : "—",
-        assignedTotal > 0 ? `of ${fmtHrs(assignedTotal)} assigned` : "None assigned")}
-      ${metric("Budget used", budgetPct != null ? `${budgetPct}%` : "—")}
+    const summary = internal ? "" : `<div class="pc-summary">
+      <div class="pc-summary-hours">${hoursBarHtml(assignedTotal, loggedTotal, Math.max(1, assignedTotal, loggedTotal))}</div>
+      <div class="pc-summary-budget">${budgetPct != null ? `<b>${budgetPct}%</b> budget used` : ""}</div>
     </div>`;
 
-    const taskRows = projectTasks.map((task) => {
-      const logged = loggedOn(task.id);
-      const assigned = assignedOn(task.id);
+    const rows = projectTasks.map((task) => ({ task, logged: loggedOn(task.id), assigned: assignedOn(task.id) || 0 }));
+    const scale = hoursScale(rows);
+    const taskRows = rows.map(({ task, logged, assigned }) => {
       const pct = internal ? null : pctOf(billedAmount(timeEntries.filter((e) => e.taskId === task.id && !e.declined), { projects, people }), Number(task.budget || 0));
       return `<div class="pc-task">
         <div class="pc-task-name" title="${esc(task.name)}">${esc(task.name)}</div>
-        <div class="pc-num">${fmtHrs(logged)}</div>
-        <div class="pc-num ${assigned == null ? "pc-dim" : ""}">${internal ? "" : assigned == null ? "—" : fmtHrs(Math.max(0, assigned - logged))}</div>
-        <div class="pc-budget">${pct != null ? `<div class="pc-bar"><div style="width:${Math.min(100, pct)}%; background:${color};"></div></div><span>${pct}%</span>` : ""}</div>
+        <div class="pc-hours">${internal ? `<span class="hb-label"><b>${fmtHrs(logged)} logged</b></span>` : hoursBarHtml(assigned, logged, scale)}</div>
+        <div class="pc-budget">${budgetHtml(pct)}</div>
       </div>${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}`;
     }).join("");
     const generalItems = projectItems.filter((d) => !d.taskId);
@@ -260,9 +256,9 @@ function render() {
         <h2><span class="cal-swatch"></span>${esc(project.name)}</h2>
         <div class="pc-meta">${esc([project.client || (internal ? "Internal" : ""), pm ? `PM ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>
       </div>
-      ${metrics}
+      ${summary}
       ${taskRows ? `<div class="pc-tasks">
-        <div class="pc-task pc-task-head"><div>Task</div><div class="pc-num">Logged</div><div class="pc-num">${internal ? "" : "Remaining"}</div><div>${internal ? "" : "Task budget"}</div></div>
+        <div class="pc-task pc-task-head"><div>Task</div><div>Your hours</div><div class="pc-budget">${internal ? "" : "Budget used"}</div></div>
         ${taskRows}
       </div>` : ""}
       ${generalItems.length ? `<div class="pc-tasks pc-general"><div class="pc-task"><div class="pc-task-name">Other subtasks</div></div>${itemsHtml(generalItems)}</div>` : ""}

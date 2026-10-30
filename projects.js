@@ -2,7 +2,7 @@ import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, 
 import {
   formatCurrency, formatDate, showToast,
   todayISO, toISODate, addDays, daysBetween, projectColor, fmtHrs, closeOnBackdropClick, budgetBarHtml, sortProjects, subtaskActionsHtml, esc, confirmDialog,
-  projectShortName,
+  projectShortName, hoursBarHtml, hoursScale,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, isSubtask, setItemCompleted, deleteItem } from "./subtasks.js";
@@ -514,23 +514,6 @@ const SAVE_DELAY_MS = 800;
 function canEditHours(projectId) {
   return isAdmin() || isPmOf(projectId);
 }
-
-// A person's hours as a bar as long as the larger of assigned and logged, on
-// one scale for everyone on the task: dark for logged, light for what's left,
-// red for hours logged past what they were assigned. Labels underneath.
-function hoursBarHtml(assigned, logged, scale) {
-  const done = Math.min(logged, assigned);
-  const left = Math.max(0, assigned - logged);
-  const over = Math.max(0, logged - assigned);
-  const total = done + left + over;
-  const pct = (n) => `${total ? (n / total) * 100 : 0}%`;
-  const label = total === 0 ? `<span class="hb-none">No hours assigned</span>`
-    : `<b>${fmtHrs(logged)} logged</b> · ${over ? `<span class="hb-over-txt">${fmtHrs(over)} over</span>` : `${fmtHrs(left)} left`}`;
-  return `<div class="hb-bar" style="width:${(total / scale) * 100}%;">
-      <span class="hb-logged" style="width:${pct(done)};"></span><span class="hb-left" style="width:${pct(left)};"></span><span class="hb-over" style="width:${pct(over)};"></span>
-    </div><div class="hb-label">${label}</div>`;
-}
-const hoursScale = (rows) => Math.max(1, ...rows.map((r) => Math.max(r.assigned, r.logged)));
 
 // One row per person on the task (or with hours on it): name, hours bar,
 // assigned hours. Editors click the hours to change them (saves itself), and

@@ -171,40 +171,29 @@ export function sortProjects(list) {
     (!!a.internal - !!b.internal) || (createdMillis(b) - createdMillis(a)) || String(a.name).localeCompare(String(b.name)));
 }
 
-// Hours bar for someone's assignment. Leads with hours REMAINING (the number
-// people act on), with logged and assigned alongside. The whole bar is the
-// assignment, filled in the project color as hours are logged. Logging past
-// the assignment is allowed (more hours are often added later), so it shows
-// in amber, not as an error. Hours on a task with nothing assigned aren't
-// "over" anything: they just show what's logged.
-export function hoursBarHtml(logged, assigned, color, large = false) {
-  if (assigned <= 0 && logged > 0) {
-    return `<div class="hours-bar-wrap">
-      <div class="hours-captions">
-        <span class="hours-left">${fmtHrs(logged)} hrs logged</span>
-        <span>No hours assigned</span>
-      </div>
-    </div>`;
-  }
-  const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 0;
-  const over = logged - assigned > 0.005;
-  const headline = assigned <= 0 && logged <= 0
-    ? "No hours assigned"
-    : over ? `${fmtHrs(logged - assigned)} hrs over` : `${fmtHrs(assigned - logged)} hrs remaining`;
-  return `<div class="hours-bar-wrap">
-    <div class="progress-bar hours-progress ${large ? "large" : "task-bar"} ${over ? "over" : ""}" style="--c:${color};">
-      <div class="fill logged" style="width:${pct}%"></div>
-    </div>
-    <div class="hours-captions">
-      <span class="hours-left ${over ? "hours-over" : ""}">${headline}</span>
-      <span>${fmtHrs(logged)} logged of ${fmtHrs(assigned)} assigned</span>
-    </div>
-  </div>`;
-}
-
 export function fmtHrs(n) {
   return (Math.round(n * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
+
+// A person's hours as a bar as long as the larger of assigned and logged:
+// dark for logged, light for what's left, red for hours logged past what was
+// assigned, with a label under it. Bars drawn with the same scale (the longest
+// in a list, see hoursScale) compare by length.
+export function hoursBarHtml(assigned, logged, scale) {
+  const done = Math.min(logged, assigned);
+  const left = Math.max(0, assigned - logged);
+  const over = Math.max(0, logged - assigned);
+  const total = done + left + over;
+  const pct = (n) => `${total ? (n / total) * 100 : 0}%`;
+  const label = total === 0 ? `<span class="hb-none">No hours assigned</span>`
+    : `<b>${fmtHrs(logged)} logged</b> · ${over ? `<span class="hb-over-txt">${fmtHrs(over)} over</span>` : `${fmtHrs(left)} left`}`;
+  return `<div class="hb-bar" style="width:${(total / scale) * 100}%;">
+      <span class="hb-logged" style="width:${pct(done)};"></span><span class="hb-left" style="width:${pct(left)};"></span><span class="hb-over" style="width:${pct(over)};"></span>
+    </div><div class="hb-label">${label}</div>`;
+}
+
+// The scale for a list of { assigned, logged }: its longest bar.
+export const hoursScale = (rows) => Math.max(1, ...rows.map((r) => Math.max(r.assigned, r.logged)));
 
 // "Tue, Oct 14" for a time entry's date.
 export const entryDate = (iso) => new Date(iso + "T00:00:00")
