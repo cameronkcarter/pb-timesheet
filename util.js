@@ -186,7 +186,7 @@ export function hoursBarHtml(assigned, logged, scale, { label: withLabel = true 
   const total = done + left + over;
   const pct = (n) => `${total ? (n / total) * 100 : 0}%`;
   const label = total === 0 ? `<span class="hb-none">No hours assigned</span>`
-    : `<b>${fmtHrs(logged)} hrs logged</b> · ${over ? `<span class="hb-over-txt">${fmtHrs(over)} over</span>` : `${fmtHrs(left)} remaining`}`;
+    : `${fmtHrs(logged)} hrs logged · ${over ? `<span class="hb-over-txt">${fmtHrs(over)} over</span>` : `<b>${fmtHrs(left)} remaining</b>`}`;
   return `<div class="hb-bar" style="width:${(total / scale) * 100}%;">
       <span class="hb-logged" style="width:${pct(done)};"></span><span class="hb-left" style="width:${pct(left)};"></span><span class="hb-over" style="width:${pct(over)};"></span>
     </div>${withLabel ? `<div class="hb-label">${label}</div>` : ""}`;

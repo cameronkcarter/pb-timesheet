@@ -1,6 +1,6 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
-  todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, confirmDialog, dateRange, entryDate,
+  todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, dateRange, entryDate,
   firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, projectShortName, sortProjects, esc,
   hoursBarHtml, hoursScale,
 } from "./util.js";
@@ -361,12 +361,22 @@ async function saveEdit(el) {
       }
     });
   });
+  // Delete right away, with Undo (which adds it back; an approved entry
+  // comes back sent for approval again).
   container.addEventListener("click", async (e) => {
     const delBtn = e.target.closest("[data-delete-entry]");
-    if (!delBtn) return;
-    if (!(await confirmDialog("", { title: "Delete this entry?", confirmText: "Delete", danger: true }))) return;
+    const entry = delBtn && timeEntries.find((x) => x.id === delBtn.dataset.deleteEntry);
+    if (!entry) return;
+    const { id, createdAt, ...data } = entry;
+    if (data.approved && !isInternal(projects.find((p) => p.id === data.projectId))) {
+      Object.assign(data, { approved: false, approvedDate: null });
+    }
     try {
-      await TimeEntries.remove(delBtn.dataset.deleteEntry);
+      await TimeEntries.remove(id);
+      showToast("Entry deleted.", {
+        action: "Undo",
+        onAction: () => TimeEntries.add(data).catch((err) => showToast("Error: " + err.message)),
+      });
     } catch (err) {
       showToast("Error: " + err.message);
     }
@@ -677,7 +687,7 @@ function renderList() {
       const pEntries = month.filter((e) => e.projectId === pid);
       const taskIds = [...new Set(pEntries.map((e) => e.taskId))].sort((a, b) => taskName(a).localeCompare(taskName(b), undefined, { numeric: true }));
       return `<tbody>
-        <tr class="appr-group"><td colspan="6"><span class="pay-dot" style="--c:${projectColor(pid)};"></span><strong>${project ? esc(project.name) : "—"}</strong> <span class="appr-muted">${fmtHrs(sumHrs(pEntries))} hrs</span></td></tr>
+        <tr class="appr-group"><td colspan="2"><span class="pay-dot" style="--c:${projectColor(pid)};"></span><strong>${project ? esc(project.name) : "—"}</strong></td><td class="num">${fmtHrs(sumHrs(pEntries))}</td><td colspan="3"></td></tr>
         ${taskIds.map((tid) => {
           const key = `${pid}|${tid}`;
           const open = openListKey === key;
