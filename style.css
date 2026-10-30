@@ -774,7 +774,7 @@ h1.login-title {
   .cal-hrs small { display: none; }
 }
 
-/* The selected day: its entries, edited in place (borderless until hover). */
+/* The selected day's entries (Edit opens one in the Log hours form). */
 .day-table { table-layout: fixed; }
 .day-table col.c-project { width: 136px; }
 .day-table col.c-task { width: 28%; }
@@ -782,9 +782,9 @@ h1.login-title {
 .day-table td { vertical-align: top; }
 .day-project { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Entries in both tables: a value and its edit box are the same size
-   (.cell: 32px tall, text 10px from the cell edge like the headers), so
-   opening a row for editing moves nothing. */
+/* Entries in both tables: values sit in .cell boxes (32px tall, text 10px
+   from the cell edge like the headers). In the list a value and its edit
+   box are the same size, so opening a row for editing moves nothing. */
 .entry-table td.cell-td { padding: 2px 1px; vertical-align: top; }
 .entry-table .cell {
   display: block;
@@ -802,9 +802,7 @@ h1.login-title {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.entry-table select.cell,
 .entry-table input.cell { height: 32px; }
-.entry-table select.cell,
 .entry-table input.cell,
 .entry-table textarea.cell { background: #fff; border-color: #d9cfe0; }
 .entry-table .cell:focus { border-color: var(--navy); outline: none; }
@@ -817,9 +815,9 @@ h1.login-title {
 .entry-table .pill { margin: 0 0 6px 9px; font-size: 11px; padding: 1px 7px; }
 .entry-table .declined-note { padding: 0 9px 6px; }
 .entry-table tr.editing td { background: #faf6fc; }
-.entry-table tr.editing td.cell-td { background: #faf6fc; }
 
-/* Cancel (while editing) | Edit / Save | x, in fixed places. */
+/* Row buttons: Edit | x in the day table; Cancel (while editing) |
+   Edit / Save | x, in fixed places, in the list. */
 .row-btns { display: flex; align-items: center; justify-content: flex-end; gap: 6px; height: 32px; }
 .row-btns button { margin: 0; }
 .row-btns button.small { width: 52px; height: 30px; padding: 0; font-size: 12px; font-weight: 600; }

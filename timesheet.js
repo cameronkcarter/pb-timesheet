@@ -9,8 +9,8 @@ import { assignedHours, isInternal } from "./rates.js";
 
 // Three cards: a calendar of your hours (two weeks, or the whole month), the
 // selected day (its entries and a form to log more), and the month's hours
-// by project and task, each task opening to its entries. Entries in both
-// places change with Edit -> Save.
+// by project and task, each task opening to its entries. A day entry's Edit
+// opens it in the Log hours form; in the list, Edit -> Save changes it in place.
 
 const selectedPersonId = requireSession();
 
@@ -225,12 +225,11 @@ document.getElementById("calNext").addEventListener("click", () => shiftCalendar
 calTodayBtn.addEventListener("click", () => selectDay(todayISO()));
 
 // ---------- The selected day's entries ----------
-// Each row's Edit opens its task, note and hours for changing (Save or
-// Cancel); the same goes for entries in the list below. Invoiced entries
-// are locked.
+// Each row's Edit loads it into the Log hours form below (see
+// startFormEdit). Invoiced entries are locked.
 
-// While a row is open for editing, its table isn't redrawn under it (unless
-// forced, e.g. by opening or closing the row).
+// While a list row is open for editing, the list isn't redrawn under it
+// (unless forced, e.g. by opening or closing the row).
 const holdRedraw = (container, force) => !force && !!container.querySelector("tr.editing");
 
 const isLocked = (e) => e.invoiced || e.paid;
@@ -240,12 +239,13 @@ const noteInput = (e) => `<textarea class="cell edit-note" rows="1" placeholder=
 const hoursInput = (e) => `<input type="number" class="cell cell-hours edit-hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" />`;
 // A value shown the same size as its edit box, so opening a row moves nothing.
 const cellText = (text, cls = "") => `<div class="cell ${cls}">${text}</div>`;
-// Three fixed slots, so nothing shifts: Cancel (only while editing),
-// Edit / Save, and x. The day table's Edit opens the Log hours form instead.
+// Day rows: Edit (into the Log hours form) and x.
 const dayActions = () => `<div class="row-btns">
     <button type="button" class="small secondary" data-action="form-edit">Edit</button>
     <button type="button" class="icon-btn" data-action="delete-entry" title="Delete" aria-label="Delete entry">&times;</button>
   </div>`;
+// List rows: three fixed slots, so nothing shifts: Cancel (only while
+// editing), Edit / Save, and x.
 const rowActions = (e) => {
   const editing = editingId === e.id;
   return `<div class="row-btns">
@@ -263,11 +263,10 @@ function fitNotes(container) {
   });
 }
 
-function renderDay(force = false) {
+function renderDay() {
   if (!selectedPersonId) return;
   const entries = myEntriesOn(selectedDay);
   dayHeading.innerHTML = `${esc(dayLabel(selectedDay))}${entries.length ? ` <span class="day-total">— ${fmtHrs(sumHrs(entries))} hrs logged</span>` : ""}`;
-  if (holdRedraw(dayEntries, force)) return;
   if (entries.length === 0) {
     dayEntries.innerHTML = `<div class="empty day-empty">Nothing logged this day yet.</div>`;
     return;
@@ -277,7 +276,6 @@ function renderDay(force = false) {
       <thead><tr><th>Project</th><th>Task</th><th>Note</th><th class="num">Hours</th><th>Status</th><th></th></tr></thead>
       <tbody>${entries.map(dayRowHtml).join("")}</tbody>
     </table></div>`;
-  fitNotes(dayEntries);
 }
 
 function dayRowHtml(e) {
@@ -309,12 +307,11 @@ function otherHoursOn(iso, exceptId) {
   return sumHrs(myEntriesOn(iso).filter((e) => e.id !== exceptId));
 }
 
-// Opens one entry for editing (closing any other) or, with null, closes it.
+// Opens one list entry for editing (closing any other) or, with null, closes it.
 function setEditing(id) {
   editingId = id;
-  renderDay(true);
   renderList(true);
-  const row = document.querySelector("tr.editing");
+  const row = listView.querySelector("tr.editing");
   row?.querySelector(".edit-hours")?.focus();
 }
 
@@ -323,17 +320,12 @@ async function saveEntry(row) {
   if (!entry) return setEditing(null);
   const hours = Number(row.querySelector(".edit-hours").value);
   const note = row.querySelector(".edit-note").value.trim();
-  const taskId = row.querySelector(".edit-task")?.value || entry.taskId;
   if (!(hours > 0)) return showToast("Enter hours worked.");
   if (otherHoursOn(entry.date, entry.id) + hours > 24) return showToast("That's more than 24 hours for this day — check the hours.");
   if (!note) return showToast("Add a note describing what you worked on.");
-  if (myEntriesOn(entry.date).some((x) => x.taskId === taskId && x.id !== entry.id)) {
-    return showToast("You already have hours on that task this day — edit that entry instead.");
-  }
   const changes = {};
   if (hours !== Number(entry.hours || 0)) changes.hours = hours;
   if (note !== (entry.note || "")) changes.note = note;
-  if (taskId !== entry.taskId) changes.taskId = taskId;
   if (!Object.keys(changes).length) return setEditing(null);
   // Undo puts the old values (and any decline) back. An entry that was
   // approved stays sent for approval again.
@@ -390,26 +382,23 @@ async function deleteEntry(entry) {
       if (entry) deleteEntry(entry);
     }
   });
-  // Enter saves (rather than adding a line to the note); Escape cancels.
-  container.addEventListener("keydown", (e) => {
-    const row = e.target.closest("tr.editing");
-    if (!row) return;
-    if (e.key === "Enter" && !e.target.matches("select")) {
-      e.preventDefault();
-      saveEntry(row);
-    }
-    if (e.key === "Escape") setEditing(null);
-  });
-  container.addEventListener("input", (e) => {
-    if (e.target.matches("textarea.edit-note")) fitNotes(e.target.parentElement);
-  });
+});
+// In the list: Enter saves (rather than adding a line to the note); Escape cancels.
+listView.addEventListener("keydown", (e) => {
+  const row = e.target.closest("tr.editing");
+  if (!row) return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveEntry(row);
+  }
+  if (e.key === "Escape") setEditing(null);
+});
+listView.addEventListener("input", (e) => {
+  if (e.target.matches("textarea.edit-note")) fitNotes(e.target.parentElement);
 });
 
 // Note boxes re-fit when the page width changes.
-window.addEventListener("resize", () => {
-  fitNotes(dayEntries);
-  fitNotes(listView);
-});
+window.addEventListener("resize", () => fitNotes(listView));
 
 // ---------- Log hours for the selected day ----------
 // Projects you can log to: the ones you're assigned on, plus every internal
@@ -464,9 +453,9 @@ function startFormEdit(entry) {
   addingTask = false;
   entryHours.value = entry.hours;
   entryNote.value = entry.note || "";
-  isDirty = true;
+  isDirty = false; // only once something's changed
   renderLogForm();
-  renderDay(true);
+  renderDay();
   // Bring the day (its entries, then Log hours with the entry in it) to the
   // top of the window, making room below it when the page is too short.
   const top = dayCard.getBoundingClientRect().top + window.scrollY - 12;
@@ -686,15 +675,14 @@ function resetForm() {
   isDirty = false;
   selectedTaskId = null;
   formEditId = null;
+  document.body.style.minHeight = "";
 }
 
 function clearForm() {
   resetForm();
-  document.body.style.minHeight = "";
   renderLogForm();
-  renderDay(true);
+  renderDay();
 }
-
 
 submitEntry.addEventListener("click", async () => {
   const projectId = selectedProjectId;
