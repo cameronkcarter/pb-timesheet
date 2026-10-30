@@ -665,22 +665,6 @@ h1.login-title {
 .ts-card h2 { margin: 0; font-size: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 8px; }
 
-/* "Click to change" tip, top right of a panel with things to edit in place. */
-.edit-tip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: #f3eaf7;
-  border: 1px solid #e4d3ee;
-  color: var(--civic-purple);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.edit-tip[hidden] { display: none; }
-.appr-head .edit-tip { margin-left: auto; }
 .day-total { font-weight: 400; color: var(--text-muted); }
 
 /* Calendar: two weeks (or a month), Sunday to Saturday with narrow
