@@ -26,61 +26,51 @@
 <main>
   <h1>Timesheet</h1>
 
-  <div class="card">
+  <div class="card ts-card">
     <div class="cal-header">
-      <h2 style="margin:0;">Your Hours</h2>
       <div class="cal-nav">
-        <button id="calPrev" class="secondary small" aria-label="Previous month">&lsaquo;</button>
-        <span id="calMonthLabel" class="cal-month-label"></span>
-        <button id="calNext" class="secondary small" aria-label="Next month">&rsaquo;</button>
+        <button id="calPrev" class="secondary small" aria-label="Previous">&lsaquo;</button>
+        <button id="calNext" class="secondary small" aria-label="Next">&rsaquo;</button>
+        <span id="calLabel" class="cal-label"></span>
         <button id="calToday" class="secondary small">Today</button>
-        <div class="segmented segmented-small" id="viewToggle" role="radiogroup" aria-label="View">
-          <button type="button" data-value="calendar" role="radio" class="on">Calendar</button>
-          <button type="button" data-value="list" role="radio">List</button>
-        </div>
+      </div>
+      <div class="segmented segmented-small" id="calMode" role="radiogroup" aria-label="Show">
+        <button type="button" data-value="week" role="radio">Week</button>
+        <button type="button" data-value="month" role="radio">Month</button>
       </div>
     </div>
-    <div id="listView" hidden></div>
-    <div id="calView">
-    <div id="calLegend" class="cal-legend"></div>
     <div id="calendar" class="cal-grid"></div>
+  </div>
 
-    <div class="day-detail">
-      <h3 id="dayHeading"></h3>
-      <div id="dayEntries"></div>
+  <div class="card ts-card" id="dayCard">
+    <h2 id="dayHeading" class="day-heading"></h2>
+    <div id="dayEntries"></div>
 
-      <div class="day-log">
-        <div class="day-log-title" id="logTitle"></div>
+    <div class="day-log">
+      <div class="day-log-title">Log hours</div>
+      <div id="projectCards" class="project-chips ts-project-chips"></div>
+      <div id="projectCardsEmpty" class="empty" style="display:none;">No projects assigned to you yet.</div>
+      <div id="noAssignmentsEmpty" class="empty" style="display:none;">You're not assigned to any tasks on this project yet.</div>
 
-        <label>Project</label>
-        <div id="projectCards" class="project-chips ts-project-chips"></div>
-        <div id="projectSelected" class="ts-project-selected" hidden></div>
-        <div id="projectCardsEmpty" class="empty" style="display:none;">No projects assigned to you yet.</div>
-        <div id="noAssignmentsEmpty" class="empty" style="display:none;">You're not assigned to any tasks on this project yet.</div>
-
-        <div id="entryForm" style="display:none;">
-          <label style="margin-top:14px;">Task</label>
-          <div id="taskCards" class="project-card-row" style="margin-top:6px;"></div>
-
-          <div class="inline-form" style="margin-top:14px;">
-            <div style="flex:0 0 140px;">
-              <label for="entryHours">Hours</label>
-              <input type="number" id="entryHours" min="0" step="0.25" placeholder="2" />
-            </div>
-          </div>
-
-          <label for="entryNote">Note — what did you work on?</label>
-          <textarea id="entryNote" rows="3" placeholder="Briefly describe what you worked on..."></textarea>
-
-          <div class="entry-actions">
-            <button id="submitEntry" style="margin:0;">Log Hours</button>
-            <span id="existingHint" class="entry-status" aria-live="polite"></span>
-            <button id="cancelEdit" class="secondary" style="margin:0; visibility:hidden;">Cancel</button>
-          </div>
+      <div id="entryForm" style="display:none;">
+        <div id="taskRows" class="ts-tasks" role="radiogroup" aria-label="Task"></div>
+        <div class="ts-entry-line">
+          <input type="number" id="entryHours" min="0" step="0.25" placeholder="Hrs" aria-label="Hours" />
+          <input type="text" id="entryNote" placeholder="What did you work on?" aria-label="Note" />
+          <button id="submitEntry">Log Hours</button>
         </div>
+        <div id="existingHint" class="entry-status" aria-live="polite"></div>
       </div>
     </div>
+  </div>
+
+  <div class="card ts-card">
+    <div class="ts-list-head">
+      <h2 id="listTitle"></h2>
+      <input type="text" id="listSearch" placeholder="Search notes" aria-label="Search your entries" />
     </div>
+    <div id="listFilters" class="project-chips ts-project-chips"></div>
+    <div id="listView"></div>
   </div>
 </main>
 

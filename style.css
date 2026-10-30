@@ -263,23 +263,7 @@ th {
 .progress-bar.large {
   height: 12px;
   border-radius: 8px;
-}
-
-.summary-label {
-  text-transform: uppercase;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  color: var(--text-muted);
-}
-
-.summary-value {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--navy);
-  margin-top: 2px;
-}
-.pill {
+}.pill {
   display: inline-block;
   padding: 2px 9px;
   border-radius: 20px;
@@ -312,68 +296,6 @@ th {
   background: #dff3f0;
   color: #0f766e;
 }
-
-.project-card-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 16px;
-}
-
-.project-card {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  min-width: 200px;
-  cursor: pointer;
-  background: var(--card);
-  position: relative;
-}
-
-.project-card:hover {
-  border-color: var(--navy-light);
-}
-
-.project-card.active {
-  border-color: var(--navy);
-  background: #f5eef8;
-  box-shadow: 0 0 0 1px var(--navy);
-}
-
-.project-card .name {
-  font-weight: 700;
-  font-size: 14px;
-  padding-right: 20px;
-}
-
-.project-card .client {
-  color: var(--text-muted);
-  font-size: 12px;
-  margin-top: 2px;
-}
-
-.task-card {
-  width: 190px;
-  min-width: 190px;
-}
-
-.task-card-stats {
-  display: flex;
-  gap: 18px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-
-.task-card:not(.active) .task-card-stats .summary-value,
-.task-card:not(.active) .task-card-stats .summary-label {
-  color: var(--text-muted);
-}
-
-.task-card.active .task-card-stats {
-  border-top-color: var(--navy);
-}
-
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -662,7 +584,11 @@ h1.login-title {
   background: #eef0f3;
 }
 
-/* ---------- Timesheet hours calendar ---------- */
+/* ---------- Timesheet ---------- */
+.ts-card h2 { margin: 0; font-size: 16px; }
+.day-total { font-weight: 400; color: var(--text-muted); }
+
+/* Calendar: a week (or month), Sunday to Saturday with narrow weekends. */
 .cal-header {
   display: flex;
   justify-content: space-between;
@@ -670,33 +596,9 @@ h1.login-title {
   gap: 12px;
   flex-wrap: wrap;
 }
-
-.cal-nav {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.cal-nav button.small {
-  min-width: 32px;
-  font-size: 14px;
-}
-
-.cal-month-label {
-  font-weight: 600;
-  min-width: 130px;
-  text-align: center;
-}
-
-.cal-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  align-items: center;
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 14px 0 10px;
-}
+.cal-nav { display: flex; align-items: center; gap: 6px; }
+.cal-nav button.small { min-width: 32px; font-size: 14px; margin: 0; }
+.cal-label { font-weight: 700; font-size: 16px; margin: 0 6px; min-width: 150px; }
 
 .cal-swatch {
   display: inline-block;
@@ -710,10 +612,10 @@ h1.login-title {
 
 .cal-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr)) 56px;
+  grid-template-columns: minmax(0, 0.6fr) repeat(5, minmax(0, 1fr)) minmax(0, 0.6fr);
   gap: 4px;
+  margin-top: 12px;
 }
-
 .cal-weekday {
   font-size: 11px;
   font-weight: 600;
@@ -721,121 +623,91 @@ h1.login-title {
   letter-spacing: 0.4px;
   color: var(--text-muted);
   text-align: center;
-  padding-bottom: 2px;
 }
-
 .cal-day {
   all: unset;
   box-sizing: border-box;
-  min-height: 68px;
-  padding: 5px;
+  min-height: 64px;
+  padding: 5px 7px 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   cursor: pointer;
 }
-
-.cal-day:hover {
-  border-color: var(--navy-light);
-  background: #faf6fc;
+.cal-grid.month .cal-day { min-height: 54px; }
+.cal-day:nth-child(7n + 1),
+.cal-day:nth-child(7n) { background: #fbfafc; }
+.cal-day:hover { border-color: var(--navy-light); background: #faf6fc; }
+.cal-day.selected { border: 2px solid var(--navy); padding: 4px 6px 5px; }
+.cal-day.out { opacity: 0.45; }
+.cal-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
-
-.cal-day.out {
-  background: #fafafb;
-}
-
-.cal-day.out .cal-date {
-  color: #b9b3bd;
-}
-
-/* Today: a navy ring, so it can't be mistaken for logged hours. */
+/* Today: a ring around the date, so it can't be mistaken for hours. */
 .cal-day.today .cal-date {
+  align-self: flex-start;
   color: var(--navy);
+  font-weight: 700;
   border: 2px solid var(--navy);
   border-radius: 10px;
   padding: 0 5px;
-  line-height: 16px;
+  line-height: 15px;
 }
-
-.cal-day.selected {
-  border: 2px solid var(--navy);
-  padding: 4px;
-}
-
-.cal-date {
-  font-size: 12px;
-  font-weight: 600;
-  align-self: flex-start;
-}
-
-.cal-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-}
-
-.cal-chip {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 3px 5px;
-  border-radius: 4px;
-  background: var(--c);
-  border: 1.5px solid var(--c);
-  color: #fff;
-}
-
-/* Pending approval: a pale tint of the project color (approved is solid). */
-.cal-chip.pending {
-  background: color-mix(in srgb, var(--c) 22%, white);
-  border-color: color-mix(in srgb, var(--c) 22%, white);
-  color: color-mix(in srgb, var(--c) 80%, black);
-}
-
-.cal-week-total {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.day-detail {
-  margin-top: 26px;
-  padding-top: 22px;
-  border-top: 3px solid #e3d6ea; /* clear break between the calendar and the day below */
-}
-
-.day-detail h3 {
-  margin: 0 0 8px;
-  font-size: 15px;
-}
+.cal-declined { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+/* Hours: bigger, bold and purple, unlike the date. */
+.cal-hrs { font-size: 17px; font-weight: 700; color: var(--civic-purple); line-height: 1.1; }
+.cal-hrs small { font-size: 11px; font-weight: 600; }
+.cal-bar { display: flex; gap: 1px; height: 4px; margin-top: auto; border-radius: 2px; overflow: hidden; }
 
 @media (max-width: 600px) {
-  .cal-grid {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 2px;
-  }
-  .cal-week-col {
-    display: none;
-  }
-  .cal-day {
-    min-height: 54px;
-    padding: 3px;
-  }
-  .cal-day.selected {
-    padding: 2px;
-  }
-  .cal-chip {
-    font-size: 10px;
-    padding: 2px 3px;
-  }
+  .cal-grid { gap: 2px; }
+  .cal-day { min-height: 50px; padding: 3px 4px; }
+  .cal-day.selected { padding: 2px 3px; }
+  .cal-hrs { font-size: 14px; }
+  .cal-hrs small { display: none; }
 }
+
+/* The selected day: its entries, edited in place (borderless until hover). */
+.day-heading { margin-bottom: 8px !important; }
+.day-table { table-layout: fixed; }
+.day-table col.c-project { width: 150px; }
+.day-table col.c-hours { width: 76px; }
+.day-table col.c-status { width: 92px; }
+.day-table col.c-x { width: 40px; }
+.day-table td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; }
+.day-project { padding-top: 13px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-table td:nth-child(4) { padding-top: 12px; }
+.day-table .saved-tick { display: block; margin-top: 2px; }
+.day-table tr.flash td { background: #fbf2e6; transition: background 0.4s; }
+.ts-edit {
+  margin: 0;
+  padding: 4px 6px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ts-edit:hover { border-color: var(--border) !important; background: #fff !important; }
+.ts-edit:focus { border-color: var(--navy) !important; background: #fff !important; cursor: text; outline: none; }
+select.ts-edit { appearance: none; -webkit-appearance: none; font-weight: 500; text-overflow: ellipsis; }
+select.ts-edit:hover, select.ts-edit:focus { appearance: auto; -webkit-appearance: auto; }
+input.ts-edit.day-note { font-size: 13px; color: var(--text-muted); }
+input.ts-edit.day-note:focus { color: var(--text); }
+input.ts-edit.day-hours { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+input.ts-edit.day-hours::-webkit-inner-spin-button,
+input.ts-edit.day-hours::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+div.day-task { font-weight: 500; padding: 4px 7px 0; }
+div.day-note { font-size: 13px; color: var(--text-muted); padding: 2px 7px 0; }
+.day-table td.day-hours { padding-top: 12px; font-weight: 600; padding-right: 14px; }
+.day-table .declined-note { padding: 0 7px; }
+.day-empty { padding: 0 0 4px; }
 
 /* ---------- Projects page ---------- */
 .budget-header {
@@ -852,18 +724,113 @@ h1.login-title {
   font-weight: 600;
 }
 
+/* Log hours: project chips, a row per task, then hours + note on one line. */
 .day-log {
-  margin-top: 18px;
-  padding: 16px;
+  margin-top: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #fcfbfd;
 }
+.day-log-title { font-size: 14px; font-weight: 700; }
+.ts-tasks { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
+button.ts-task {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) minmax(60px, 160px) 110px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+button.ts-task:hover { background: #f6f1f8; }
+button.ts-task.on { background: #f3eaf7; border-color: #dcc8ea; }
+button.ts-task.unassigned .ts-task-name { color: var(--text-muted); }
+.ts-radio { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #b9a3c4; background: #fff; }
+.ts-task.on .ts-radio { border-color: var(--navy); box-shadow: inset 0 0 0 3px #fff; background: var(--navy); }
+.ts-task-hrs { font-size: 12px; color: var(--text-muted); text-align: right; white-space: nowrap; }
+.ts-task .hb-bar { height: 8px; }
+button.ts-task-more {
+  align-self: flex-start;
+  margin: 2px 0 0;
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 600;
+}
+button.ts-task-more:hover { background: #f6f1f8; }
+.ts-task-new { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.ts-task-new input { margin: 0; max-width: 320px; }
+.ts-task-new button { margin: 0; }
+.ts-entry-line { display: flex; gap: 8px; margin-top: 12px; }
+.ts-entry-line #entryHours { flex: 0 0 76px; }
+.ts-entry-line #entryNote { flex: 1; min-width: 0; }
+.ts-entry-line button { margin: 0; white-space: nowrap; }
+#existingHint.warn { margin-top: 8px; }
 
-.day-log-title {
-  font-size: 15px;
+/* Your entries: the month by week; a row opens its day. */
+.ts-list-head { display: flex; align-items: center; gap: 12px; }
+.ts-list-head input { margin: 0 0 0 auto; max-width: 220px; padding: 6px 10px; }
+#listFilters:not(:empty) { margin-top: 10px; }
+.ts-week {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 8px 4px;
+  font-size: 12px;
   font-weight: 700;
-  margin-bottom: 10px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+button.ts-list-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) minmax(0, 1.2fr) 44px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 7px 8px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+}
+button.ts-list-row:hover { background: #faf6fc; }
+button.ts-list-row.on { background: #f6eff9; }
+.ts-list-date { font-size: 13px; color: var(--text-muted); }
+.ts-list-task, .ts-list-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-list-task { font-weight: 500; }
+.ts-list-note { font-size: 13px; color: var(--text-muted); }
+.ts-list-note .pill { margin-right: 6px; font-size: 11px; padding: 1px 7px; }
+.ts-list-hrs { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 600px) {
+  .table-scroll table.day-table { min-width: 0; }
+  .day-table col.c-project { width: 84px; }
+  .day-table col.c-hours { width: 56px; }
+  .day-table col.c-status { width: 0; }
+  .day-table td:nth-child(4) { overflow: hidden; padding: 0; }
+  button.ts-task { grid-template-columns: 16px minmax(0, 1fr) 92px; }
+  .ts-task-bar { display: none; }
+  .ts-entry-line { flex-wrap: wrap; }
+  .ts-entry-line #entryNote { flex-basis: calc(100% - 84px); }
+  .ts-entry-line button { flex: 1; }
+  .ts-list-head { flex-wrap: wrap; }
+  .ts-list-head input { margin: 0; max-width: none; }
+  button.ts-list-row { grid-template-columns: 78px minmax(0, 1fr) 36px; gap: 8px; }
+  .ts-list-date { font-size: 12px; white-space: nowrap; }
+  .ts-list-note { display: none; }
 }
 
 .table-scroll table {
@@ -1245,16 +1212,7 @@ button:disabled:hover {
   cursor: not-allowed;
 }
 
-/* Timesheet: Log Hours button row, with notes beside the button. */
-.entry-actions {
-  display: flex;
-  align-items: flex-start; /* button stays put even if a note wraps */
-  gap: 14px;
-  margin-top: 14px;
-  min-height: 42px;
-}
-
-/* Notes next to the button show as small alert chips (info / warning). */
+/* Notes under the Log Hours line (and on invoices) as small alert chips. */
 .entry-status {
   flex: 1;
   display: flex;
@@ -1288,16 +1246,6 @@ button:disabled:hover {
 .entry-status-icon {
   font-size: 14px;
   line-height: 1;
-}
-
-/* Keep Cancel at the far right even when the chip is short. */
-.entry-actions #cancelEdit {
-  margin-left: auto !important;
-}
-
-.entry-actions #submitEntry {
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 /* ---------- Assignments shown under their task ---------- */
@@ -2734,81 +2682,6 @@ button.small.btn-approve-project:hover {
 }
 .appr-table tr.appr-closed td { opacity: 0.6; }
 
-/* ---------- Timesheet: task cards ---------- */
-.task-card .task-of {
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.task-card-bar {
-  height: 4px;
-  margin-top: 8px;
-  border-radius: 2px;
-  background: #efeaf2;
-  overflow: hidden;
-}
-
-.task-card-bar div {
-  height: 100%;
-  border-radius: 2px;
-  background: var(--navy);
-}
-
-.task-card:not(.active) .task-card-bar div { background: #b9a3c4; }
-.task-card-bar.over div,
-.task-card:not(.active) .task-card-bar.over div { background: #d9934a; }
-
-.task-card.unassigned:not(.active) {
-  border-style: dashed;
-}
-
-button.task-card-more {
-  margin: 0;
-  background: transparent;
-  color: var(--navy);
-  border: 1px dashed var(--border);
-  font-weight: 600;
-  font-size: 14px;
-  min-height: 80px;
-}
-
-button.task-card-more:hover { background: #faf8fb; }
-
-.task-card-new {
-  cursor: default;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.task-card-new input {
-  margin: 0;
-}
-
-.task-card-new .row-actions {
-  justify-content: flex-end;
-  align-items: center;
-}
-
-.task-card-new button { margin: 0; }
-
-/* ---------- Timesheet: List view ---------- */
-#listView {
-  margin-top: 14px;
-}
-
-.list-total {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-}
-
-.list-table .appr-task .pill {
-  font-size: 11px;
-  padding: 1px 7px;
-}
-
 /* ---------- Projects: closing internal tasks ---------- */
 .task-row.task-closed .task-name { color: var(--text-muted); }
 .task-cell .pill { margin-left: 8px; background: #f1eef4; color: var(--text-muted); }
@@ -3074,10 +2947,6 @@ select.analytics-select {
 }
 .appr-head .row-actions { flex-wrap: wrap; }
 #analyticsRange { flex-wrap: nowrap; }
-
-/* Calendar / List sits after Today; wraps under the month on narrow screens. */
-.cal-nav { flex-wrap: wrap; justify-content: flex-end; }
-.cal-nav #viewToggle { margin-left: 6px; }
 
 /* ---------- Approvals: entry actions ---------- */
 /* Edit (expenses only, a quiet link) · Decline | No charge | Approve
@@ -3478,20 +3347,9 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   border-top: 1px solid var(--border);
 }
 
-/* ---------- Timesheet project picker ---------- */
-.project-chips.ts-project-chips { padding: 0; margin-top: 6px; }
-.ts-project-selected {
-  margin-top: 10px;
-  padding: 8px 12px;
-  border-left: 4px solid var(--c, var(--navy));
-  background: #faf9fb;
-  border-radius: 0 8px 8px 0;
-}
-.ts-project-selected[hidden] { display: none; }
-.ts-project-selected .name { font-weight: 700; font-size: 14px; }
-.ts-project-selected .meta { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
-.ts-project-selected .meta:empty { display: none; }
-
+/* ---------- Timesheet project chips ---------- */
+.project-chips.ts-project-chips { padding: 0; margin-top: 8px; }
+.ts-project-chips button.project-chip { padding: 4px 11px; font-size: 13px; }
 /* ---------- Dashboard project cards ----------
    One row per project (Project | your hours | budget) that opens to its
    tasks in the same columns. The project's bar is purple, tasks' orange. */

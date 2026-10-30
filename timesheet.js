@@ -1,14 +1,16 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
-  todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, dateRange, entryDate, confirmDialog,
+  todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, confirmDialog,
   firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, projectShortName, sortProjects, esc,
+  hoursBarHtml, hoursScale,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { assignedHours, isInternal } from "./rates.js";
 
-// The page is one calendar: click a day to see what you logged that day and
-// log more hours for it (project -> task -> hours + note) right below. The
-// List view shows the month's hours grouped by project and task instead.
+// Three cards: a calendar of your hours (a week, or the whole month), the
+// selected day (its entries, editable in place, and a form to log more), and
+// a list of the month's entries to look back through. Clicking a list row
+// opens its day.
 
 const selectedPersonId = requireSession();
 
@@ -22,44 +24,47 @@ let selectedTaskId = null;
 let projectPicked = false; // until you pick one, the first (newest) project is selected
 let navChecked = false;
 let isDirty = false;
-let editingEntryId = null; // entry loaded into the form by its Edit button
-let calMonth = firstOfMonth(new Date()); // month shown in the calendar
 let selectedDay = todayISO();
-let showOtherTasks = false; // tasks on the project you're not assigned to
-let addingTask = false;     // the "+ New task" box on internal projects
-let view = "calendar";      // or "list"
-let openListKey = null;     // "<projectId>|<taskId>" open in the List view
-try { if (localStorage.getItem("pb_timesheet_view") === "list") view = "list"; } catch (_) { /* no storage */ }
+let calAnchor = selectedDay; // a day in the week or month the calendar shows
+let calMode = "week";        // or "month"
+let showOtherTasks = false;  // tasks on the project you're not assigned to
+let addingTask = false;      // the "+ New task" box on internal projects
+let listProjectId = null;    // project filter on the list (null: all)
+let listQuery = "";
+let dayRedrawPending = false; // a redraw skipped while editing an entry
+try { if (localStorage.getItem("pb_timesheet_cal") === "month") calMode = "month"; } catch (_) { /* no storage */ }
 // timesheet.html?day=YYYY-MM-DD opens that day (e.g. "Fix" on a declined entry).
 const linkedDay = new URLSearchParams(location.search).get("day");
 if (/^\d{4}-\d{2}-\d{2}$/.test(linkedDay || "")) {
   selectedDay = linkedDay;
-  calMonth = firstOfMonth(new Date(linkedDay + "T00:00:00"));
-  view = "calendar";
+  calAnchor = linkedDay;
 }
 
 const calendarEl = document.getElementById("calendar");
-const calLegend = document.getElementById("calLegend");
-const calMonthLabel = document.getElementById("calMonthLabel");
+const calLabel = document.getElementById("calLabel");
+const calModeEl = document.getElementById("calMode");
 
+const dayCard = document.getElementById("dayCard");
 const dayHeading = document.getElementById("dayHeading");
 const dayEntries = document.getElementById("dayEntries");
-const logTitle = document.getElementById("logTitle");
 const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
-const projectSelectedEl = document.getElementById("projectSelected");
 const noAssignmentsEmpty = document.getElementById("noAssignmentsEmpty");
 const entryForm = document.getElementById("entryForm");
-const taskCardsEl = document.getElementById("taskCards");
+const taskRowsEl = document.getElementById("taskRows");
 const entryHours = document.getElementById("entryHours");
 const entryNote = document.getElementById("entryNote");
 const existingHint = document.getElementById("existingHint");
 const submitEntry = document.getElementById("submitEntry");
-const cancelEdit = document.getElementById("cancelEdit");
 
-function fmtHours(n) {
-  return String(Math.round(n * 100) / 100);
-}
+const listTitle = document.getElementById("listTitle");
+const listSearch = document.getElementById("listSearch");
+const listFilters = document.getElementById("listFilters");
+const listView = document.getElementById("listView");
+
+const sumHrs = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+const byTaskName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+const projectName = (id) => projects.find((p) => p.id === id)?.name || "—";
 
 function dayLabel(iso, opts = { weekday: "long", month: "short", day: "numeric", year: "numeric" }) {
   return new Date(iso + "T00:00:00").toLocaleDateString("en-US", opts);
@@ -86,6 +91,7 @@ if (selectedPersonId) {
 
 function renderAll() {
   renderCalendar();
+  renderDay();
   renderLogForm();
   renderList();
 }
@@ -96,152 +102,237 @@ window.addEventListener("beforeunload", (e) => {
   e.returnValue = "";
 });
 
-// ---------- Calendar ----------
-// Each day shows one small chip per project (colored by project): solid once
-// approved (or later), a pale tint while still pending approval.
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function myEntries() {
+  return timeEntries.filter((e) => e.personId === selectedPersonId);
+}
 
+function myEntriesOn(iso) {
+  return myEntries().filter((e) => e.date === iso);
+}
+
+// Only what you can act on shows: declined (fix it) and invoiced or paid
+// (locked). Pending and approved look the same.
 function statusPill(e) {
   if (e.paid) return '<span class="pill green">Paid</span>';
   if (e.invoiced) return '<span class="pill blue">Invoiced</span>';
-  if (e.approved) return '<span class="pill teal">Approved</span>';
-  if (e.declined) return '<span class="pill red">Declined</span>';
-  return '<span class="pill orange">Pending Approval</span>';
+  if (e.declined && !e.approved) return '<span class="pill red">Declined</span>';
+  return "";
 }
 
-function myEntriesByDate() {
-  const byDate = {};
-  timeEntries
-    .filter((e) => e.personId === selectedPersonId)
-    .forEach((e) => { (byDate[e.date] = byDate[e.date] || []).push(e); });
-  return byDate;
+// ---------- Calendar ----------
+// Sunday to Saturday, weekends narrow. Each day shows its total hours and a
+// thin bar split by project (hover a piece for the project).
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function weekLabel(start) {
+  const last = addDays(start, 6);
+  const fmt = (d, opts) => d.toLocaleDateString("en-US", opts);
+  if (start.getFullYear() !== last.getFullYear()) {
+    const full = { month: "short", day: "numeric", year: "numeric" };
+    return `${fmt(start, full)} – ${fmt(last, full)}`;
+  }
+  const end = start.getMonth() === last.getMonth() ? last.getDate() : fmt(last, { month: "short", day: "numeric" });
+  return `${fmt(start, { month: "short", day: "numeric" })} – ${end}, ${last.getFullYear()}`;
 }
 
-function dayChipsHtml(entries) {
-  const groups = {};
-  entries.forEach((e) => {
-    const pending = !e.approved && !e.invoiced;
-    const key = `${e.projectId}|${pending}`;
-    if (!groups[key]) groups[key] = { projectId: e.projectId, pending, hours: 0 };
-    groups[key].hours += Number(e.hours || 0);
-  });
-  const name = (id) => projects.find((p) => p.id === id)?.name || "—";
-  return Object.values(groups)
-    .sort((a, b) => name(a.projectId).localeCompare(name(b.projectId)) || a.pending - b.pending)
-    .map((g) => `<span class="cal-chip ${g.pending ? "pending" : ""}" style="--c:${projectColor(g.projectId)};"
-      title="${esc(name(g.projectId))} — ${fmtHours(g.hours)} hrs${g.pending ? " (pending approval)" : ""}">${fmtHours(g.hours)}</span>`)
-    .join("");
+function projectBarHtml(entries) {
+  const hours = {};
+  entries.forEach((e) => { hours[e.projectId] = (hours[e.projectId] || 0) + Number(e.hours || 0); });
+  return `<span class="cal-bar">${Object.keys(hours)
+    .sort((a, b) => projectName(a).localeCompare(projectName(b)))
+    .map((pid) => `<span style="flex:${hours[pid]}; background:${projectColor(pid)};" title="${esc(projectName(pid))} — ${fmtHrs(hours[pid])} hrs"></span>`)
+    .join("")}</span>`;
 }
 
 function renderCalendar() {
   if (!selectedPersonId) return;
-  const byDate = myEntriesByDate();
+  const byDate = {};
+  myEntries().forEach((e) => { (byDate[e.date] = byDate[e.date] || []).push(e); });
   const today = todayISO();
-  const monthPrefix = monthKey(calMonth);
-  calMonthLabel.textContent = formatMonthLabel(calMonth);
-
-  // Sunday-start weeks covering the whole month.
-  let cursor = getWeekStart(toISODate(calMonth));
-  const cells = WEEKDAYS.map((d) => `<div class="cal-weekday">${d}</div>`).concat('<div class="cal-weekday cal-week-col">Week</div>');
-  const monthProjectIds = new Set();
-  do {
-    let weekTotal = 0;
-    for (let i = 0; i < 7; i++) {
-      const iso = toISODate(cursor);
-      const entries = byDate[iso] || [];
-      const dayTotal = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
-      weekTotal += dayTotal;
-      const inMonth = iso.startsWith(monthPrefix);
-      if (inMonth) {
-        entries.forEach((e) => monthProjectIds.add(e.projectId));
-      }
-      const classes = ["cal-day", inMonth ? "" : "out", iso === today ? "today" : "", iso === selectedDay ? "selected" : ""].join(" ");
-      cells.push(`<button type="button" class="${classes}" data-date="${iso}">
-        <span class="cal-date">${cursor.getDate()}</span>
-        <span class="cal-chips">${dayChipsHtml(entries)}</span>
-      </button>`);
-      cursor = addDays(cursor, 1);
-    }
-    cells.push(`<div class="cal-week-total cal-week-col">${weekTotal ? fmtHours(weekTotal) : ""}</div>`);
-  } while (toISODate(cursor).startsWith(monthPrefix));
-  calendarEl.innerHTML = cells.join("");
-
-  const legendProjects = projects.filter((p) => monthProjectIds.has(p.id));
-  calLegend.innerHTML = `
-    ${legendProjects.map((p) => `<span><span class="cal-swatch" style="--c:${projectColor(p.id)};"></span>${esc(p.name)}</span>`).join("")}
-    <span class="cal-legend-key"><span class="cal-chip" style="--c:#746b7a;">2</span> Approved</span>
-    <span class="cal-legend-key"><span class="cal-chip pending" style="--c:#746b7a;">2</span> Pending approval</span>`;
-
-  renderDayEntries(byDate[selectedDay] || []);
-}
-
-function renderDayEntries(entries) {
-  const total = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
-  dayHeading.innerHTML = `${dayLabel(selectedDay)}${entries.length ? ` <span class="empty" style="padding:0; font-weight:400;">— ${fmtHours(total)} hrs logged</span>` : ""}`;
-  if (entries.length === 0) {
-    dayEntries.innerHTML = `<div class="empty" style="padding-top:0;">Nothing logged this day yet.</div>`;
-    return;
+  const anchor = new Date(calAnchor + "T00:00:00");
+  let start;
+  let end;
+  if (calMode === "week") {
+    start = getWeekStart(calAnchor);
+    end = addDays(start, 7);
+    calLabel.textContent = weekLabel(start);
+  } else {
+    const first = firstOfMonth(anchor);
+    start = getWeekStart(toISODate(first));
+    end = addDays(getWeekStart(toISODate(addDays(addMonths(first, 1), -1))), 7);
+    calLabel.textContent = formatMonthLabel(first);
   }
-  const rows = entries.map((e) => {
-    const project = projects.find((p) => p.id === e.projectId);
-    const task = tasks.find((t) => t.id === e.taskId);
-    const noteHtml = (e.note ? `<div class="empty" style="padding:2px 0 0;">${esc(e.note)}</div>` : "") +
-      (e.declined && !e.approved && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : "");
-    return `<tr>
-      <td><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(project.name) : "—"}</td>
-      <td>${task ? esc(task.name) : "—"}${noteHtml}</td>
-      <td>${e.hours}</td>
-      <td>${statusPill(e)}</td>
-      <td>${e.invoiced ? "" : `<div class="row-actions">
-        <button class="small secondary" data-edit-entry="${e.id}">Edit</button>
-        <button class="danger small" data-delete-entry="${e.id}">Delete</button>
-      </div>`}</td>
-    </tr>`;
-  }).join("");
-  dayEntries.innerHTML = `<div class="table-scroll"><table>
-      <thead><tr><th>Project</th><th>Task</th><th>Hours</th><th>Status</th><th style="width:140px;"></th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>`;
+  calModeEl.querySelectorAll("button").forEach((b) => {
+    b.classList.toggle("on", b.dataset.value === calMode);
+    b.setAttribute("aria-checked", b.dataset.value === calMode);
+  });
+
+  const month = monthKey(anchor);
+  const cells = WEEKDAYS.map((d) => `<div class="cal-weekday">${d}</div>`);
+  for (let d = start; d < end; d = addDays(d, 1)) {
+    const iso = toISODate(d);
+    const entries = byDate[iso] || [];
+    const total = sumHrs(entries);
+    const declined = entries.some((e) => e.declined && !e.approved);
+    const out = calMode === "month" && !iso.startsWith(month);
+    const classes = ["cal-day", out ? "out" : "", iso === today ? "today" : "", iso === selectedDay ? "selected" : ""].join(" ");
+    cells.push(`<button type="button" class="${classes}" data-date="${iso}">
+      <span class="cal-date">${d.getDate()}${declined ? '<i class="cal-declined" title="Declined hours"></i>' : ""}</span>
+      ${total ? `<span class="cal-hrs">${fmtHrs(total)}<small> hrs</small></span>${projectBarHtml(entries)}` : ""}
+    </button>`);
+  }
+  calendarEl.className = `cal-grid ${calMode}`;
+  calendarEl.innerHTML = cells.join("");
 }
 
 function selectDay(iso) {
-  if (editingEntryId && iso !== selectedDay) resetForm();
   selectedDay = iso;
-  calMonth = firstOfMonth(new Date(iso + "T00:00:00"));
+  calAnchor = iso;
   renderAll();
+}
+
+function setCalMode(mode) {
+  // Into a week: the selected day's, if it's in the month shown.
+  if (mode === "week" && selectedDay.startsWith(monthKey(new Date(calAnchor + "T00:00:00")))) calAnchor = selectedDay;
+  calMode = mode;
+  try { localStorage.setItem("pb_timesheet_cal", mode); } catch (_) { /* no storage */ }
+  renderCalendar();
+  renderList();
+}
+
+function shiftCalendar(n) {
+  const anchor = new Date(calAnchor + "T00:00:00");
+  calAnchor = toISODate(calMode === "week" ? addDays(anchor, 7 * n) : addMonths(anchor, n));
+  renderCalendar();
+  renderList();
 }
 
 calendarEl.addEventListener("click", (e) => {
   const day = e.target.closest(".cal-day");
   if (day) selectDay(day.dataset.date);
 });
-
-document.getElementById("calPrev").addEventListener("click", () => { calMonth = addMonths(calMonth, -1); renderCalendar(); renderList(); });
-document.getElementById("calNext").addEventListener("click", () => { calMonth = addMonths(calMonth, 1); renderCalendar(); renderList(); });
+calModeEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-value]");
+  if (btn && btn.dataset.value !== calMode) setCalMode(btn.dataset.value);
+});
+document.getElementById("calPrev").addEventListener("click", () => shiftCalendar(-1));
+document.getElementById("calNext").addEventListener("click", () => shiftCalendar(1));
 document.getElementById("calToday").addEventListener("click", () => selectDay(todayISO()));
 
-// Loads an entry into the log form (switching to its day in the calendar).
-function startEdit(entry) {
-  if (view !== "calendar") setView("calendar");
-  if (entry.date !== selectedDay) selectDay(entry.date);
-  editingEntryId = entry.id;
-  projectPicked = true;
-  selectedProjectId = entry.projectId;
-  selectedTaskId = entry.taskId;
-  entryHours.value = entry.hours;
-  entryNote.value = entry.note || "";
-  isDirty = true;
-  renderLogForm();
-  entryHours.focus();
-}
-
-dayEntries.addEventListener("click", async (e) => {
-  const editBtn = e.target.closest("[data-edit-entry]");
-  if (editBtn) {
-    const entry = timeEntries.find((x) => x.id === editBtn.dataset.editEntry);
-    if (entry) startEdit(entry);
+// ---------- The selected day's entries ----------
+// Task, note and hours are edited in place and save when you leave the box
+// (or pick a task). Invoiced entries are locked.
+function renderDay() {
+  if (!selectedPersonId) return;
+  const entries = myEntriesOn(selectedDay);
+  dayHeading.innerHTML = `${esc(dayLabel(selectedDay))}${entries.length ? ` <span class="day-total">— ${fmtHrs(sumHrs(entries))} hrs logged</span>` : ""}`;
+  // Don't redraw under someone mid-edit; catch up when they leave the table.
+  if (dayEntries.contains(document.activeElement) && document.activeElement.matches(".ts-edit")) {
+    dayRedrawPending = true;
     return;
   }
+  dayRedrawPending = false;
+  if (entries.length === 0) {
+    dayEntries.innerHTML = `<div class="empty day-empty">Nothing logged this day yet.</div>`;
+    return;
+  }
+  dayEntries.innerHTML = `<div class="table-scroll"><table class="day-table">
+      <colgroup><col class="c-project" /><col /><col class="c-hours" /><col class="c-status" /><col class="c-x" /></colgroup>
+      <thead><tr><th>Project</th><th>Task</th><th class="num">Hours</th><th></th><th></th></tr></thead>
+      <tbody>${entries.map(dayRowHtml).join("")}</tbody>
+    </table></div>`;
+}
+
+function dayRowHtml(e) {
+  const project = projects.find((p) => p.id === e.projectId);
+  const task = tasks.find((t) => t.id === e.taskId);
+  const reason = e.declined && !e.approved && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : "";
+  const projectCell = `<td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>`;
+  if (e.invoiced || e.paid) {
+    return `<tr data-entry-id="${e.id}">${projectCell}
+      <td><div class="day-task">${task ? esc(task.name) : "—"}</div><div class="day-note">${esc(e.note || "")}</div></td>
+      <td class="num day-hours">${fmtHrs(Number(e.hours || 0))}</td>
+      <td>${statusPill(e)}</td><td></td>
+    </tr>`;
+  }
+  const options = tasks.filter((t) => t.projectId === e.projectId && (!t.closed || t.id === e.taskId)).sort(byTaskName);
+  return `<tr data-entry-id="${e.id}">${projectCell}
+    <td>
+      <select class="ts-edit day-task" data-field="taskId" aria-label="Task" title="Click to change">
+        ${options.map((t) => `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+      </select>
+      <input type="text" class="ts-edit day-note" data-field="note" value="${esc(e.note || "")}" placeholder="Add a note" aria-label="Note" title="Click to change" />
+      ${reason}
+    </td>
+    <td class="num"><input type="number" class="ts-edit day-hours" data-field="hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" title="Click to change" /></td>
+    <td>${statusPill(e)}<span class="saved-tick"></span></td>
+    <td><button type="button" class="icon-btn" data-delete-entry="${e.id}" title="Delete" aria-label="Delete entry">&times;</button></td>
+  </tr>`;
+}
+
+// Saving any change resubmits the entry for approval (internal projects
+// auto-approve) and clears a decline.
+function approvalFields(projectId) {
+  return {
+    ...(isInternal(projects.find((p) => p.id === projectId))
+      ? { approved: true, approvedDate: new Date().toISOString() }
+      : { approved: false, approvedDate: null }),
+    declined: false, declineReason: null,
+  };
+}
+
+// Hours you have on a day, not counting one entry (the one being changed).
+function otherHoursOn(iso, exceptId) {
+  return sumHrs(myEntriesOn(iso).filter((e) => e.id !== exceptId));
+}
+
+async function saveEdit(el) {
+  const row = el.closest("tr[data-entry-id]");
+  const entry = timeEntries.find((x) => x.id === row?.dataset.entryId);
+  if (!entry) return;
+  const field = el.dataset.field;
+  const revert = (msg) => {
+    showToast(msg);
+    el.value = field === "hours" ? Number(entry.hours || 0) : entry[field] || "";
+  };
+  let value = el.value;
+  if (field === "hours") {
+    value = Number(value);
+    if (!(value > 0)) return revert("Enter hours worked.");
+    if (otherHoursOn(entry.date, entry.id) + value > 24) return revert("That's more than 24 hours for this day — check the hours.");
+  } else if (field === "note") {
+    value = value.trim();
+    if (!value) return revert("Add a note describing what you worked on.");
+  } else if (field === "taskId" && myEntriesOn(entry.date).some((x) => x.taskId === value && x.id !== entry.id)) {
+    return revert("You already have hours on that task this day — change that entry instead.");
+  }
+  if (String(entry[field] ?? "") === String(value)) return;
+  try {
+    await TimeEntries.update(entry.id, { [field]: value, ...approvalFields(entry.projectId) });
+    const tick = row.querySelector(".saved-tick");
+    if (tick) {
+      tick.textContent = "Saved";
+      tick.classList.add("show");
+      setTimeout(() => tick.classList.remove("show"), 1200);
+    }
+  } catch (err) {
+    revert("Error: " + err.message);
+  }
+}
+
+dayEntries.addEventListener("change", (e) => {
+  if (e.target.matches(".ts-edit")) saveEdit(e.target);
+});
+dayEntries.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches("input.ts-edit")) e.target.blur();
+});
+dayEntries.addEventListener("focusout", () => {
+  setTimeout(() => {
+    if (dayRedrawPending && !dayEntries.contains(document.activeElement)) renderDay();
+  });
+});
+
+dayEntries.addEventListener("click", async (e) => {
   const delBtn = e.target.closest("[data-delete-entry]");
   if (!delBtn) return;
   if (!(await confirmDialog("", { title: "Delete this entry?", confirmText: "Delete", danger: true }))) return;
@@ -267,48 +358,28 @@ function selectedProjectIsInternal() {
 // Every open task on the project. On billable projects your assigned tasks
 // come first; the rest ("other tasks") can still be logged to — assignments
 // are the plan, not a gate — and your PM sees those hours flagged. Closed
-// tasks (e.g. finished proposals) are hidden unless an entry being edited
-// is on one.
+// tasks (e.g. finished proposals) are hidden.
 function myTaskOptions() {
-  const byName = (a, b) => a.task.name.localeCompare(b.task.name, undefined, { numeric: true });
-  const open = tasks.filter((t) => t.projectId === selectedProjectId && (!t.closed || t.id === selectedTaskId));
+  const open = tasks.filter((t) => t.projectId === selectedProjectId && !t.closed).sort(byTaskName);
   if (selectedProjectIsInternal()) {
-    return open.map((task) => ({ assignment: null, task, internal: true })).sort(byName);
+    return open.map((task) => ({ assignment: null, task, internal: true }));
   }
   return open
     .map((task) => ({ task, assignment: assignments.find((a) => a.personId === selectedPersonId && a.taskId === task.id) || null }))
-    .sort((a, b) => (!a.assignment - !b.assignment) || byName(a, b));
+    .sort((a, b) => (!a.assignment - !b.assignment) || byTaskName(a.task, b.task));
 }
 
 // The entry this person already has for the selected day + task, if any —
 // logging again replaces it rather than adding a second one.
 function existingEntry() {
-  return timeEntries.find((e) =>
-    e.personId === selectedPersonId && e.taskId === selectedTaskId && e.date === selectedDay);
-}
-
-// When editing an entry and switching it to a task that already has its own
-// entry that day, the two would collide.
-function editConflict() {
-  const existing = existingEntry();
-  return !!(editingEntryId && existing && existing.id !== editingEntryId);
-}
-
-// Hours already logged on the selected day, not counting the entry a save replaces.
-function otherHoursThatDay(replacingId) {
-  return timeEntries
-    .filter((e) => e.personId === selectedPersonId && e.date === selectedDay && e.id !== replacingId)
-    .reduce((s, e) => s + Number(e.hours || 0), 0);
+  return myEntriesOn(selectedDay).find((e) => e.taskId === selectedTaskId);
 }
 
 function renderLogForm() {
   if (!selectedPersonId) return;
-  logTitle.textContent = `Log hours for ${dayLabel(selectedDay, { weekday: "long", month: "long", day: "numeric" })}`;
-
   const mine = myProjects();
   if (mine.length === 0) {
     projectCardsEl.innerHTML = "";
-    projectSelectedEl.hidden = true;
     projectCardsEmpty.style.display = "block";
     noAssignmentsEmpty.style.display = "none";
     entryForm.style.display = "none";
@@ -318,24 +389,8 @@ function renderLogForm() {
   if (selectedProjectId && !mine.some((p) => p.id === selectedProjectId)) selectedProjectId = null;
   if (!projectPicked || !selectedProjectId) selectedProjectId = mine[0].id;
 
-  // Your projects as chips (short names), then the picked one's full name,
-  // client and PM underneath.
   projectCardsEl.innerHTML = mine.map((p) => `<button type="button" class="project-chip ${p.id === selectedProjectId ? "on" : ""}"
     data-project-card="${p.id}" style="--c:${projectColor(p.id)};" title="${esc(p.name)}"><i aria-hidden="true"></i>${esc(projectShortName(p))}</button>`).join("");
-  const picked = mine.find((p) => p.id === selectedProjectId);
-  const pm = picked && people.find((x) => x.id === picked.pmPersonId);
-  projectSelectedEl.hidden = !picked;
-  if (picked) {
-    projectSelectedEl.style.setProperty("--c", projectColor(picked.id));
-    projectSelectedEl.innerHTML = `<div class="name">${esc(picked.name)}</div>
-      <div class="meta">${esc([picked.client || (isInternal(picked) ? "Internal" : ""), pm ? `PM: ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>`;
-  }
-
-  if (!selectedProjectId) {
-    noAssignmentsEmpty.style.display = "none";
-    entryForm.style.display = "none";
-    return;
-  }
 
   const options = myTaskOptions();
   if (options.length === 0 && !selectedProjectIsInternal()) {
@@ -347,84 +402,77 @@ function renderLogForm() {
   entryForm.style.display = "block";
   // No task is picked automatically; the person chooses one each time.
   if (selectedTaskId && !options.some((c) => c.task.id === selectedTaskId)) selectedTaskId = null;
-  renderTaskCards(options);
+  renderTaskRows(options);
   renderExistingHint();
 }
 
 // Hours this person has logged on a task, optionally leaving out one entry
 // (the one being replaced when re-logging the same day).
 function loggedOnTask(taskId, exceptEntryId = null) {
-  return timeEntries
-    .filter((e) => e.personId === selectedPersonId && e.taskId === taskId && e.id !== exceptEntryId)
-    .reduce((sum, e) => sum + Number(e.hours || 0), 0);
+  return sumHrs(myEntries().filter((e) => e.taskId === taskId && e.id !== exceptEntryId));
 }
 
-// One card per task, showing your hours on it: "8 of 20 hrs" with a bar when
-// assigned (amber past the assignment), just what you've logged otherwise.
-function taskCardHtml(c) {
+// One row per task: your hours on it as a bar (one scale for the project,
+// like the Projects tab) and "logged / assigned".
+function taskRowHtml(c, scale) {
   const active = c.task.id === selectedTaskId;
   const logged = loggedOnTask(c.task.id);
-  let label;
-  let value;
+  const assigned = c.assignment ? assignedHours(c.assignment, { projects, people }) : 0;
   let bar = "";
-  const assignedHrs = c.assignment ? assignedHours(c.assignment, { projects, people }) : 0;
+  let text;
   if (c.internal) {
-    label = "You've logged";
-    value = `${fmtHours(logged)} hrs`;
-  } else if (c.assignment && assignedHrs <= 0) {
-    // On the task, but no hours handed out yet.
-    label = "No hours assigned";
-    value = logged ? `${fmtHours(logged)} hrs` : "—";
-  } else if (c.assignment) {
-    const assigned = assignedHours(c.assignment, { projects, people });
-    const over = logged - assigned > 0.005;
-    label = over ? `${fmtHours(logged - assigned)} hrs past assigned` : "Your hours";
-    value = `<span class="${over ? "hours-over" : ""}">${fmtHours(logged)}</span> <span class="task-of">of ${fmtHours(assigned)} hrs</span>`;
-    const pct = assigned > 0 ? Math.min(100, (logged / assigned) * 100) : 100;
-    bar = `<div class="task-card-bar ${over ? "over" : ""}"><div style="width:${pct}%"></div></div>`;
+    text = `${fmtHrs(logged)} hrs logged`;
+  } else if (!c.assignment) {
+    text = logged ? `${fmtHrs(logged)} hrs · not assigned` : "Not assigned";
+  } else if (assigned <= 0) {
+    text = logged ? `${fmtHrs(logged)} hrs · none assigned` : "No hours assigned";
   } else {
-    label = "Not assigned";
-    value = logged ? `${fmtHours(logged)} hrs` : "—";
+    bar = hoursBarHtml(assigned, logged, scale, { label: false });
+    text = `${fmtHrs(logged)} / ${fmtHrs(assigned)} hrs`;
   }
-  return `<div class="project-card task-card ${active ? "active" : ""} ${!c.internal && !c.assignment ? "unassigned" : ""}" data-task-card="${c.task.id}">
-    <div class="name">${esc(c.task.name)}</div>
-    <div class="task-card-stats">
-      <div><span class="summary-label">${label}</span><div class="summary-value">${value}</div></div>
-    </div>
-    ${bar}
-  </div>`;
+  const over = assigned > 0 && logged - assigned > 0.005;
+  return `<button type="button" class="ts-task ${active ? "on" : ""} ${!c.internal && !c.assignment ? "unassigned" : ""}"
+      data-task-id="${c.task.id}" role="radio" aria-checked="${active}">
+    <span class="ts-radio" aria-hidden="true"></span>
+    <span class="ts-task-name">${esc(c.task.name)}</span>
+    <span class="ts-task-bar">${bar}</span>
+    <span class="ts-task-hrs ${over ? "hb-over-txt" : ""}">${text}</span>
+  </button>`;
 }
 
-function renderTaskCards(options) {
+function renderTaskRows(options) {
   const mine = options.filter((c) => c.internal || c.assignment);
   const others = options.filter((c) => !c.internal && !c.assignment);
   // Other tasks show when asked for, when you have none assigned here, or
   // when one of them is picked.
   const othersOpen = showOtherTasks || !mine.length || others.some((c) => c.task.id === selectedTaskId);
-  const cards = [...mine, ...(othersOpen ? others : [])].map(taskCardHtml);
+  const shown = [...mine, ...(othersOpen ? others : [])];
+  const scale = hoursScale(shown.map((c) => ({
+    assigned: c.assignment ? assignedHours(c.assignment, { projects, people }) : 0,
+    logged: c.assignment ? loggedOnTask(c.task.id) : 0,
+  })));
+  const rows = shown.map((c) => taskRowHtml(c, scale));
   if (others.length && mine.length) {
-    cards.push(`<button type="button" class="project-card task-card task-card-more" data-action="other-tasks">
+    rows.push(`<button type="button" class="ts-task-more" data-action="other-tasks">
       ${othersOpen ? "Hide other tasks" : `+ ${others.length} other task${others.length === 1 ? "" : "s"}`}</button>`);
   }
   // Internal projects (e.g. Proposals & Pursuits): anyone can add a task,
   // like one per proposal, and close it from the Projects tab when done.
   if (selectedProjectIsInternal()) {
-    cards.push(addingTask
-      ? `<div class="project-card task-card task-card-new">
+    rows.push(addingTask
+      ? `<div class="ts-task-new">
           <input type="text" id="newTaskName" placeholder="New task name" autocomplete="off" />
-          <div class="row-actions">
-            <button type="button" class="link-btn" data-action="cancel-new-task">Cancel</button>
-            <button type="button" class="small" data-action="save-new-task">Add</button>
-          </div>
+          <button type="button" class="link-btn" data-action="cancel-new-task">Cancel</button>
+          <button type="button" class="small" data-action="save-new-task">Add</button>
         </div>`
-      : `<button type="button" class="project-card task-card task-card-more" data-action="new-task">+ New task</button>`);
+      : `<button type="button" class="ts-task-more" data-action="new-task">+ New task</button>`);
   }
-  taskCardsEl.innerHTML = cards.join("");
-  if (addingTask) taskCardsEl.querySelector("#newTaskName")?.focus();
+  taskRowsEl.innerHTML = rows.join("");
+  if (addingTask) taskRowsEl.querySelector("#newTaskName")?.focus();
 }
 
 async function saveNewTask() {
-  const input = taskCardsEl.querySelector("#newTaskName");
+  const input = taskRowsEl.querySelector("#newTaskName");
   const name = input ? input.value.trim() : "";
   if (!name) return showToast("Give the task a name.");
   if (tasks.some((t) => t.projectId === selectedProjectId && !t.closed && t.name.toLowerCase() === name.toLowerCase())) {
@@ -446,46 +494,31 @@ async function saveNewTask() {
 
 // Notes under the form: replacing an existing entry for this day, and/or
 // going past the hours assigned on this task (allowed — it's flagged for
-// admins so they can add hours).
+// your PM).
 function renderExistingHint() {
-  if (!selectedTaskId) {
-    existingHint.className = "entry-status info";
-    existingHint.innerHTML = '<span class="entry-status-icon" aria-hidden="true">&uarr;</span>Choose a task above to log hours';
-    submitEntry.textContent = "Log Hours";
-    submitEntry.disabled = true;
-    cancelEdit.style.visibility = isDirty ? "visible" : "hidden";
-    return;
-  }
-  const existing = existingEntry();
-  const replacingId = editingEntryId || (existing ? existing.id : null);
+  const existing = selectedTaskId ? existingEntry() : null;
   const notes = [];
-  if (editConflict()) {
-    notes.push("You already have hours on that task this day — edit that entry instead");
-    submitEntry.textContent = "Save Changes";
-    submitEntry.disabled = true;
-  } else if (existing && existing.invoiced) {
+  submitEntry.textContent = existing ? "Update Entry" : "Log Hours";
+  submitEntry.disabled = false;
+  if (existing && (existing.invoiced || existing.paid)) {
     notes.push("Already invoiced for this day — can't be changed");
-    submitEntry.textContent = "Log Hours";
     submitEntry.disabled = true;
-  } else {
-    if (existing && !editingEntryId) notes.push(`Replaces the ${existing.hours} hrs already logged here`);
-    submitEntry.textContent = editingEntryId ? "Save Changes" : existing ? "Update Entry" : "Log Hours";
-    submitEntry.disabled = false;
-
+  } else if (selectedTaskId) {
+    if (existing) notes.push(`Replaces the ${fmtHrs(Number(existing.hours))} hrs already logged here`);
     const option = myTaskOptions().find((c) => c.task.id === selectedTaskId);
     const hours = Number(entryHours.value) || 0;
-    if (hours > 0 && otherHoursThatDay(replacingId) + hours > 24) {
+    if (hours > 0 && otherHoursOn(selectedDay, existing?.id) + hours > 24) {
       notes.push("That's more than 24 hours for this day");
     }
-    const assigned = option && option.assignment ? assignedHours(option.assignment, { projects, people }) : 0;
-    if (option && option.assignment && assigned > 0 && hours > 0) {
-      const after = loggedOnTask(selectedTaskId, replacingId) + hours;
+    const assigned = option?.assignment ? assignedHours(option.assignment, { projects, people }) : 0;
+    if (option?.assignment && assigned > 0 && hours > 0) {
+      const after = loggedOnTask(selectedTaskId, existing?.id) + hours;
       if (after - assigned > 0.005) {
-        notes.push(`${fmtHours(after - assigned)} hrs past your ${fmtHours(assigned)} assigned — that's OK, your PM will see it`);
+        notes.push(`${fmtHrs(after - assigned)} hrs past your ${fmtHrs(assigned)} assigned — that's OK, your PM will see it`);
       }
     } else if (option && !option.internal && !option.assignment) {
       notes.push("Not one of your assigned tasks — that's OK, your PM will see it");
-    } else if (option && option.assignment && assigned <= 0 && hours > 0) {
+    } else if (option?.assignment && assigned <= 0 && hours > 0) {
       notes.push("No hours assigned on this task yet — that's OK, your PM will see it");
     }
   }
@@ -493,7 +526,6 @@ function renderExistingHint() {
   existingHint.innerHTML = notes.length
     ? `<span class="entry-status-icon" aria-hidden="true">&#9888;</span>${notes.map(esc).join(" &middot; ")}`
     : "";
-  cancelEdit.style.visibility = isDirty ? "visible" : "hidden";
 }
 
 projectCardsEl.addEventListener("click", (e) => {
@@ -507,25 +539,26 @@ projectCardsEl.addEventListener("click", (e) => {
   renderLogForm();
 });
 
-taskCardsEl.addEventListener("click", (e) => {
+taskRowsEl.addEventListener("click", (e) => {
   const action = e.target.closest("[data-action]")?.dataset.action;
   if (action === "other-tasks") showOtherTasks = !showOtherTasks;
   if (action === "new-task") addingTask = true;
   if (action === "cancel-new-task") addingTask = false;
   if (action === "save-new-task") return saveNewTask();
   if (!action) {
-    const card = e.target.closest("[data-task-card]");
-    if (!card) return;
-    selectedTaskId = card.dataset.taskCard;
+    const row = e.target.closest("[data-task-id]");
+    if (!row) return;
+    selectedTaskId = row.dataset.taskId;
   }
-  renderTaskCards(myTaskOptions());
+  renderTaskRows(myTaskOptions());
   renderExistingHint();
+  if (!action) entryHours.focus();
 });
 
-taskCardsEl.addEventListener("keydown", (e) => {
+taskRowsEl.addEventListener("keydown", (e) => {
   if (e.target.id !== "newTaskName") return;
   if (e.key === "Enter") saveNewTask();
-  if (e.key === "Escape") { addingTask = false; renderTaskCards(myTaskOptions()); }
+  if (e.key === "Escape") { addingTask = false; renderTaskRows(myTaskOptions()); }
 });
 
 [entryHours, entryNote].forEach((el) => {
@@ -533,25 +566,20 @@ taskCardsEl.addEventListener("keydown", (e) => {
     isDirty = entryHours.value.trim() !== "" || entryNote.value.trim() !== "";
     renderExistingHint();
   });
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitEntry.click();
+  });
 });
 
-function resetForm() {
+function clearForm() {
   entryHours.value = "";
   entryNote.value = "";
   isDirty = false;
-  editingEntryId = null;
   selectedTaskId = null;
-}
-
-function clearForm() {
-  resetForm();
   renderLogForm();
 }
 
-cancelEdit.addEventListener("click", clearForm);
-
 submitEntry.addEventListener("click", async () => {
-  const personId = selectedPersonId;
   const projectId = selectedProjectId;
   const taskId = selectedTaskId;
   const date = selectedDay;
@@ -561,34 +589,25 @@ submitEntry.addEventListener("click", async () => {
   if (!projectId || !taskId) return showToast("Choose a task first.");
   if (!hours || hours <= 0) return showToast("Enter hours worked.");
   if (!note) return showToast("Add a note describing what you worked on.");
-  if (editConflict()) return showToast("You already have hours on that task this day — edit that entry instead.");
 
   const existing = existingEntry();
-  if (existing && existing.invoiced) {
+  if (existing && (existing.invoiced || existing.paid)) {
     return showToast("This day/task has already been invoiced and can't be changed here.");
   }
-  if (otherHoursThatDay(editingEntryId || (existing ? existing.id : null)) + hours > 24) {
+  if (otherHoursOn(date, existing?.id) + hours > 24) {
     return showToast("That's more than 24 hours for this day — check the hours.");
   }
 
-  const autoApprove = selectedProjectIsInternal();
-  const approval = {
-    ...(autoApprove
-      ? { approved: true, approvedDate: new Date().toISOString() }
-      : { approved: false, approvedDate: null }),
-    declined: false, declineReason: null, // an edit resubmits a declined entry
-  };
   try {
-    if (editingEntryId) {
-      // Editing can move an entry to another task on the same day.
-      await TimeEntries.update(editingEntryId, { projectId, taskId, hours, note, ...approval });
-      showToast("Entry updated.");
-    } else if (existing) {
-      await TimeEntries.update(existing.id, { hours, note, ...approval });
+    if (existing) {
+      await TimeEntries.update(existing.id, { hours, note, ...approvalFields(projectId) });
       showToast("Entry updated.");
     } else {
-      const person = people.find((p) => p.id === personId);
-      await TimeEntries.add({ personId, projectId, taskId, date, hours, note, rate: person ? person.rate : 0, ...approval });
+      const person = people.find((p) => p.id === selectedPersonId);
+      await TimeEntries.add({
+        personId: selectedPersonId, projectId, taskId, date, hours, note,
+        rate: person ? person.rate : 0, ...approvalFields(projectId),
+      });
       showToast("Hours logged.");
     }
     clearForm();
@@ -597,93 +616,80 @@ submitEntry.addEventListener("click", async () => {
   }
 });
 
-// ---------- List view ----------
-// The month's hours grouped by project, then task (with all-time totals, so
-// e.g. hours on one proposal add up across months). Click a task to see each
-// entry and its note; Edit opens it in the calendar's log form.
-const listView = document.getElementById("listView");
-const calView = document.getElementById("calView");
-const viewToggle = document.getElementById("viewToggle");
-
-function setView(v) {
-  view = v;
-  try { localStorage.setItem("pb_timesheet_view", v); } catch (_) { /* no storage */ }
-  viewToggle.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.value === v));
-  listView.hidden = v !== "list";
-  calView.hidden = v === "list";
-  renderList();
+// ---------- Your entries ----------
+// The month the calendar shows, newest week first, filtered by project and
+// a search of notes and task names. Click a row to open its day above.
+function weekKey(iso) {
+  return toISODate(getWeekStart(iso));
 }
-
-const sumHrs = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
 function renderList() {
-  if (view !== "list" || !selectedPersonId) return;
-  const mine = timeEntries.filter((e) => e.personId === selectedPersonId);
-  const month = mine.filter((e) => e.date.startsWith(monthKey(calMonth)));
-  if (!month.length) {
-    listView.innerHTML = `<div class="empty">Nothing logged in ${esc(formatMonthLabel(calMonth))}.</div>`;
-    return;
-  }
+  if (!selectedPersonId) return;
+  const anchor = new Date(calAnchor + "T00:00:00");
+  const month = myEntries().filter((e) => e.date.startsWith(monthKey(anchor)));
+  listTitle.innerHTML = `${esc(formatMonthLabel(anchor))} <span class="day-total">— ${fmtHrs(sumHrs(month))} hrs</span>`;
+
   const order = sortProjects(projects).map((p) => p.id);
   const projectIds = [...new Set(month.map((e) => e.projectId))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  if (listProjectId && !projectIds.includes(listProjectId)) listProjectId = null;
+  listFilters.innerHTML = projectIds.length < 2 ? "" : [
+    `<button type="button" class="project-chip ${listProjectId ? "" : "on"}" data-list-project="">All projects</button>`,
+    ...projectIds.map((pid) => {
+      const p = projects.find((x) => x.id === pid);
+      return `<button type="button" class="project-chip ${pid === listProjectId ? "on" : ""}" data-list-project="${pid}"
+        style="--c:${projectColor(pid)};" title="${esc(p?.name || "")}"><i aria-hidden="true"></i>${esc(projectShortName(p) || "—")}</button>`;
+    }),
+  ].join("");
+
   const taskName = (id) => tasks.find((t) => t.id === id)?.name || "—";
-
-  listView.innerHTML = `<div class="list-total">${fmtHrs(sumHrs(month))} hrs in ${esc(formatMonthLabel(calMonth))}</div>
-    <div class="pay-scroll"><table class="pay-table appr-table list-table">
-    <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" /><col /><col class="c-actions" /><col class="c-chev" /></colgroup>
-    <thead><tr><th>Date</th><th>Task</th><th class="num">Hours</th><th>Notes</th><th></th><th></th></tr></thead>
-    ${projectIds.map((pid) => {
-      const project = projects.find((p) => p.id === pid);
-      const pEntries = month.filter((e) => e.projectId === pid);
-      const taskIds = [...new Set(pEntries.map((e) => e.taskId))].sort((a, b) => taskName(a).localeCompare(taskName(b), undefined, { numeric: true }));
-      return `<tbody>
-        <tr class="appr-group"><td colspan="6"><span class="pay-dot" style="--c:${projectColor(pid)};"></span><strong>${project ? esc(project.name) : "—"}</strong> <span class="appr-muted">${fmtHrs(sumHrs(pEntries))} hrs</span></td></tr>
-        ${taskIds.map((tid) => {
-          const key = `${pid}|${tid}`;
-          const open = openListKey === key;
-          const tEntries = pEntries.filter((e) => e.taskId === tid).sort((a, b) => (a.date < b.date ? -1 : 1));
-          const allTime = sumHrs(mine.filter((e) => e.taskId === tid));
-          const thisMonth = sumHrs(tEntries);
-          return `<tr class="appr-row ${open ? "open" : ""}" data-key="${esc(key)}">
-            <td class="appr-date">${dateRange(tEntries)}</td>
-            <td class="appr-task">${esc(taskName(tid))}</td>
-            <td class="num appr-subtotal">${fmtHrs(thisMonth)}</td>
-            <td class="appr-note appr-muted">${tEntries.length} ${tEntries.length === 1 ? "entry" : "entries"}${allTime - thisMonth > 0.005 ? ` · ${fmtHrs(allTime)} hrs all time` : ""}</td>
-            <td></td>
-            <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
-          </tr>
-          ${open ? tEntries.map((e) => `<tr class="appr-entry">
-            <td class="appr-date">${entryDate(e.date)}</td>
-            <td class="appr-task">${statusPill(e)}</td>
-            <td class="num">${fmtHrs(Number(e.hours))}</td>
-            <td class="appr-entry-note ${e.note ? "" : "appr-muted"}">${e.note ? esc(e.note) : "No note"}${e.declined && !e.approved && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</td>
-            <td class="num appr-actions" colspan="2">${e.invoiced ? "" : `<button type="button" class="link-btn" data-list-edit="${e.id}">Edit</button>`}</td>
-          </tr>`).join("") : ""}`;
-        }).join("")}
-      </tbody>`;
-    }).join("")}
-  </table></div>`;
-}
-
-listView.addEventListener("click", (e) => {
-  const edit = e.target.closest("[data-list-edit]");
-  if (edit) {
-    const entry = timeEntries.find((x) => x.id === edit.dataset.listEdit);
-    if (entry) {
-      startEdit(entry);
-      document.querySelector(".day-log")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+  const q = listQuery.trim().toLowerCase();
+  const shown = month
+    .filter((e) => !listProjectId || e.projectId === listProjectId)
+    .filter((e) => !q || `${e.note || ""} ${taskName(e.taskId)}`.toLowerCase().includes(q))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  if (!shown.length) {
+    listView.innerHTML = `<div class="empty">${month.length ? "No entries match." : `Nothing logged in ${esc(formatMonthLabel(anchor))}.`}</div>`;
     return;
   }
-  const row = e.target.closest("tr.appr-row");
-  if (!row) return;
-  openListKey = openListKey === row.dataset.key ? null : row.dataset.key;
+
+  const weeks = [];
+  shown.forEach((e) => {
+    const key = weekKey(e.date);
+    if (weeks.at(-1)?.key !== key) weeks.push({ key, entries: [] });
+    weeks.at(-1).entries.push(e);
+  });
+  listView.innerHTML = weeks.map((w) => `<div class="ts-week">
+      <span>${esc(weekLabel(new Date(w.key + "T00:00:00")))}</span><span>${fmtHrs(sumHrs(w.entries))} hrs</span>
+    </div>
+    ${w.entries.map((e) => `<button type="button" class="ts-list-row ${e.date === selectedDay ? "on" : ""}" data-date="${e.date}" data-entry-id="${e.id}">
+      <span class="ts-list-date">${esc(dayLabel(e.date, { weekday: "short", month: "short", day: "numeric" }))}</span>
+      <span class="ts-list-task"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};" title="${esc(projectName(e.projectId))}"></span>${esc(taskName(e.taskId))}</span>
+      <span class="ts-list-note">${statusPill(e)}${esc(e.note || "")}</span>
+      <span class="ts-list-hrs">${fmtHrs(Number(e.hours || 0))}</span>
+    </button>`).join("")}`).join("");
+}
+
+listFilters.addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-list-project]");
+  if (!chip) return;
+  listProjectId = chip.dataset.listProject || null;
   renderList();
 });
 
-viewToggle.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-value]");
-  if (btn && btn.dataset.value !== view) setView(btn.dataset.value);
+listSearch.addEventListener("input", () => {
+  listQuery = listSearch.value;
+  renderList();
 });
 
-setView(view);
+// Opens the entry's day above, with its row highlighted.
+listView.addEventListener("click", (e) => {
+  const row = e.target.closest(".ts-list-row");
+  if (!row) return;
+  selectDay(row.dataset.date);
+  dayCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  const tr = dayEntries.querySelector(`tr[data-entry-id="${row.dataset.entryId}"]`);
+  if (tr) {
+    tr.classList.add("flash");
+    setTimeout(() => tr.classList.remove("flash"), 1600);
+  }
+});
