@@ -64,9 +64,15 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["closed"]);
     }
 
+    // Who's on a task and their hours: admins, and the project's manager.
     match /assignments/{id} {
       allow read: if isStaff();
       allow write: if isAdmin();
+      allow create: if isPmOf(request.resource.data.projectId)
+        && taskIsOn(request.resource.data.taskId, request.resource.data.projectId);
+      allow update: if isPmOf(resource.data.projectId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hours"]);
+      allow delete: if isPmOf(resource.data.projectId);
     }
 
     match /invoices/{id} {

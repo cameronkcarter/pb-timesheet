@@ -843,11 +843,6 @@ h1.login-title {
 }
 
 /* ---------- Projects page ---------- */
-.project-card-colored,
-.project-card-colored.active {
-  border-left: 5px solid var(--c);
-}
-
 .budget-header {
   display: flex;
   justify-content: space-between;
@@ -857,50 +852,6 @@ h1.login-title {
 }
 
 /* ---------- Dashboard hours progress ---------- */
-.hours-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-}
-
-.hours-total {
-  margin-top: 16px;
-  padding: 12px 14px;
-  background: #faf7fb;
-  border-radius: 8px;
-}
-
-.hours-total .progress-bar {
-  margin-top: 6px;
-}
-
-.hours-rows {
-  margin-top: 14px;
-}
-
-.hours-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 300px) minmax(0, 1fr);
-  gap: 20px;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.hours-row:last-child {
-  border-bottom: none;
-}
-
-.hours-row-name {
-  font-size: 14px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .hours-captions {
   display: flex;
   justify-content: space-between;
@@ -917,13 +868,6 @@ h1.login-title {
 .hours-over {
   color: #b5651d; /* amber: over assigned hours is allowed, just flagged */
   font-weight: 600;
-}
-
-@media (max-width: 600px) {
-  .hours-row {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
 }
 
 .day-log {
@@ -976,43 +920,6 @@ tr.task-row.expanded .task-chevron {
   color: var(--red);
   font-weight: 600;
 }
-
-.assign-row {
-  display: grid;
-  grid-template-columns: minmax(150px, 200px) 150px minmax(200px, 1fr) 32px;
-  gap: 16px;
-  align-items: center;
-  padding: 8px 0;
-  font-size: 14px;
-  border-bottom: 1px solid var(--border);
-}
-
-.assign-row:last-of-type {
-  border-bottom: none;
-}
-
-.assign-name {
-  font-weight: 600;
-}
-
-.assign-name select {
-  margin: 0;
-  font-weight: 400;
-}
-
-.assign-input {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-}
-
-.assign-input input {
-  width: 80px;
-  margin: 0;
-  padding: 6px 8px;
-}
-
 button.icon-btn {
   background: transparent;
   color: var(--text-muted);
@@ -1040,19 +947,6 @@ button.link-btn {
 button.link-btn:hover {
   background: transparent;
   text-decoration: underline;
-}
-
-@media (max-width: 600px) {
-  .assign-row {
-    grid-template-columns: 1fr auto 32px;
-    grid-template-areas: "name input x" "bar bar bar";
-    row-gap: 6px;
-  }
-  .assign-row .assign-name { grid-area: name; }
-  .assign-row .assign-input { grid-area: input; }
-  .assign-row .icon-btn { grid-area: x; }
-  .assign-row .assign-bar { grid-area: bar; }
-
 }
 
 /* ---------- App-style sheet modals (Admin: project, person) ---------- */
@@ -1390,11 +1284,6 @@ tr.stripe-row td {
 .hours-captions .hours-left.hours-over {
   color: #b5651d;
 }
-
-.hours-total .hours-captions .hours-left {
-  font-size: 16px;
-}
-
 button:disabled,
 button:disabled:hover {
   background: #c9c3cd;
@@ -1458,13 +1347,6 @@ button:disabled:hover {
 }
 
 /* ---------- Assignments shown under their task ---------- */
-.due-list {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .due-item {
   display: flex;
   align-items: center;
@@ -1583,24 +1465,7 @@ button.link-btn.due-edit {
   }
 }
 
-/* Dashboard/Projects: a task's hours bar with its assignments underneath. */
-.hours-row.hours-row-with-items {
-  align-items: start;
-}
-
-.hours-row.hours-row-with-items .hours-row-name {
-  padding-top: 2px;
-}
-
-button.link-btn.assign-link {
-  display: block;
-  margin: 2px 0 0;
-  padding: 0;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.section-head {
+/* Dashboard/Projects: a task's hours bar with its assignments underneath. */.section-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2197,23 +2062,11 @@ button.link-btn.pay-more {
     justify-content: flex-start;
   }
 }
-
-.hours-logged-only {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
 /* Subtasks stay on one line; long titles are cut off with "…". */
 .due-title {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Projects: narrower name column in an open task, more room for subtasks. */
-td.accordion-cell .hours-row {
-  grid-template-columns: 180px minmax(0, 1fr);
 }
 
 /* Internal tasks: Task column width matches the name column of the people
@@ -2524,10 +2377,6 @@ table.appr-table {
   font-weight: 600;
   margin-left: 10px;
 }
-
-.appr-actions .link-btn.appr-decline { color: var(--red); }
-.appr-actions .link-btn.appr-approve { color: var(--green); }
-
 .appr-actions button.small {
   margin-left: 10px;
 }
@@ -2554,27 +2403,6 @@ table.appr-table {
 }
 
 /* ---------- Projects tab: admin tools, totals, three-tone bars ---------- */
-.projects-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
-}
-
-.projects-head h2 {
-  margin: 0;
-}
-
-.projects-admin-bar {
-  align-items: center;
-}
-
-.projects-admin-bar button.small {
-  margin: 0;
-}
-
 .segmented.segmented-small button {
   padding: 5px 14px;
   font-size: 13px;
@@ -2583,20 +2411,6 @@ table.appr-table {
 .budget-header .row-actions button {
   margin: 0;
 }
-
-button.active-toggle {
-  background: var(--navy);
-  border-color: var(--navy);
-  color: #fff;
-}
-
-.budget-pm {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-left: 8px;
-}
-
 .bar-legend {
   display: flex;
   gap: 16px;
@@ -2675,23 +2489,6 @@ button.btn-tint-purple {
 button.btn-tint-purple:hover {
   background: #e6d7f2;
 }
-
-button.btn-tint-amber {
-  background: #fdf0de;
-  color: #8a4f10;
-  border: 1px solid #f3d3a6;
-}
-
-button.btn-tint-amber:hover {
-  background: #fae3c4;
-}
-
-button.btn-tint-amber.active-toggle {
-  background: #b5651d;
-  border-color: #b5651d;
-  color: #fff;
-}
-
 /* Budget table: fixed columns so long task names don't squeeze the numbers. */
 #budgetTable {
   table-layout: fixed;
@@ -2732,35 +2529,6 @@ button.btn-tint-amber.active-toggle {
   margin-right: 6px;
   vertical-align: 1px;
 }
-
-table.expense-list {
-  width: 100%;
-  font-size: 13px;
-  margin-bottom: 8px;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.expense-list th {
-  font-size: 11px;
-  padding: 6px 10px;
-}
-
-.expense-list td {
-  padding: 6px 10px;
-}
-
-.expense-list .num {
-  text-align: right;
-}
-
-.expense-actions .link-btn {
-  font-size: 12px;
-  font-weight: 600;
-  margin-left: 10px;
-}
-
 .stat-split .dot.expense { background: var(--lavender); }
 
 .stat-split span[hidden] {
@@ -2796,41 +2564,9 @@ table.inv-expenses {
   margin-left: auto;
 }
 
-/* Dashboard project card: expenses below the tasks. */
-.card-expenses {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--border);
-}
-
-.card-expenses .due-list {
-  margin: 4px 0 6px;
-}
-
-.declined-note.inline {
+/* Dashboard project card: expenses below the tasks. */.declined-note.inline {
   display: inline;
   margin-left: 6px;
-}
-
-/* Edit assignments: rows line up with the people view (name column 180px). */
-td.accordion-cell .assign-row {
-  grid-template-columns: 180px 130px minmax(0, 1fr) 32px;
-  gap: 20px;
-}
-
-.assign-summary {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  padding: 0 0 8px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.assign-summary strong {
-  color: var(--text);
 }
 
 /* Subtotals are quiet; the grand total stands out. */
@@ -2899,23 +2635,6 @@ button.person-chip::after {
   color: var(--civic-purple);
   font-weight: 800;
 }
-
-.card-expenses .hours-row {
-  border-bottom: none;
-  padding-top: 0;
-}
-
-.expense-summary {
-  font-size: 13px;
-  color: var(--text-muted);
-  padding-top: 2px;
-}
-
-.expense-summary strong {
-  font-size: 15px;
-  color: var(--text);
-}
-
 .sub-actions .link-btn {
   font-size: 12px;
   font-weight: 600;
@@ -2965,24 +2684,6 @@ button.small.btn-approve-project {
 
 button.small.btn-approve-project:hover {
   background: #256a29;
-}
-
-/* Projects: the people view uses the same columns as Edit staff & hours. */
-td.accordion-cell .assign-row {
-  align-items: start;
-}
-
-td.accordion-cell .assign-row .assign-input,
-td.accordion-cell .assign-row > .icon-btn {
-  align-self: center;
-}
-
-.assign-row .assign-name button.assign-link {
-  margin-top: 1px;
-}
-
-.assign-row.people-row .assign-bar .due-list {
-  margin-top: 8px;
 }
 
 /* Admin: Data card (Google Sheet + Backup). */
@@ -3077,14 +2778,6 @@ td.accordion-cell .assign-row > .icon-btn {
   flex-wrap: wrap;
   justify-content: flex-start;
 }
-
-.pill.not-billed {
-  background: #fbefe2;
-  color: #9a5a16;
-  margin-right: 4px;
-}
-
-
 .appr-table tr.appr-closed td { opacity: 0.6; }
 
 /* ---------- Timesheet: task cards ---------- */
@@ -3629,7 +3322,6 @@ button.appr-unapprove:hover { color: var(--red); background: #fff; }
 
 .dialog-actions button.danger:hover { background: #a93226; }
 
-
 /* New project: billing type must be chosen before saving. */
 .segmented.needs-choice {
   box-shadow: 0 0 0 2px var(--red);
@@ -3641,18 +3333,7 @@ button.appr-unapprove:hover { color: var(--red); background: #fff; }
   75% { transform: translateX(4px); }
 }
 
-
-
 /* ---------- Projects: one card to pick and see a project ---------- */
-.page-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.page-title-row button { margin: 0; }
-
 .card.project-switch { padding: 0 0 16px; overflow: hidden; }
 
 .project-head {
@@ -3888,10 +3569,7 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   font-size: 12px;
   color: var(--text-muted);
 }
-.pc-task-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pc-due { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
-.pc-due.overdue { color: var(--red); font-weight: 600; }
-.pc-num { font-variant-numeric: tabular-nums; }
+.pc-task-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.pc-num { font-variant-numeric: tabular-nums; }
 .pc-dim { color: var(--text-muted); }
 .pc-budget { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
 .pc-budget span { width: 36px; text-align: right; }
@@ -3989,26 +3667,8 @@ button.declined-fix {
 }
 .declined-fix:hover { background: #fff7f6; }
 
-/* Projects tab: one "+ Subtask" under a task's people. */
-
-/* Projects tab subtasks: same look as the Dashboard's. */
-.sub-checks { margin: 6px 0 2px; }
-.sub-check { display: flex; align-items: center; gap: 14px; padding: 3px 0; font-size: 13px; }
-.sub-check-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; margin: 0;
-  padding-left: 10px; border-left: 2px solid var(--border); font-weight: 400; color: var(--text); cursor: pointer; }
-.sub-check-name input { margin: 0; width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--civic-purple); cursor: pointer; }
-.sub-check-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sub-check-who { color: var(--text-muted); font-size: 12px; }
-.sub-check.done .sub-check-name > span { text-decoration: line-through; color: var(--text-muted); }
-.sub-check-due { flex: 0 0 76px; color: var(--text-muted); white-space: nowrap; }
-.sub-check-due.overdue { color: var(--red); font-weight: 600; }
-.sub-check-actions { flex: 0 0 88px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
-.sub-check-actions .link-btn { margin: 0; padding: 0; font-size: 12px; }
-.sub-check-actions .icon-btn { margin: 0; padding: 0 2px; font-size: 16px; line-height: 1; color: var(--text-muted); }
-
 /* Subtask row buttons: Edit, ✓ complete / ↺ reopen, × delete. */
-.pc-sub-actions .icon-btn.sub-act,
-.sub-check-actions .icon-btn.sub-act {
+.pc-sub-actions .icon-btn.sub-act {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -4022,7 +3682,7 @@ button.declined-fix {
 }
 .icon-btn.sub-act.sub-act-done { color: #3d8b4f; font-weight: 700; }
 .icon-btn.sub-act.sub-act-done:hover { background: #e8f4ea; color: #2a6a38; }
-.pc-sub-name, .sub-check-name { cursor: default; }
+.pc-sub-name { cursor: default; }
 
 /* Toast with an Undo button. */
 .toast.has-action.show { pointer-events: auto; display: flex; align-items: center; gap: 14px; }
@@ -4062,39 +3722,27 @@ button.declined-fix {
 }
 .pc-subs .pc-sub.done .pc-sub-name::before { background: #c9c2cf; }
 
-/* ---------- Projects tab: a task's people (view and Edit staff & hours) ----------
-   Same columns in both modes: Person | Due | Assigned | Logged | Remaining | actions. */
-.tp-list { max-width: 900px; }
-.tp-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 70px 72px 60px 76px 190px 28px;
-  gap: 18px;
-  align-items: center;
-  font-size: 14px;
-}
+/* ---------- Projects tab: a task's people ----------
+   Client projects: Person | Hours bar | Assigned | ×  (.tp-hours, below)
+   Internal projects: Person | Logged */
+.tp-row { display: grid; gap: 18px; align-items: center; font-size: 14px; }
 .tp-row.tp-head { padding: 0 0 6px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
 .tp-row.tp-person { padding: 9px 0; border-top: 1px solid var(--border); }
 .tp-head + .tp-row.tp-person { border-top: none; }
 .tp-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tp-rate { font-size: 12px; font-weight: 400; color: var(--text-muted); }
 .tp-num { font-variant-numeric: tabular-nums; }
-.tp-num.tp-remaining { font-weight: 700; }
-.tp-row.tp-head > :nth-child(4) { color: var(--text); }
 .tp-dim { color: var(--text-muted); }
-.tp-input input { width: 72px; margin: 0; padding: 5px 8px; }
 .tp-x { display: flex; justify-content: flex-end; }
 .tp-x .icon-btn { margin: 0; }
-.tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 70px 0 60px 0 0 96px; }
+.tp-internal .tp-row { grid-template-columns: 180px 96px; gap: 20px; } /* lines up with th.internal-task-col */
 
-/* Subtasks under a person: their own tinted band, like the Dashboard. */
+/* Expense rows (Project expenses / subconsultants), in a tinted band. */
 .tp-subs {
   margin: 0 -10px 10px;
   padding: 4px 10px;
   background: #f1ebf5;
   border-radius: 8px;
 }
-.tp-row.tp-sub { padding: 6px 0; font-size: 13px; }
-.tp-row.tp-sub + .tp-row.tp-sub { border-top: 1px solid #e4dbea; }
 .tp-sub-name { position: relative; padding-left: 14px; min-width: 0; }
 .tp-sub-name > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tp-sub-name::before {
@@ -4110,7 +3758,6 @@ button.declined-fix {
 }
 .tp-sub.done .tp-sub-name > span { text-decoration: line-through; color: var(--text-muted); }
 .tp-sub.done .tp-sub-name::before { background: #c9c2cf; }
-.tp-sub-who { color: var(--text-muted); font-size: 12px; }
 .tp-due { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
 .tp-due.overdue { color: var(--red); font-weight: 600; }
 .tp-sub-actions { grid-column: 3 / -1; display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
@@ -4123,12 +3770,9 @@ button.declined-fix {
 .tp-sub-actions .icon-btn.sub-act.sub-act-done { color: #3d8b4f; font-weight: 700; }
 
 @media (max-width: 600px) {
-  .tp-row { grid-template-columns: minmax(0, 1fr) 54px 52px 44px 56px 0 24px; gap: 8px; font-size: 13px; }
-  .tp-row .tp-share { grid-column: 1 / -1; grid-row: 2; }
-  .tp-head > :nth-child(6) { display: none; }
-  .tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 54px 0 44px 0 0 24px; }
+  .tp-row { gap: 8px; font-size: 13px; }
+  .tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 64px; }
   .tp-name { white-space: normal; }
-  .tp-input input { width: 52px; padding: 4px; }
   .tp-sub-name > span { white-space: normal; }
 }
 
@@ -4166,19 +3810,42 @@ button.declined-fix {
   .tp-exp .tp-exp-row > div:not(.tp-sub-name) { justify-self: start; }
 }
 
-/* Projects tab: each person's share of the task budget, in the project's
-   color (solid = logged, light = assigned, not logged), and what's left. */
-.tp-share { display: flex; align-items: center; gap: 8px; }
-.tp-bar { flex: 1; display: flex; height: 8px; border-radius: 4px; background: #ebe5ef; overflow: hidden; }
-.tp-bar-logged { height: 100%; background: var(--c, var(--civic-purple)); }
-.tp-bar-togo { height: 100%; background: color-mix(in srgb, var(--c, var(--civic-purple)) 30%, #fff); }
-.tp-bar-open { height: 100%; background: repeating-linear-gradient(135deg, #cfc7d6 0 4px, #e2dce7 4px 8px); }
-.tp-share-pct { width: 34px; text-align: right; font-size: 12px; color: var(--text-muted); }
+/* Projects tab, client projects: each person's hours as a bar (same scale
+   for everyone on the task) with labels under it, then Assigned. */
+.tp-hours .tp-row { grid-template-columns: minmax(0, 190px) minmax(0, 1fr) 112px 28px; }
+.tp-hours-cell { min-width: 0; }
+.hb-bar { display: flex; height: 12px; border-radius: 4px; overflow: hidden; min-width: 2px; }
+.hb-bar > span { height: 100%; }
+.hb-logged { background: var(--accent); }
+.hb-left { background: #eec293; }
+.hb-over { background: var(--red); }
+.hb-label { margin-top: 4px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.hb-label b { font-weight: 700; color: var(--text); }
+.hb-over-txt { color: var(--red); font-weight: 600; }
+.hb-none { font-style: italic; }
+.tp-assigned { display: flex; align-items: center; justify-content: flex-end; gap: 4px; position: relative; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tp-head .tp-assigned { font-weight: inherit; }
+.tp-unit { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.tp-assigned input.assignHours {
+  width: 62px; margin: 0; padding: 4px 6px; text-align: right;
+  font: inherit; font-weight: 600; background: transparent;
+  border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+  -moz-appearance: textfield;
+}
+.tp-assigned input.assignHours::-webkit-inner-spin-button,
+.tp-assigned input.assignHours::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.tp-assigned input.assignHours:hover { border-color: var(--border); background: #fff; }
+.tp-assigned input.assignHours:focus { border-color: var(--navy); background: #fff; cursor: text; outline: none; }
+.tp-assigned .saved-tick { position: absolute; right: 0; top: 100%; font-weight: 400; }
+.tp-open-amt { font-size: 13px; color: var(--text-muted); }
+.tp-unassigned .hours-over-strong { font-size: 13px; }
+@media (max-width: 600px) {
+  .tp-hours .tp-row { grid-template-columns: minmax(0, 1fr) 96px 24px; row-gap: 6px; }
+  .tp-hours .tp-row .tp-hours-cell { grid-column: 1 / -1; grid-row: 2; }
+  .tp-hours .tp-head > :nth-child(2) { display: none; }
+}
 .tp-row.tp-unassigned { padding: 9px 0; border-top: 1px solid var(--border); }
 .tp-unassigned .tp-name { font-weight: 500; font-style: italic; color: var(--text-muted); }
-.tp-unassigned .tp-num { color: var(--text-muted); font-size: 13px; }
-.tp-share.over { font-size: 13px; }
-.tp-open-amt { font-style: normal; font-weight: 400; font-size: 13px; margin-left: 6px; }
 
 /* No Due column: subtask due dates sit after the name. */
 .due-inline { color: var(--text-muted); white-space: nowrap; }
@@ -4189,35 +3856,13 @@ button.declined-fix {
 .pc-sub .pc-sub-actions { grid-column: 4 / -1; }
 .pc-sub .pc-sub-name { grid-column: 1 / 4; }
 
-/* Projects tab people: Person | Assigned | Logged | Remaining | share bar |
-   percent (and × when editing). The bar column is sized to sit under the
-   tasks' Progress bars (see alignShareBars). */
-.tp-list { max-width: none; }
-.tp-row { grid-template-columns: minmax(0, 1fr) 72px 60px 76px var(--share-w, 180px) var(--tail-w, 70px); gap: 18px; }
-.tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 0 60px 0 var(--share-w, 180px) var(--tail-w, 70px); }
-.tp-tail { display: flex; align-items: center; gap: 8px; }
-.tp-tail .icon-btn { margin: 0 0 0 auto; }
-.tp-pct { font-size: 12px; color: var(--text-muted); }
-.tp-input { display: flex; align-items: center; gap: 6px; }
-.tp-row.tp-sub .tp-sub-name { grid-column: 1 / 5; }
-.tp-row.tp-sub .tp-sub-actions { grid-column: 5 / -1; }
 .tp-sub-name > span { white-space: normal; overflow: visible; }
-
-/* Share bars use the same colors as the task Progress bars above. */
-.tp-bar-logged { background: var(--accent); }
-.tp-bar { background: #eceef1; }
-.tp-bar-togo { background: #eec293; }
 
 @media (max-width: 600px) {
   .pc-task { grid-template-columns: minmax(0, 1fr) 44px 52px; }
   .pc-subs .pc-task.pc-sub { grid-template-columns: minmax(0, 1fr) 44px 42px; }
   .pc-sub .pc-sub-name { grid-column: 1 / 2; }
   .pc-sub .pc-sub-actions { grid-column: 2 / -1; }
-  .tp-row { grid-template-columns: minmax(0, 1fr) 48px 44px 56px 0 36px; gap: 8px; }
-  .tp-internal .tp-row { grid-template-columns: minmax(0, 1fr) 0 44px 0 0 36px; }
-  .tp-row .tp-share { grid-column: 1 / -1; grid-row: 2; }
-  .tp-row.tp-sub .tp-sub-name { grid-column: 1 / 3; }
-  .tp-row.tp-sub .tp-sub-actions { grid-column: 3 / -1; }
 }
 
 /* ---------- Projects tab: subtasks & events under the timeline ----------
