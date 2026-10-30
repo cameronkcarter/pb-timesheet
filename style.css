@@ -827,6 +827,9 @@ h1.login-title {
 .row-btns button.icon-btn { width: 28px; height: 30px; padding: 0; }
 .row-btns .invisible { visibility: hidden; }
 .day-table col.c-actions { width: 104px; }
+.day-table col.c-status { width: 128px; }
+.day-table td.day-status { padding: 9px 10px 0; white-space: nowrap; }
+.day-table td.day-status .pill { margin: 0; }
 /* Hours read from the left here, under their header. */
 .day-table th.num,
 .day-table td.num .cell-hours { text-align: left; }
@@ -925,7 +928,7 @@ button.ts-task-more:hover { background: #f6f1f8; }
 
 @media (max-width: 600px) {
   /* Scrolls sideways, like other tables on phones. */
-  .table-scroll table.day-table { min-width: 540px; }
+  .table-scroll table.day-table { min-width: 660px; }
   .day-table col.c-project { width: 96px; }
   .day-table col.c-actions { width: 100px; }
   button.ts-task,

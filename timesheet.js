@@ -118,12 +118,6 @@ function statusPill(e) {
   return '<span class="pill orange">Pending Approval</span>';
 }
 
-// The day's entries show only what you can act on: declined (fix it) and
-// invoiced or paid (locked).
-function flagPill(e) {
-  return e.paid || e.invoiced || (e.declined && !e.approved) ? statusPill(e) : "";
-}
-
 // ---------- Calendar ----------
 // Last week and this one (or the whole month), Sunday to Saturday with
 // weekends narrow. Each day shows its total hours and a thin bar split by
@@ -279,8 +273,8 @@ function renderDay(force = false) {
     return;
   }
   dayEntries.innerHTML = `<div class="table-scroll"><table class="day-table entry-table">
-      <colgroup><col class="c-project" /><col class="c-task" /><col /><col class="c-hours" /><col class="c-actions" /></colgroup>
-      <thead><tr><th>Project</th><th>Task</th><th>Note</th><th class="num">Hours</th><th></th></tr></thead>
+      <colgroup><col class="c-project" /><col class="c-task" /><col /><col class="c-hours" /><col class="c-status" /><col class="c-actions" /></colgroup>
+      <thead><tr><th>Project</th><th>Task</th><th>Note</th><th class="num">Hours</th><th>Status</th><th></th></tr></thead>
       <tbody>${entries.map(dayRowHtml).join("")}</tbody>
     </table></div>`;
   fitNotes(dayEntries);
@@ -291,9 +285,10 @@ function dayRowHtml(e) {
   const task = tasks.find((t) => t.id === e.taskId);
   return `<tr class="${formEditId === e.id ? "in-form" : ""}" data-entry-id="${e.id}">
     <td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>
-    <td class="cell-td">${cellText(task ? esc(task.name) : "—", "cell-task")}${flagPill(e)}</td>
+    <td class="cell-td">${cellText(task ? esc(task.name) : "—", "cell-task")}</td>
     <td class="cell-td">${cellText(esc(e.note || ""))}${declineNote(e)}</td>
     <td class="cell-td num">${cellText(fmtHrs(Number(e.hours || 0)), "cell-hours")}</td>
+    <td class="day-status">${statusPill(e)}</td>
     <td class="cell-td">${isLocked(e) ? "" : dayActions()}</td>
   </tr>`;
 }
