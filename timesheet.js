@@ -8,9 +8,9 @@ import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName 
 import { assignedHours, isInternal } from "./rates.js";
 
 // Three cards: a calendar of your hours (two weeks, or the whole month), the
-// selected day (its entries, editable in place, and a form to log more), and
-// the month's hours by project and task, each task opening to its entries
-// (also editable in place).
+// selected day (its entries and a form to log more), and the month's hours
+// by project and task, each task opening to its entries. Entries in both
+// places change with Edit -> Save.
 
 const selectedPersonId = requireSession();
 
@@ -30,7 +30,7 @@ let calMode = "weeks";       // last week and this one, or "month"
 let showOtherTasks = false;  // tasks on the project you're not assigned to
 let addingTask = false;      // the "+ New task" box on internal projects
 let openListKey = null;      // "<projectId>|<taskId>" open in the list
-let redrawPending = false;   // a redraw skipped while editing an entry
+let editingId = null;         // entry open for editing (one at a time)
 try { if (localStorage.getItem("pb_timesheet_cal") === "month") calMode = "month"; } catch (_) { /* no storage */ }
 // timesheet.html?day=YYYY-MM-DD opens that day (e.g. "Fix" on a declined entry).
 const linkedDay = new URLSearchParams(location.search).get("day");
@@ -58,9 +58,7 @@ const entryNote = document.getElementById("entryNote");
 const existingHint = document.getElementById("existingHint");
 const submitEntry = document.getElementById("submitEntry");
 
-const dayEditTip = document.getElementById("dayEditTip");
 const listTitle = document.getElementById("listTitle");
-const listEditTip = document.getElementById("listEditTip");
 const listView = document.getElementById("listView");
 
 const sumHrs = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
@@ -231,44 +229,40 @@ document.getElementById("calNext").addEventListener("click", () => shiftCalendar
 calTodayBtn.addEventListener("click", () => selectDay(todayISO()));
 
 // ---------- The selected day's entries ----------
-// Task, note and hours are edited in place and save when you leave the box
-// (or pick a task). Invoiced entries are locked.
+// Each row's Edit opens its task, note and hours for changing (Save or
+// Cancel); the same goes for entries in the list below. Invoiced entries
+// are locked.
 
-// True while someone is typing in an entry's box in this container, so it
-// isn't redrawn under them; it catches up when they leave (see focusout).
-function editingIn(container) {
-  if (container.contains(document.activeElement) && document.activeElement.matches(".ts-edit")) {
-    redrawPending = true;
-    return true;
-  }
-  return false;
-}
+// While a row is open for editing, its table isn't redrawn under it (unless
+// forced, e.g. by opening or closing the row).
+const holdRedraw = (container, force) => !force && !!container.querySelector("tr.editing");
 
 const isLocked = (e) => e.invoiced || e.paid;
 const declineNote = (e) => (e.declined && !e.approved && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : "");
-// Notes grow to show in full (see fitNotes); Enter saves rather than adding a line.
-const noteInput = (e) => `<textarea class="ts-edit day-note" data-field="note" rows="1" placeholder="Add a note" aria-label="Note" title="Click to edit">${esc(e.note || "")}</textarea>`;
+// The note box grows to show the whole note (see fitNotes).
+const noteInput = (e) => `<textarea class="edit-note" rows="1" placeholder="What did you work on?" aria-label="Note">${esc(e.note || "")}</textarea>`;
+const hoursInput = (e) => `<input type="number" class="edit-hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" />`;
+const rowActions = (e) => (editingId === e.id
+  ? `<button type="button" class="small" data-action="save-entry">Save</button><button type="button" class="link-btn" data-action="cancel-entry">Cancel</button>`
+  : `<button type="button" class="link-btn" data-action="edit-entry">Edit</button><button type="button" class="icon-btn" data-action="delete-entry" title="Delete" aria-label="Delete entry">&times;</button>`);
 function fitNotes(container) {
-  container.querySelectorAll("textarea.day-note").forEach((t) => {
+  container.querySelectorAll("textarea.edit-note").forEach((t) => {
     t.style.height = "auto";
     t.style.height = `${t.scrollHeight + 2}px`;
   });
 }
-const hoursInput = (e) => `<input type="number" class="ts-edit day-hours" data-field="hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" title="Click to edit" />`;
-const deleteBtn = (e) => `<button type="button" class="icon-btn" data-delete-entry="${e.id}" title="Delete" aria-label="Delete entry">&times;</button>`;
 
-function renderDay() {
+function renderDay(force = false) {
   if (!selectedPersonId) return;
   const entries = myEntriesOn(selectedDay);
   dayHeading.innerHTML = `${esc(dayLabel(selectedDay))}${entries.length ? ` <span class="day-total">— ${fmtHrs(sumHrs(entries))} hrs logged</span>` : ""}`;
-  dayEditTip.hidden = !entries.some((e) => !isLocked(e));
-  if (editingIn(dayEntries)) return;
+  if (holdRedraw(dayEntries, force)) return;
   if (entries.length === 0) {
     dayEntries.innerHTML = `<div class="empty day-empty">Nothing logged this day yet.</div>`;
     return;
   }
   dayEntries.innerHTML = `<div class="table-scroll"><table class="day-table">
-      <colgroup><col class="c-project" /><col class="c-task" /><col /><col class="c-hours" /><col class="c-x" /></colgroup>
+      <colgroup><col class="c-project" /><col class="c-task" /><col /><col class="c-hours" /><col class="c-actions" /></colgroup>
       <thead><tr><th>Project</th><th>Task</th><th>Note</th><th class="num">Hours</th><th></th></tr></thead>
       <tbody>${entries.map(dayRowHtml).join("")}</tbody>
     </table></div>`;
@@ -279,23 +273,22 @@ function dayRowHtml(e) {
   const project = projects.find((p) => p.id === e.projectId);
   const task = tasks.find((t) => t.id === e.taskId);
   const projectCell = `<td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>`;
-  if (isLocked(e)) {
+  if (editingId !== e.id) {
     return `<tr data-entry-id="${e.id}">${projectCell}
       <td><div class="day-task">${task ? esc(task.name) : "—"}</div>${flagPill(e)}</td>
-      <td><div class="day-note">${esc(e.note || "")}</div></td>
-      <td class="num day-hours">${fmtHrs(Number(e.hours || 0))}</td><td></td>
+      <td><div class="day-note">${esc(e.note || "")}</div>${declineNote(e)}</td>
+      <td class="num day-hours">${fmtHrs(Number(e.hours || 0))}</td>
+      <td class="num row-btns">${isLocked(e) ? "" : rowActions(e)}</td>
     </tr>`;
   }
   const options = tasks.filter((t) => t.projectId === e.projectId && (!t.closed || t.id === e.taskId)).sort(byTaskName);
-  return `<tr data-entry-id="${e.id}">${projectCell}
-    <td>
-      <select class="ts-edit day-task" data-field="taskId" aria-label="Task" title="Click to edit">
-        ${options.map((t) => `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
-      </select>${flagPill(e)}
-    </td>
-    <td>${noteInput(e)}${declineNote(e)}</td>
+  return `<tr class="editing" data-entry-id="${e.id}">${projectCell}
+    <td><select class="edit-task" aria-label="Task">
+      ${options.map((t) => `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+    </select></td>
+    <td>${noteInput(e)}</td>
     <td class="num">${hoursInput(e)}</td>
-    <td class="num day-x">${deleteBtn(e)}</td>
+    <td class="num row-btns">${rowActions(e)}</td>
   </tr>`;
 }
 
@@ -315,90 +308,97 @@ function otherHoursOn(iso, exceptId) {
   return sumHrs(myEntriesOn(iso).filter((e) => e.id !== exceptId));
 }
 
-async function saveEdit(el) {
-  const row = el.closest("tr[data-entry-id]");
-  const entry = timeEntries.find((x) => x.id === row?.dataset.entryId);
-  if (!entry) return;
-  const field = el.dataset.field;
-  const revert = (msg) => {
-    showToast(msg);
-    el.value = field === "hours" ? Number(entry.hours || 0) : entry[field] || "";
-  };
-  let value = el.value;
-  if (field === "hours") {
-    value = Number(value);
-    if (!(value > 0)) return revert("Enter hours worked.");
-    if (otherHoursOn(entry.date, entry.id) + value > 24) return revert("That's more than 24 hours for this day — check the hours.");
-  } else if (field === "note") {
-    value = value.trim();
-    if (!value) return revert("Add a note describing what you worked on.");
-  } else if (field === "taskId" && myEntriesOn(entry.date).some((x) => x.taskId === value && x.id !== entry.id)) {
-    return revert("You already have hours on that task this day — change that entry instead.");
+// Opens one entry for editing (closing any other) or, with null, closes it.
+function setEditing(id) {
+  editingId = id;
+  renderDay(true);
+  renderList(true);
+  const row = document.querySelector("tr.editing");
+  row?.querySelector(".edit-hours")?.focus();
+}
+
+async function saveEntry(row) {
+  const entry = timeEntries.find((x) => x.id === row.dataset.entryId);
+  if (!entry) return setEditing(null);
+  const hours = Number(row.querySelector(".edit-hours").value);
+  const note = row.querySelector(".edit-note").value.trim();
+  const taskId = row.querySelector(".edit-task")?.value || entry.taskId;
+  if (!(hours > 0)) return showToast("Enter hours worked.");
+  if (otherHoursOn(entry.date, entry.id) + hours > 24) return showToast("That's more than 24 hours for this day — check the hours.");
+  if (!note) return showToast("Add a note describing what you worked on.");
+  if (myEntriesOn(entry.date).some((x) => x.taskId === taskId && x.id !== entry.id)) {
+    return showToast("You already have hours on that task this day — edit that entry instead.");
   }
-  if (String(entry[field] ?? "") === String(value)) return;
-  // Undo puts the old value (and any decline) back. An entry that was
+  const changes = {};
+  if (hours !== Number(entry.hours || 0)) changes.hours = hours;
+  if (note !== (entry.note || "")) changes.note = note;
+  if (taskId !== entry.taskId) changes.taskId = taskId;
+  if (!Object.keys(changes).length) return setEditing(null);
+  // Undo puts the old values (and any decline) back. An entry that was
   // approved stays sent for approval again.
-  const before = {
-    [field]: field === "hours" ? Number(entry.hours || 0) : entry[field] || "",
-    declined: !!entry.declined, declineReason: entry.declineReason || null,
-  };
+  const before = { declined: !!entry.declined, declineReason: entry.declineReason || null };
+  Object.keys(changes).forEach((k) => { before[k] = k === "hours" ? Number(entry.hours || 0) : entry[k] || ""; });
   try {
-    await TimeEntries.update(entry.id, { [field]: value, ...approvalFields(entry.projectId) });
+    await TimeEntries.update(entry.id, { ...changes, ...approvalFields(entry.projectId) });
+    setEditing(null);
     showToast("Entry updated.", {
       action: "Undo",
       onAction: () => TimeEntries.update(entry.id, before).catch((err) => showToast("Error: " + err.message)),
     });
   } catch (err) {
-    revert("Error: " + err.message);
+    showToast("Error: " + err.message);
+  }
+}
+
+// Delete after a confirm, with Undo (which adds it back; an approved entry
+// comes back sent for approval again).
+async function deleteEntry(entry) {
+  if (!(await confirmDialog("", { title: "Delete this entry?", confirmText: "Delete", danger: true }))) return;
+  const { id, createdAt, ...data } = entry;
+  if (data.approved && !isInternal(projects.find((p) => p.id === data.projectId))) {
+    Object.assign(data, { approved: false, approvedDate: null });
+  }
+  try {
+    await TimeEntries.remove(id);
+    showToast("Entry deleted.", {
+      action: "Undo",
+      onAction: () => TimeEntries.add(data).catch((err) => showToast("Error: " + err.message)),
+    });
+  } catch (err) {
+    showToast("Error: " + err.message);
   }
 }
 
 [dayEntries, listView].forEach((container) => {
-  container.addEventListener("change", (e) => {
-    if (e.target.matches(".ts-edit")) saveEdit(e.target);
-  });
-  container.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && e.target.matches("input.ts-edit, textarea.ts-edit")) {
-      e.preventDefault();
-      e.target.blur();
+  container.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    const row = btn?.closest("tr[data-entry-id]");
+    if (!row) return;
+    const action = btn.dataset.action;
+    if (action === "edit-entry") setEditing(row.dataset.entryId);
+    if (action === "cancel-entry") setEditing(null);
+    if (action === "save-entry") saveEntry(row);
+    if (action === "delete-entry") {
+      const entry = timeEntries.find((x) => x.id === row.dataset.entryId);
+      if (entry) deleteEntry(entry);
     }
+  });
+  // Enter saves (rather than adding a line to the note); Escape cancels.
+  container.addEventListener("keydown", (e) => {
+    const row = e.target.closest("tr.editing");
+    if (!row) return;
+    if (e.key === "Enter" && !e.target.matches("select")) {
+      e.preventDefault();
+      saveEntry(row);
+    }
+    if (e.key === "Escape") setEditing(null);
   });
   container.addEventListener("input", (e) => {
-    if (e.target.matches("textarea.day-note")) fitNotes(e.target.parentElement);
-  });
-  container.addEventListener("focusout", () => {
-    setTimeout(() => {
-      if (redrawPending && !document.activeElement?.matches(".ts-edit")) {
-        redrawPending = false;
-        renderDay();
-        renderList();
-      }
-    });
-  });
-  // Delete after a confirm, with Undo (which adds it back; an approved
-  // entry comes back sent for approval again).
-  container.addEventListener("click", async (e) => {
-    const delBtn = e.target.closest("[data-delete-entry]");
-    const entry = delBtn && timeEntries.find((x) => x.id === delBtn.dataset.deleteEntry);
-    if (!entry) return;
-    if (!(await confirmDialog("", { title: "Delete this entry?", confirmText: "Delete", danger: true }))) return;
-    const { id, createdAt, ...data } = entry;
-    if (data.approved && !isInternal(projects.find((p) => p.id === data.projectId))) {
-      Object.assign(data, { approved: false, approvedDate: null });
-    }
-    try {
-      await TimeEntries.remove(id);
-      showToast("Entry deleted.", {
-        action: "Undo",
-        onAction: () => TimeEntries.add(data).catch((err) => showToast("Error: " + err.message)),
-      });
-    } catch (err) {
-      showToast("Error: " + err.message);
-    }
+    if (e.target.matches("textarea.edit-note")) fitNotes(e.target.parentElement);
   });
 });
 
-// Notes re-fit when the page width changes.
+// Note boxes re-fit when the page width changes.
 window.addEventListener("resize", () => {
   fitNotes(dayEntries);
   fitNotes(listView);
@@ -684,14 +684,13 @@ submitEntry.addEventListener("click", async () => {
 // ---------- The month's hours ----------
 // The month the calendar shows, grouped by project, then task (with all-time
 // totals, so e.g. hours on one proposal add up across months). Click a task
-// to see its entries; their hours and notes edit in place.
-function renderList() {
-  if (!selectedPersonId || editingIn(listView)) return;
+// to see its entries; Edit changes an entry's hours and note.
+function renderList(force = false) {
+  if (!selectedPersonId || holdRedraw(listView, force)) return;
   const anchor = new Date(calAnchor + "T00:00:00");
   const mine = myEntries();
   const month = mine.filter((e) => e.date.startsWith(monthKey(anchor)));
   listTitle.textContent = `— ${formatMonthLabel(anchor)}${month.length ? ` · ${fmtHrs(sumHrs(month))} hrs` : ""}`;
-  listEditTip.hidden = !month.some((e) => !isLocked(e));
   if (!month.length) {
     listView.innerHTML = `<div class="empty">Nothing logged in ${esc(formatMonthLabel(anchor))}.</div>`;
     return;
@@ -701,7 +700,7 @@ function renderList() {
   const taskName = (id) => tasks.find((t) => t.id === id)?.name || "—";
 
   listView.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table list-table">
-    <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" /><col /><col class="c-x" /><col class="c-chev" /></colgroup>
+    <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" /><col /><col class="c-actions" /><col class="c-chev" /></colgroup>
     <thead><tr><th>Date</th><th>Task</th><th class="num">Hours</th><th>Notes</th><th></th><th></th></tr></thead>
     ${projectIds.map((pid) => {
       const project = projects.find((p) => p.id === pid);
@@ -724,13 +723,16 @@ function renderList() {
             <td></td>
             <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
           </tr>
-          ${open ? tEntries.map((e) => `<tr class="appr-entry" data-entry-id="${e.id}">
-            <td class="appr-date">${entryDate(e.date)}</td>
-            <td class="appr-task">${statusPill(e)}</td>
-            <td class="num">${isLocked(e) ? fmtHrs(Number(e.hours || 0)) : hoursInput(e)}</td>
-            <td class="appr-entry-note">${isLocked(e) ? esc(e.note || "") : noteInput(e)}${declineNote(e)}</td>
-            <td class="num day-x" colspan="2">${isLocked(e) ? "" : deleteBtn(e)}</td>
-          </tr>`).join("") : ""}`;
+          ${open ? tEntries.map((e) => {
+            const editing = editingId === e.id;
+            return `<tr class="appr-entry ${editing ? "editing" : ""}" data-entry-id="${e.id}">
+              <td class="appr-date">${entryDate(e.date)}</td>
+              <td class="appr-task">${statusPill(e)}</td>
+              <td class="num">${editing ? hoursInput(e) : fmtHrs(Number(e.hours || 0))}</td>
+              <td class="appr-entry-note">${editing ? noteInput(e) : esc(e.note || "")}${editing ? "" : declineNote(e)}</td>
+              <td class="num row-btns" colspan="2">${isLocked(e) ? "" : rowActions(e)}</td>
+            </tr>`;
+          }).join("") : ""}`;
         }).join("")}
       </tbody>`;
     }).join("")}

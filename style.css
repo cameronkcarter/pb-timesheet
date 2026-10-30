@@ -702,39 +702,26 @@ h1.login-title {
 .day-table col.c-project { width: 140px; }
 .day-table col.c-task { width: 30%; }
 .day-table col.c-hours { width: 64px; }
-.day-table col.c-x { width: 64px; }
+.day-table col.c-actions { width: 128px; }
 .day-table td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; }
 .day-project { padding-top: 13px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-table .pill { margin: 2px 0 0 7px; font-size: 11px; padding: 1px 7px; }
-td.day-x { white-space: nowrap; }
+/* Edit + x, or Save + Cancel while a row is open for editing. */
+td.row-btns { white-space: nowrap; }
+td.row-btns button { margin: 0 0 0 8px; vertical-align: middle; }
+td.row-btns button.link-btn { padding: 2px 0; font-weight: 600; }
+td.row-btns button.small { padding: 5px 12px; }
+tr.editing td { background: #faf6fc; }
+tr.editing select,
+tr.editing input,
+tr.editing textarea { margin: 0; padding: 5px 8px; font-size: 13px; }
+tr.editing input.edit-hours { width: 64px; text-align: right; }
+textarea.edit-note { display: block; width: 100%; resize: none; overflow: hidden; line-height: 1.4; font-family: inherit; }
 .day-table tr.flash td { background: #fbf2e6; transition: background 0.4s; }
-.ts-edit {
-  margin: 0;
-  padding: 4px 6px !important;
-  border: 1px solid transparent !important;
-  background: transparent !important;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.ts-edit:hover { border-color: var(--border) !important; background: #fff !important; }
-.ts-edit:focus { border-color: var(--navy) !important; background: #fff !important; cursor: text; outline: none; }
-select.ts-edit { appearance: none; -webkit-appearance: none; font-weight: 500; text-overflow: ellipsis; }
-select.ts-edit:hover, select.ts-edit:focus { appearance: auto; -webkit-appearance: auto; }
-textarea.ts-edit.day-note {
-  display: block;
-  width: 100%;
-  resize: none;
-  overflow: hidden;
-  font-size: 13px;
-  line-height: 1.4;
-  font-family: inherit;
-}
-input.ts-edit.day-hours { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-input.ts-edit.day-hours::-webkit-inner-spin-button,
-input.ts-edit.day-hours::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 div.day-task { font-weight: 500; padding: 4px 7px 0; }
 div.day-note { font-size: 13px; padding: 4px 7px 0; }
-.day-table td.day-hours { padding-top: 12px; font-weight: 600; padding-right: 14px; }
+.day-table td.day-hours { padding-top: 12px; font-weight: 600; }
+.day-table td.row-btns { padding-top: 10px; }
 .day-table .declined-note,
 .list-table .declined-note { padding: 0 7px; }
 .day-empty { padding: 0 0 4px; }
@@ -822,17 +809,15 @@ button.ts-task-more:hover { background: #f6f1f8; }
 
 /* The month's hours: like Approvals, entries open under their task. */
 .list-table { margin-top: 0; }
-.list-table col.c-x { width: 64px; }
+.list-table col.c-actions { width: 128px; }
 .list-table .appr-task .pill { font-size: 11px; padding: 1px 7px; }
 .list-table .appr-note .pill { font-size: 11px; padding: 1px 7px; margin-right: 4px; }
-.list-table td.appr-entry-note .ts-edit { width: 100%; }
-.list-table input.ts-edit.day-hours { width: 56px; }
 
 @media (max-width: 600px) {
   /* Scrolls sideways, like other tables on phones. */
   .table-scroll table.day-table { min-width: 540px; }
   .day-table col.c-project { width: 96px; }
-  .day-table col.c-x { width: 40px; }
+  .day-table col.c-actions { width: 116px; }
   button.ts-task,
   .ts-task-head { grid-template-columns: minmax(0, 1fr) 56px; gap: 4px 10px; }
   button.ts-task .ts-task-bar { grid-column: 1 / -1; grid-row: 2; }
