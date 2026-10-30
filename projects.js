@@ -364,7 +364,7 @@ function renderBudget() {
 
   thead.innerHTML = internal
     ? `<tr><th class="internal-task-col">Task</th><th colspan="4">Hours logged</th></tr>`
-    : `<tr><th>Task</th><th class="c-money">Budget</th><th class="c-money">Spent</th><th class="c-bar">Progress</th><th class="c-money c-remaining">Remaining</th></tr>`;
+    : `<tr><th>Task</th><th class="c-money">Budget</th><th class="c-money">Spent</th><th class="c-bar">Progress</th><th class="c-money">Remaining</th></tr>`;
 
   // No tasks yet: say so, but still show the expense rows below.
   budgetEmpty.style.display = projectTasks.length ? "none" : "block";
@@ -387,7 +387,7 @@ function renderBudget() {
       totals.unassigned += use.unassigned;
       cells = `<td>${formatCurrency(use.budget)}</td><td>${formatCurrency(use.spent)}</td>
         <td class="progressCell">${budgetBarHtml(use.spent, use.committed, use.budget, false, invoiced)}</td>
-        <td class="c-remaining" ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>`;
+        <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>`;
     }
     const open = dueDates.filter((d) => d.taskId === t.id && isSubtask(d) && !d.completed);
     const overdue = open.some((d) => d.dueDate < todayISO());
@@ -438,7 +438,7 @@ function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = 
   const remaining = budget - spent;
   return `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
     <td>${budgetBarHtml(spent, committed, budget, false, invoiced)}</td>
-    <td class="c-remaining" ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>${extra}`;
+    <td ${remaining < 0 ? 'style="color:var(--red);"' : ""}>${formatCurrency(remaining)}</td>${extra}`;
 }
 
 function expenseRowsHtml(project, taskTotals, cols) {

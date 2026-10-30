@@ -4420,8 +4420,3 @@ textarea.mb-input:focus { outline: none; border-color: var(--navy-light); box-sh
   .mb-more { margin-left: 38px; }
 }
 
-/* Remaining is the number people look for: bold, in full text color. */
-#budgetTable td.c-remaining { font-weight: 700; color: var(--text); }
-#budgetTable th.c-remaining { color: var(--text); }
-#budgetTable tr.budget-subtotal-row td.c-remaining { font-weight: 700; color: var(--text); }
-#budgetTable tr.budget-total-row td.c-remaining { font-weight: 800; color: var(--plum); }
