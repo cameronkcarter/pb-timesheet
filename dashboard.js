@@ -56,13 +56,13 @@ if (selectedPersonId) {
 // ---------- Approvals ----------
 // For project managers and admins: one line saying what's waiting, opening
 // to the approvals list (see approvals.js). Starts closed so the Dashboard
-// stays short; remembers if you leave it open.
+// stays short (a link to #approvals opens it).
 const approvalsCard = document.getElementById("approvals");
 const approvalToggle = document.getElementById("approvalToggle");
 const approvalPanel = document.getElementById("approvalPanel");
 const approvalSummary = document.getElementById("approvalSummary");
 let approvalsOpen = location.hash === "#approvals";
-try { if (localStorage.getItem("pb_approvals_open") === "1") approvalsOpen = true; } catch (_) { /* no storage */ }
+try { localStorage.removeItem("pb_approvals_open"); } catch (_) { /* no storage */ } // no longer remembered
 
 const approvals = createApprovals({
   getData: () => ({ people, projects, tasks, assignments, timeEntries, expenses }),
@@ -89,7 +89,6 @@ function renderApprovals() {
 
 approvalToggle.addEventListener("click", () => {
   approvalsOpen = !approvalsOpen;
-  try { localStorage.setItem("pb_approvals_open", approvalsOpen ? "1" : "0"); } catch (_) { /* no storage */ }
   renderApprovals();
 });
 
