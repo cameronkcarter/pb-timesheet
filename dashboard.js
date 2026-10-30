@@ -258,7 +258,7 @@ function render() {
           <div class="pc-meta">${esc([project.client || (internal ? "Internal" : ""), pm ? `PM ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>
         </div>
         <div class="pc-hours">${internal ? `<span class="hb-label"><b>${fmtHrs(loggedTotal)} hrs logged</b></span>` : hoursBarHtml(assignedTotal, loggedTotal, Math.max(1, assignedTotal, loggedTotal))}</div>
-        <div class="pc-budget">${budgetPct != null ? `<b>${budgetPct}%</b><small>budget</small>` : ""}</div>
+        <div class="pc-budget">${budgetPct != null ? `<b>${budgetPct}%</b><small>budget used</small>` : ""}</div>
       </div>
       ${open ? `<div class="pc-body">
         ${taskRows ? `<div class="pc-tasks">
