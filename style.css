@@ -699,31 +699,57 @@ h1.login-title {
 
 /* The selected day: its entries, edited in place (borderless until hover). */
 .day-table { table-layout: fixed; }
-.day-table col.c-project { width: 140px; }
-.day-table col.c-task { width: 30%; }
-.day-table col.c-hours { width: 64px; }
-.day-table col.c-actions { width: 128px; }
-.day-table td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; }
-.day-project { padding-top: 13px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.day-table .pill { margin: 2px 0 0 7px; font-size: 11px; padding: 1px 7px; }
-/* Edit + x, or Save + Cancel while a row is open for editing. */
-td.row-btns { white-space: nowrap; }
-td.row-btns button { margin: 0 0 0 8px; vertical-align: middle; }
-td.row-btns button.link-btn { padding: 2px 0; font-weight: 600; }
-td.row-btns button.small { padding: 5px 12px; }
-tr.editing td { background: #faf6fc; }
-tr.editing select,
-tr.editing input,
-tr.editing textarea { margin: 0; padding: 5px 8px; font-size: 13px; }
-tr.editing input.edit-hours { width: 64px; text-align: right; }
-textarea.edit-note { display: block; width: 100%; resize: none; overflow: hidden; line-height: 1.4; font-family: inherit; }
-.day-table tr.flash td { background: #fbf2e6; transition: background 0.4s; }
-div.day-task { font-weight: 500; padding: 4px 7px 0; }
-div.day-note { font-size: 13px; padding: 4px 7px 0; }
-.day-table td.day-hours { padding-top: 12px; font-weight: 600; }
-.day-table td.row-btns { padding-top: 10px; }
-.day-table .declined-note,
-.list-table .declined-note { padding: 0 7px; }
+.day-table col.c-project { width: 136px; }
+.day-table col.c-task { width: 28%; }
+.day-table col.c-hours { width: 76px; }
+.day-table td { vertical-align: top; }
+.day-project { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Entries in both tables: a value and its edit box are the same size
+   (.cell: 32px tall, text 10px from the cell edge like the headers), so
+   opening a row for editing moves nothing. */
+.entry-table td.cell-td { padding: 2px 1px; vertical-align: top; }
+.entry-table .cell {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.entry-table select.cell,
+.entry-table input.cell { height: 32px; }
+.entry-table select.cell,
+.entry-table input.cell,
+.entry-table textarea.cell { background: #fff; border-color: #d9cfe0; }
+.entry-table .cell:focus { border-color: var(--navy); outline: none; }
+.entry-table textarea.cell { resize: none; overflow: hidden; }
+.entry-table .cell-task { font-weight: 500; }
+.entry-table .cell-hours { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.entry-table input.cell-hours { -moz-appearance: textfield; }
+.entry-table input.cell-hours::-webkit-inner-spin-button,
+.entry-table input.cell-hours::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.entry-table .pill { margin: 0 0 6px 9px; font-size: 11px; padding: 1px 7px; }
+.entry-table .declined-note { padding: 0 9px 6px; }
+.entry-table tr.editing td { background: #faf6fc; }
+.entry-table tr.editing td.cell-td { background: #faf6fc; }
+
+/* Cancel (while editing) | Edit / Save | x, in fixed places. */
+.row-btns { display: flex; align-items: center; justify-content: flex-end; gap: 6px; height: 32px; }
+.row-btns button { margin: 0; }
+.row-btns button.small { width: 52px; height: 30px; padding: 0; font-size: 12px; font-weight: 600; }
+.row-btns button.link-btn { margin: 0; padding: 0 4px; font-size: 12px; font-weight: 600; }
+.row-btns button.icon-btn { width: 28px; height: 30px; padding: 0; }
+.row-btns .invisible { visibility: hidden; }
+.day-table col.c-actions { width: 150px; }
 .day-empty { padding: 0 0 4px; }
 
 /* ---------- Projects page ---------- */
@@ -809,7 +835,9 @@ button.ts-task-more:hover { background: #f6f1f8; }
 
 /* The month's hours: like Approvals, entries open under their task. */
 .list-table { margin-top: 0; }
-.list-table col.c-actions { width: 128px; }
+.list-table col.c-actions { width: 150px; }
+.list-table tr.appr-entry td.cell-td { padding: 1px 1px; }
+.list-table .cell { font-size: 13px; }
 .list-table .appr-task .pill { font-size: 11px; padding: 1px 7px; }
 .list-table .appr-note .pill { font-size: 11px; padding: 1px 7px; margin-right: 4px; }
 
@@ -817,7 +845,7 @@ button.ts-task-more:hover { background: #f6f1f8; }
   /* Scrolls sideways, like other tables on phones. */
   .table-scroll table.day-table { min-width: 540px; }
   .day-table col.c-project { width: 96px; }
-  .day-table col.c-actions { width: 116px; }
+  .day-table col.c-actions { width: 140px; }
   button.ts-task,
   .ts-task-head { grid-template-columns: minmax(0, 1fr) 56px; gap: 4px 10px; }
   button.ts-task .ts-task-bar { grid-column: 1 / -1; grid-row: 2; }

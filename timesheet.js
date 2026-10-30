@@ -240,11 +240,22 @@ const holdRedraw = (container, force) => !force && !!container.querySelector("tr
 const isLocked = (e) => e.invoiced || e.paid;
 const declineNote = (e) => (e.declined && !e.approved && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : "");
 // The note box grows to show the whole note (see fitNotes).
-const noteInput = (e) => `<textarea class="edit-note" rows="1" placeholder="What did you work on?" aria-label="Note">${esc(e.note || "")}</textarea>`;
-const hoursInput = (e) => `<input type="number" class="edit-hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" />`;
-const rowActions = (e) => (editingId === e.id
-  ? `<button type="button" class="small" data-action="save-entry">Save</button><button type="button" class="link-btn" data-action="cancel-entry">Cancel</button>`
-  : `<button type="button" class="link-btn" data-action="edit-entry">Edit</button><button type="button" class="icon-btn" data-action="delete-entry" title="Delete" aria-label="Delete entry">&times;</button>`);
+const noteInput = (e) => `<textarea class="cell edit-note" rows="1" placeholder="What did you work on?" aria-label="Note">${esc(e.note || "")}</textarea>`;
+const hoursInput = (e) => `<input type="number" class="cell cell-hours edit-hours" min="0" step="0.25" value="${Number(e.hours || 0)}" aria-label="Hours" />`;
+// A value shown the same size as its edit box, so opening a row moves nothing.
+const cellText = (text, cls = "") => `<div class="cell ${cls}">${text}</div>`;
+// Three fixed slots, so nothing shifts: Cancel (only while editing),
+// Edit / Save, and x.
+const rowActions = (e) => {
+  const editing = editingId === e.id;
+  return `<div class="row-btns">
+    <button type="button" class="link-btn ${editing ? "" : "invisible"}" data-action="cancel-entry" ${editing ? "" : 'tabindex="-1" aria-hidden="true"'}>Cancel</button>
+    ${editing
+      ? '<button type="button" class="small" data-action="save-entry">Save</button>'
+      : '<button type="button" class="small secondary" data-action="edit-entry">Edit</button>'}
+    <button type="button" class="icon-btn" data-action="delete-entry" title="Delete" aria-label="Delete entry">&times;</button>
+  </div>`;
+};
 function fitNotes(container) {
   container.querySelectorAll("textarea.edit-note").forEach((t) => {
     t.style.height = "auto";
@@ -261,7 +272,7 @@ function renderDay(force = false) {
     dayEntries.innerHTML = `<div class="empty day-empty">Nothing logged this day yet.</div>`;
     return;
   }
-  dayEntries.innerHTML = `<div class="table-scroll"><table class="day-table">
+  dayEntries.innerHTML = `<div class="table-scroll"><table class="day-table entry-table">
       <colgroup><col class="c-project" /><col class="c-task" /><col /><col class="c-hours" /><col class="c-actions" /></colgroup>
       <thead><tr><th>Project</th><th>Task</th><th>Note</th><th class="num">Hours</th><th></th></tr></thead>
       <tbody>${entries.map(dayRowHtml).join("")}</tbody>
@@ -272,23 +283,19 @@ function renderDay(force = false) {
 function dayRowHtml(e) {
   const project = projects.find((p) => p.id === e.projectId);
   const task = tasks.find((t) => t.id === e.taskId);
-  const projectCell = `<td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>`;
-  if (editingId !== e.id) {
-    return `<tr data-entry-id="${e.id}">${projectCell}
-      <td><div class="day-task">${task ? esc(task.name) : "—"}</div>${flagPill(e)}</td>
-      <td><div class="day-note">${esc(e.note || "")}</div>${declineNote(e)}</td>
-      <td class="num day-hours">${fmtHrs(Number(e.hours || 0))}</td>
-      <td class="num row-btns">${isLocked(e) ? "" : rowActions(e)}</td>
-    </tr>`;
-  }
+  const editing = editingId === e.id;
   const options = tasks.filter((t) => t.projectId === e.projectId && (!t.closed || t.id === e.taskId)).sort(byTaskName);
-  return `<tr class="editing" data-entry-id="${e.id}">${projectCell}
-    <td><select class="edit-task" aria-label="Task">
-      ${options.map((t) => `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
-    </select></td>
-    <td>${noteInput(e)}</td>
-    <td class="num">${hoursInput(e)}</td>
-    <td class="num row-btns">${rowActions(e)}</td>
+  const taskCell = editing
+    ? `<select class="cell edit-task" aria-label="Task">
+        ${options.map((t) => `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+      </select>`
+    : cellText(task ? esc(task.name) : "—", "cell-task");
+  return `<tr class="${editing ? "editing" : ""}" data-entry-id="${e.id}">
+    <td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>
+    <td class="cell-td">${taskCell}${flagPill(e)}</td>
+    <td class="cell-td">${editing ? noteInput(e) : cellText(esc(e.note || ""))}${declineNote(e)}</td>
+    <td class="cell-td num">${editing ? hoursInput(e) : cellText(fmtHrs(Number(e.hours || 0)), "cell-hours")}</td>
+    <td class="cell-td">${isLocked(e) ? "" : rowActions(e)}</td>
   </tr>`;
 }
 
@@ -699,7 +706,7 @@ function renderList(force = false) {
   const projectIds = [...new Set(month.map((e) => e.projectId))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
   const taskName = (id) => tasks.find((t) => t.id === id)?.name || "—";
 
-  listView.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table list-table">
+  listView.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table list-table entry-table">
     <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" /><col /><col class="c-actions" /><col class="c-chev" /></colgroup>
     <thead><tr><th>Date</th><th>Task</th><th class="num">Hours</th><th>Notes</th><th></th><th></th></tr></thead>
     ${projectIds.map((pid) => {
@@ -728,9 +735,9 @@ function renderList(force = false) {
             return `<tr class="appr-entry ${editing ? "editing" : ""}" data-entry-id="${e.id}">
               <td class="appr-date">${entryDate(e.date)}</td>
               <td class="appr-task">${statusPill(e)}</td>
-              <td class="num">${editing ? hoursInput(e) : fmtHrs(Number(e.hours || 0))}</td>
-              <td class="appr-entry-note">${editing ? noteInput(e) : esc(e.note || "")}${editing ? "" : declineNote(e)}</td>
-              <td class="num row-btns" colspan="2">${isLocked(e) ? "" : rowActions(e)}</td>
+              <td class="cell-td num">${editing ? hoursInput(e) : cellText(fmtHrs(Number(e.hours || 0)), "cell-hours")}</td>
+              <td class="cell-td">${editing ? noteInput(e) : cellText(esc(e.note || ""))}${declineNote(e)}</td>
+              <td class="cell-td" colspan="2">${isLocked(e) ? "" : rowActions(e)}</td>
             </tr>`;
           }).join("") : ""}`;
         }).join("")}
