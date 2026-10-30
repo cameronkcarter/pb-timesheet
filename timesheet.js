@@ -30,7 +30,8 @@ let calMode = "weeks";       // last week and this one, or "month"
 let showOtherTasks = false;  // tasks on the project you're not assigned to
 let addingTask = false;      // the "+ New task" box on internal projects
 let openListKey = null;      // "<projectId>|<taskId>" open in the list
-let editingId = null;         // entry open for editing (one at a time)
+let editingId = null;         // entry open for editing in the list (one at a time)
+let formEditId = null;        // day entry loaded into the Log hours form by its Edit button
 try { if (localStorage.getItem("pb_timesheet_cal") === "month") calMode = "month"; } catch (_) { /* no storage */ }
 // timesheet.html?day=YYYY-MM-DD opens that day (e.g. "Fix" on a declined entry).
 const linkedDay = new URLSearchParams(location.search).get("day");
@@ -57,6 +58,7 @@ const entryHours = document.getElementById("entryHours");
 const entryNote = document.getElementById("entryNote");
 const existingHint = document.getElementById("existingHint");
 const submitEntry = document.getElementById("submitEntry");
+const cancelEdit = document.getElementById("cancelEdit");
 
 const listTitle = document.getElementById("listTitle");
 const listView = document.getElementById("listView");
@@ -195,6 +197,7 @@ function renderCalendar() {
 // Picking a day in the calendar leaves it where it is; anywhere else (Jump
 // to today, a link) also brings that day into view.
 function selectDay(iso, { moveCalendar = true } = {}) {
+  if (formEditId && iso !== selectedDay) resetForm();
   selectedDay = iso;
   if (moveCalendar) calAnchor = iso;
   renderAll();
@@ -245,7 +248,11 @@ const hoursInput = (e) => `<input type="number" class="cell cell-hours edit-hour
 // A value shown the same size as its edit box, so opening a row moves nothing.
 const cellText = (text, cls = "") => `<div class="cell ${cls}">${text}</div>`;
 // Three fixed slots, so nothing shifts: Cancel (only while editing),
-// Edit / Save, and x.
+// Edit / Save, and x. The day table's Edit opens the Log hours form instead.
+const dayActions = () => `<div class="row-btns">
+    <button type="button" class="small secondary" data-action="form-edit">Edit</button>
+    <button type="button" class="icon-btn" data-action="delete-entry" title="Delete" aria-label="Delete entry">&times;</button>
+  </div>`;
 const rowActions = (e) => {
   const editing = editingId === e.id;
   return `<div class="row-btns">
@@ -283,19 +290,12 @@ function renderDay(force = false) {
 function dayRowHtml(e) {
   const project = projects.find((p) => p.id === e.projectId);
   const task = tasks.find((t) => t.id === e.taskId);
-  const editing = editingId === e.id;
-  const options = tasks.filter((t) => t.projectId === e.projectId && (!t.closed || t.id === e.taskId)).sort(byTaskName);
-  const taskCell = editing
-    ? `<select class="cell edit-task" aria-label="Task">
-        ${options.map((t) => `<option value="${t.id}" ${t.id === e.taskId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
-      </select>`
-    : cellText(task ? esc(task.name) : "—", "cell-task");
-  return `<tr class="${editing ? "editing" : ""}" data-entry-id="${e.id}">
+  return `<tr class="${formEditId === e.id ? "in-form" : ""}" data-entry-id="${e.id}">
     <td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>
-    <td class="cell-td">${taskCell}${flagPill(e)}</td>
-    <td class="cell-td">${editing ? noteInput(e) : cellText(esc(e.note || ""))}${declineNote(e)}</td>
-    <td class="cell-td num">${editing ? hoursInput(e) : cellText(fmtHrs(Number(e.hours || 0)), "cell-hours")}</td>
-    <td class="cell-td">${isLocked(e) ? "" : rowActions(e)}</td>
+    <td class="cell-td">${cellText(task ? esc(task.name) : "—", "cell-task")}${flagPill(e)}</td>
+    <td class="cell-td">${cellText(esc(e.note || ""))}${declineNote(e)}</td>
+    <td class="cell-td num">${cellText(fmtHrs(Number(e.hours || 0)), "cell-hours")}</td>
+    <td class="cell-td">${isLocked(e) ? "" : dayActions()}</td>
   </tr>`;
 }
 
@@ -367,6 +367,7 @@ async function deleteEntry(entry) {
   }
   try {
     await TimeEntries.remove(id);
+    if (formEditId === id) clearForm();
     showToast("Entry deleted.", {
       action: "Undo",
       onAction: () => TimeEntries.add(data).catch((err) => showToast("Error: " + err.message)),
@@ -383,6 +384,10 @@ async function deleteEntry(entry) {
     if (!row) return;
     const action = btn.dataset.action;
     if (action === "edit-entry") setEditing(row.dataset.entryId);
+    if (action === "form-edit") {
+      const entry = timeEntries.find((x) => x.id === row.dataset.entryId);
+      if (entry) startFormEdit(entry);
+    }
     if (action === "cancel-entry") setEditing(null);
     if (action === "save-entry") saveEntry(row);
     if (action === "delete-entry") {
@@ -426,9 +431,11 @@ function selectedProjectIsInternal() {
 // Every open task on the project. On billable projects your assigned tasks
 // come first; the rest ("other tasks") can still be logged to — assignments
 // are the plan, not a gate — and your PM sees those hours flagged. Closed
-// tasks (e.g. finished proposals) are hidden.
+// tasks (e.g. finished proposals) are hidden unless the entry being edited
+// is on one.
 function myTaskOptions() {
-  const open = tasks.filter((t) => t.projectId === selectedProjectId && !t.closed).sort(byTaskName);
+  const editTaskId = formEditId && timeEntries.find((e) => e.id === formEditId)?.taskId;
+  const open = tasks.filter((t) => t.projectId === selectedProjectId && (!t.closed || t.id === editTaskId)).sort(byTaskName);
   if (selectedProjectIsInternal()) {
     return open.map((task) => ({ assignment: null, task, internal: true }));
   }
@@ -441,6 +448,31 @@ function myTaskOptions() {
 // logging again replaces it rather than adding a second one.
 function existingEntry() {
   return myEntriesOn(selectedDay).find((e) => e.taskId === selectedTaskId);
+}
+
+// When editing an entry and switching it to a task that already has its own
+// entry that day, the two would collide.
+function editConflict() {
+  const existing = existingEntry();
+  return !!(formEditId && existing && existing.id !== formEditId);
+}
+
+// Loads a day entry into the Log hours form (Save changes / Cancel).
+function startFormEdit(entry) {
+  if (editingId) setEditing(null);
+  formEditId = entry.id;
+  projectPicked = true;
+  selectedProjectId = entry.projectId;
+  selectedTaskId = entry.taskId;
+  showOtherTasks = false;
+  addingTask = false;
+  entryHours.value = entry.hours;
+  entryNote.value = entry.note || "";
+  isDirty = true;
+  renderLogForm();
+  renderDay(true);
+  document.querySelector(".day-log").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  entryHours.focus({ preventScroll: true });
 }
 
 function renderLogForm() {
@@ -569,22 +601,27 @@ async function saveNewTask() {
 // your PM).
 function renderExistingHint() {
   const existing = selectedTaskId ? existingEntry() : null;
+  const replacingId = formEditId || existing?.id;
   const notes = [];
-  submitEntry.textContent = existing ? "Update Entry" : "Log Hours";
+  submitEntry.textContent = formEditId ? "Save Changes" : existing ? "Update Entry" : "Log Hours";
   submitEntry.disabled = false;
-  if (existing && (existing.invoiced || existing.paid)) {
+  cancelEdit.hidden = !formEditId;
+  if (editConflict()) {
+    notes.push("You already have hours on that task this day — edit that entry instead");
+    submitEntry.disabled = true;
+  } else if (existing && (existing.invoiced || existing.paid)) {
     notes.push("Already invoiced for this day — can't be changed");
     submitEntry.disabled = true;
   } else if (selectedTaskId) {
-    if (existing) notes.push(`Replaces the ${fmtHrs(Number(existing.hours))} hrs already logged here`);
+    if (existing && !formEditId) notes.push(`Replaces the ${fmtHrs(Number(existing.hours))} hrs already logged here`);
     const option = myTaskOptions().find((c) => c.task.id === selectedTaskId);
     const hours = Number(entryHours.value) || 0;
-    if (hours > 0 && otherHoursOn(selectedDay, existing?.id) + hours > 24) {
+    if (hours > 0 && otherHoursOn(selectedDay, replacingId) + hours > 24) {
       notes.push("That's more than 24 hours for this day");
     }
     const assigned = option?.assignment ? assignedHours(option.assignment, { projects, people }) : 0;
     if (option?.assignment && assigned > 0 && hours > 0) {
-      const after = loggedOnTask(selectedTaskId, existing?.id) + hours;
+      const after = loggedOnTask(selectedTaskId, replacingId) + hours;
       if (after - assigned > 0.005) {
         notes.push(`${fmtHrs(after - assigned)} hrs past your ${fmtHrs(assigned)} assigned — that's OK, your PM will see it`);
       }
@@ -640,16 +677,25 @@ taskRowsEl.addEventListener("keydown", (e) => {
   });
   el.addEventListener("keydown", (e) => {
     if (e.key === "Enter") submitEntry.click();
+    if (e.key === "Escape" && formEditId) clearForm();
   });
 });
 
-function clearForm() {
+function resetForm() {
   entryHours.value = "";
   entryNote.value = "";
   isDirty = false;
   selectedTaskId = null;
-  renderLogForm();
+  formEditId = null;
 }
+
+function clearForm() {
+  resetForm();
+  renderLogForm();
+  renderDay(true);
+}
+
+cancelEdit.addEventListener("click", clearForm);
 
 submitEntry.addEventListener("click", async () => {
   const projectId = selectedProjectId;
@@ -661,17 +707,32 @@ submitEntry.addEventListener("click", async () => {
   if (!projectId || !taskId) return showToast("Choose a task first.");
   if (!hours || hours <= 0) return showToast("Enter hours worked.");
   if (!note) return showToast("Add a note describing what you worked on.");
+  if (editConflict()) return showToast("You already have hours on that task this day — edit that entry instead.");
 
   const existing = existingEntry();
   if (existing && (existing.invoiced || existing.paid)) {
     return showToast("This day/task has already been invoiced and can't be changed here.");
   }
-  if (otherHoursOn(date, existing?.id) + hours > 24) {
+  if (otherHoursOn(date, formEditId || existing?.id) + hours > 24) {
     return showToast("That's more than 24 hours for this day — check the hours.");
   }
 
   try {
-    if (existing) {
+    const editing = formEditId && timeEntries.find((e) => e.id === formEditId);
+    if (editing) {
+      // Can move the entry to another task or project on the same day. Undo
+      // puts the old values (and any decline) back; an entry that was
+      // approved stays sent for approval again.
+      const before = {
+        projectId: editing.projectId, taskId: editing.taskId, hours: Number(editing.hours || 0), note: editing.note || "",
+        declined: !!editing.declined, declineReason: editing.declineReason || null,
+      };
+      await TimeEntries.update(editing.id, { projectId, taskId, hours, note, ...approvalFields(projectId) });
+      showToast("Entry updated.", {
+        action: "Undo",
+        onAction: () => TimeEntries.update(editing.id, before).catch((err) => showToast("Error: " + err.message)),
+      });
+    } else if (existing) {
       await TimeEntries.update(existing.id, { hours, note, ...approvalFields(projectId) });
       showToast("Entry updated.");
     } else {

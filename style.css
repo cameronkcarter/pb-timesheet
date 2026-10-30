@@ -749,7 +749,9 @@ h1.login-title {
 .row-btns button.link-btn { margin: 0; padding: 0 4px; font-size: 12px; font-weight: 600; }
 .row-btns button.icon-btn { width: 28px; height: 30px; padding: 0; }
 .row-btns .invisible { visibility: hidden; }
-.day-table col.c-actions { width: 150px; }
+.day-table col.c-actions { width: 104px; }
+.day-table tr.in-form td { background: #f3ecf7; }
+.day-table tr.in-form td:first-child { box-shadow: inset 3px 0 0 var(--navy); }
 .day-empty { padding: 0 0 4px; }
 
 /* ---------- Projects page ---------- */
@@ -831,6 +833,8 @@ button.ts-task-more:hover { background: #f6f1f8; }
 .ts-entry-line #entryHours { flex: 0 0 76px; }
 .ts-entry-line #entryNote { flex: 1; min-width: 0; }
 .ts-entry-line button { margin: 0; white-space: nowrap; }
+.ts-entry-line #cancelEdit { font-weight: 600; padding: 0 4px; }
+.ts-entry-line #cancelEdit[hidden] { display: none; }
 #existingHint.warn { margin-top: 8px; }
 
 /* The month's hours: like Approvals, entries open under their task. */
@@ -845,7 +849,7 @@ button.ts-task-more:hover { background: #f6f1f8; }
   /* Scrolls sideways, like other tables on phones. */
   .table-scroll table.day-table { min-width: 540px; }
   .day-table col.c-project { width: 96px; }
-  .day-table col.c-actions { width: 140px; }
+  .day-table col.c-actions { width: 100px; }
   button.ts-task,
   .ts-task-head { grid-template-columns: minmax(0, 1fr) 56px; gap: 4px 10px; }
   button.ts-task .ts-task-bar { grid-column: 1 / -1; grid-row: 2; }
@@ -853,6 +857,7 @@ button.ts-task-more:hover { background: #f6f1f8; }
   .ts-entry-line { flex-wrap: wrap; }
   .ts-entry-line #entryNote { flex-basis: calc(100% - 84px); }
   .ts-entry-line button { flex: 1; }
+  .ts-entry-line #cancelEdit { flex: 0 0 auto; }
 }
 
 .table-scroll table {
