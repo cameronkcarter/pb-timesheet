@@ -185,10 +185,11 @@ function render() {
     return;
   }
 
-  // Each card: a row per task with your hours bar (one scale per card, like
-  // the Projects tab) and the task's budget used, its subtasks underneath,
-  // then a Total row: your hours logged and left, and the project's budget
-  // used. Staff see budgets as percentages only, never dollars.
+  // Each card is one row until opened: the project (client, PM, a chip for
+  // subtasks due), your hours on it as a bar and its budget used. Opened, a
+  // row per task with your hours bar (one scale per card, like the Projects
+  // tab) and the task's budget used, its subtasks underneath. Staff see
+  // budgets as percentages only, never dollars.
   const byDue = (a, b) => (!!a.completed - !!b.completed) || (a.dueDate < b.dueDate ? -1 : 1);
   // Subtasks sit under their task: name with its due date after it, then
   // Edit / ✓ complete / × delete at the far right.
@@ -228,7 +229,11 @@ function render() {
       const a = myAssignments.find((x) => x.taskId === taskId);
       return a ? assignedHours(a, { projects, people }) : null;
     };
-    const leftTotal = myAssignments.reduce((s, a) => s + Math.max(0, assignedHours(a, { projects, people }) - loggedOn(a.taskId)), 0);
+    const assignedTotal = myAssignments.reduce((s, a) => s + assignedHours(a, { projects, people }), 0);
+    const loggedTotal = sumHours(projectEntries);
+    const openItems = projectItems.filter((d) => !d.completed);
+    const overdue = openItems.filter((d) => d.dueDate < today).length;
+    const open = isCardOpen(projectId, overdue > 0);
     const projectBudget = tasks.filter((t) => t.projectId === projectId).reduce((s, t) => s + Number(t.budget || 0), 0);
     const budgetPct = pctOf(billedAmount(timeEntries.filter((e) => e.projectId === projectId && !e.declined), { projects, people }), projectBudget);
 
@@ -242,25 +247,27 @@ function render() {
         <div class="pc-budget">${budgetHtml(pct)}</div>
       </div>${itemsHtml(projectItems.filter((d) => d.taskId === task.id))}`;
     }).join("");
-    const totalRow = internal || rows.length < 2 ? "" : `<div class="pc-task pc-total">
-        <div class="pc-task-name">Total</div>
-        <div class="pc-hours"><span class="hb-label"><b>${fmtHrs(sumHours(projectEntries))} logged</b> · ${fmtHrs(leftTotal)} left</span></div>
-        <div class="pc-budget">${budgetHtml(budgetPct)}</div>
-      </div>`;
     const generalItems = projectItems.filter((d) => !d.taskId);
 
-    return `<div class="card project-card-v2" style="--c:${color};">
-      <div class="pc-head">
-        <h2><span class="cal-swatch"></span>${esc(project.name)}</h2>
-        <div class="pc-meta">${esc([project.client || (internal ? "Internal" : ""), pm ? `PM ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>
+    const chip = overdue ? `<span class="pc-chip overdue">${overdue} overdue</span>`
+      : openItems.length ? `<span class="pc-chip">${openItems.length} due</span>` : "";
+    return `<div class="card project-card-v2 ${open ? "open" : ""}" style="--c:${color};">
+      <div class="pc-head" role="button" tabindex="0" aria-expanded="${open}" data-action="toggle-card" data-project-id="${projectId}">
+        <div class="pc-title">
+          <h2><span class="pc-chev" aria-hidden="true">&#9656;</span><span class="cal-swatch"></span>${esc(project.name)}${chip}</h2>
+          <div class="pc-meta">${esc([project.client || (internal ? "Internal" : ""), pm ? `PM ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>
+        </div>
+        <div class="pc-hours">${internal ? `<span class="hb-label"><b>${fmtHrs(loggedTotal)} logged</b></span>` : hoursBarHtml(assignedTotal, loggedTotal, Math.max(1, assignedTotal, loggedTotal))}</div>
+        <div class="pc-budget">${budgetPct != null ? `<b>${budgetPct}%</b><small>budget</small>` : ""}</div>
       </div>
-      ${taskRows ? `<div class="pc-tasks">
-        <div class="pc-task pc-task-head"><div>Task</div><div>Your hours</div><div class="pc-budget">${internal ? "" : "Budget used"}</div></div>
-        ${taskRows}
-        ${totalRow}
+      ${open ? `<div class="pc-body">
+        ${taskRows ? `<div class="pc-tasks">
+          <div class="pc-task pc-task-head"><div>Task</div><div>Your hours</div><div class="pc-budget">${internal ? "" : "Budget used"}</div></div>
+          ${taskRows}
+        </div>` : ""}
+        ${generalItems.length ? `<div class="pc-tasks pc-general"><div class="pc-task"><div class="pc-task-name">Other subtasks</div></div>${itemsHtml(generalItems)}</div>` : ""}
+        ${cardFooterHtml(project)}
       </div>` : ""}
-      ${generalItems.length ? `<div class="pc-tasks pc-general"><div class="pc-task"><div class="pc-task-name">Other subtasks</div></div>${itemsHtml(generalItems)}</div>` : ""}
-      ${cardFooterHtml(project)}
     </div>`;
   }).join("");
 }
@@ -360,6 +367,22 @@ function renderPay(myEntries) {
 
 function myExpenses() {
   return expenses.filter((e) => e.personId === selectedPersonId && e.kind !== "sub");
+}
+
+// Which project cards are open, remembered in this browser ({ projectId:
+// true/false }). Cards you haven't opened or closed start closed, unless they
+// have overdue subtasks.
+const CARDS_KEY = "pb_dashboard_cards_open";
+let cardsOpen = {};
+try { cardsOpen = JSON.parse(localStorage.getItem(CARDS_KEY)) || {}; } catch (_) { /* no storage */ }
+function isCardOpen(projectId, hasOverdue) {
+  return projectId in cardsOpen ? cardsOpen[projectId] : hasOverdue;
+}
+function toggleCard(head) {
+  const pid = head.dataset.projectId;
+  cardsOpen[pid] = head.getAttribute("aria-expanded") !== "true";
+  try { localStorage.setItem(CARDS_KEY, JSON.stringify(cardsOpen)); } catch (_) { /* no storage */ }
+  render();
 }
 
 // Bottom of each card: "+ Subtask" and "+ Expense", then a summary of your
@@ -475,6 +498,10 @@ const expenseEditor = createExpenseEditor({
 projectSummaryCards.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
+  if (btn.dataset.action === "toggle-card") {
+    toggleCard(btn);
+    return;
+  }
   if (btn.dataset.action === "add-expense") {
     expenseEditor.open(null, { kind: "project", projectId: btn.dataset.projectId });
     return;
@@ -500,6 +527,13 @@ projectSummaryCards.addEventListener("click", (e) => {
   if (action === "add-subtask") {
     itemEditor.open(null, { mode: "subtask", projectId: btn.dataset.projectId, personId: selectedPersonId });
   }
+});
+
+projectSummaryCards.addEventListener("keydown", (e) => {
+  const head = e.target.closest(".pc-head");
+  if (!head || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  toggleCard(head);
 });
 
 toggleCompletedBtn.addEventListener("click", () => {
