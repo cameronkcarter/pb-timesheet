@@ -83,7 +83,8 @@ nav a.active {
 }
 
 /* Notifications: the bell beside your name, and its list. */
-.notif { position: relative; }
+.notif { position: relative; margin-left: auto; }
+.notif + .nav-user-name { margin-left: 0 !important; }
 .notif-bell {
   position: relative;
   display: flex;
@@ -91,7 +92,7 @@ nav a.active {
   justify-content: center;
   width: 36px;
   height: 36px;
-  margin: 0 4px 0 -6px;
+  margin: 0 -6px 0 0;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -826,6 +827,9 @@ h1.login-title {
 .row-btns button.icon-btn { width: 28px; height: 30px; padding: 0; }
 .row-btns .invisible { visibility: hidden; }
 .day-table col.c-actions { width: 104px; }
+/* Hours read from the left here, under their header. */
+.day-table th.num,
+.day-table td.num .cell-hours { text-align: left; }
 .day-table tr.in-form td { background: #f3ecf7; }
 .day-table tr.in-form td:first-child { box-shadow: inset 3px 0 0 var(--navy); }
 .day-empty { padding: 0 0 4px; }
@@ -849,9 +853,9 @@ h1.login-title {
 .day-log {
   margin-top: 14px;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid #e2d8ea;
   border-radius: 10px;
-  background: #fcfbfd;
+  background: #f3eef6;
 }
 .day-log-title { font-size: 14px; font-weight: 700; }
 .ts-tasks { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
@@ -909,8 +913,6 @@ button.ts-task-more:hover { background: #f6f1f8; }
 .ts-entry-line #entryHours { flex: 0 0 76px; }
 .ts-entry-line #entryNote { flex: 1; min-width: 0; }
 .ts-entry-line button { margin: 0; white-space: nowrap; }
-.ts-entry-line #cancelEdit { font-weight: 600; padding: 0 4px; }
-.ts-entry-line #cancelEdit[hidden] { display: none; }
 #existingHint.warn { margin-top: 8px; }
 
 /* The month's hours: like Approvals, entries open under their task. */
@@ -933,7 +935,6 @@ button.ts-task-more:hover { background: #f6f1f8; }
   .ts-entry-line { flex-wrap: wrap; }
   .ts-entry-line #entryNote { flex-basis: calc(100% - 84px); }
   .ts-entry-line button { flex: 1; }
-  .ts-entry-line #cancelEdit { flex: 0 0 auto; }
 }
 
 .table-scroll table {

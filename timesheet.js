@@ -58,7 +58,6 @@ const entryHours = document.getElementById("entryHours");
 const entryNote = document.getElementById("entryNote");
 const existingHint = document.getElementById("existingHint");
 const submitEntry = document.getElementById("submitEntry");
-const cancelEdit = document.getElementById("cancelEdit");
 
 const listTitle = document.getElementById("listTitle");
 const listView = document.getElementById("listView");
@@ -386,7 +385,8 @@ async function deleteEntry(entry) {
     if (action === "edit-entry") setEditing(row.dataset.entryId);
     if (action === "form-edit") {
       const entry = timeEntries.find((x) => x.id === row.dataset.entryId);
-      if (entry) startFormEdit(entry);
+      if (formEditId === entry?.id) clearForm();
+      else if (entry) startFormEdit(entry);
     }
     if (action === "cancel-entry") setEditing(null);
     if (action === "save-entry") saveEntry(row);
@@ -457,7 +457,8 @@ function editConflict() {
   return !!(formEditId && existing && existing.id !== formEditId);
 }
 
-// Loads a day entry into the Log hours form (Save changes / Cancel).
+// Loads a day entry into the Log hours form (Update Entry). Its Edit again,
+// Escape or picking another day puts the form back.
 function startFormEdit(entry) {
   if (editingId) setEditing(null);
   formEditId = entry.id;
@@ -471,7 +472,10 @@ function startFormEdit(entry) {
   isDirty = true;
   renderLogForm();
   renderDay(true);
-  document.querySelector(".day-log").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  // Bring Log hours to the top of the window, so it's clear that's where the
+  // entry opened.
+  const top = document.querySelector(".day-log").getBoundingClientRect().top + window.scrollY - 12;
+  window.scrollTo({ top, behavior: "smooth" });
   entryHours.focus({ preventScroll: true });
 }
 
@@ -603,9 +607,8 @@ function renderExistingHint() {
   const existing = selectedTaskId ? existingEntry() : null;
   const replacingId = formEditId || existing?.id;
   const notes = [];
-  submitEntry.textContent = formEditId ? "Save Changes" : existing ? "Update Entry" : "Log Hours";
+  submitEntry.textContent = formEditId || existing ? "Update Entry" : "Log Hours";
   submitEntry.disabled = false;
-  cancelEdit.hidden = !formEditId;
   if (editConflict()) {
     notes.push("You already have hours on that task this day — edit that entry instead");
     submitEntry.disabled = true;
@@ -695,7 +698,6 @@ function clearForm() {
   renderDay(true);
 }
 
-cancelEdit.addEventListener("click", clearForm);
 
 submitEntry.addEventListener("click", async () => {
   const projectId = selectedProjectId;

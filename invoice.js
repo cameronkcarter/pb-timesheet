@@ -8,6 +8,7 @@ import { sheetSyncEnabled } from "./sheets.js";
 import { createSheetSync } from "./sheet-sync.js";
 import { billRateOf, paidAmount, isBillable } from "./rates.js";
 import { expenseLabel, expenseQtyText, createExpenseEditor } from "./expenses.js";
+import { notifyEntries } from "./notifications.js";
 
 const sessionPersonId = requireSession();
 
@@ -957,6 +958,7 @@ async function generate(row, isPreview, btn) {
       const billRates = Object.fromEntries(closing.map((e) => [e.id, entryRate(e)]));
       if (closing.length) await TimeEntries.markInvoiced(closing.map((e) => e.id), ref.id, billRates);
       if (exps.length) await Expenses.markInvoiced(exps.map((e) => e.id), ref.id);
+      notifyEntries([...closing, ...exps.map((e) => ({ ...e, isExpense: true }))], { by: sessionPersonId, data: { people, projects }, verb: "invoiced" });
       delete drafts[project.id];
       openRow = `inv:${ref.id}`;
       showToast("Invoice generated.");

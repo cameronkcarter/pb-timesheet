@@ -1,6 +1,7 @@
 // Notifications: a bell in the top bar, beside your name, listing what
 // someone else changed about your hours and expenses (approved, declined,
-// edited, moved back to pending, reimbursed) and tasks you were added to.
+// edited, moved back to pending, invoiced, reimbursed) and tasks you were
+// added to.
 //
 // Each is a document written by whoever made the change (an admin or the
 // project's manager; see firestore.rules):
@@ -84,7 +85,7 @@ function ago(iso) {
   return then.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// Adds the bell beside your name in the top bar (once per page).
+// Adds the bell just left of your name in the top bar (once per page).
 export function mountBell(person) {
   const nameEl = document.getElementById("navUserName");
   if (!person || !nameEl || document.getElementById("notifBell")) return;
@@ -94,7 +95,7 @@ export function mountBell(person) {
       ${BELL}<span class="notif-count" hidden></span>
     </button>
     <div class="notif-panel" role="dialog" aria-label="Notifications" hidden></div>`;
-  nameEl.after(wrap);
+  nameEl.before(wrap);
   const bell = wrap.querySelector(".notif-bell");
   const count = wrap.querySelector(".notif-count");
   const panel = wrap.querySelector(".notif-panel");
