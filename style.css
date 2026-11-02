@@ -2364,7 +2364,7 @@ table.appr-table {
 
 .appr-table col.c-date { width: 128px; }
 .appr-table col.c-task { width: 28%; }
-.appr-table col.c-hours { width: 64px; }
+.appr-table col.c-hours { width: 56px; }
 .appr-table col.c-actions { width: 172px; }
 .appr-table col.c-chev { width: 30px; }
 
@@ -3077,7 +3077,7 @@ select.analytics-select {
 .appr-table .appr-inline-hours { width: 64px; text-align: right; }
 .appr-table textarea.appr-inline-note { display: block; resize: none; overflow: hidden; line-height: 1.4; font-family: inherit; }
 /* Billed: the client's amount, with the person's bill rate under it. */
-.appr-table col.c-billed { width: 96px; }
+.appr-table col.c-billed { width: 90px; }
 .appr-table td.appr-billed { font-variant-numeric: tabular-nums; }
 .appr-table .appr-rate { font-size: 11px; font-weight: 400; color: var(--text-muted); }
 /* A project's total, under its people. */
@@ -4167,15 +4167,15 @@ button.appr-panel-toggle:hover { background: #faf7fc; }
 .appr-panel-body .empty { padding: 18px 20px; }
 .appr-panel-body .pay-scroll { padding: 0 12px 8px; }
 
-table.appr-table { min-width: 960px; }
+table.appr-table { min-width: 860px; }
 table.appr-table.appr-no-money { min-width: 700px; }
-.appr-table col.c-date { width: 108px; }
-.appr-table col.c-who { width: 160px; }
-.appr-table col.c-hours { width: 64px; }
-.appr-table col.c-rate { width: 84px; }
-.appr-table col.c-billed { width: 96px; }
-.appr-table col.c-actions.pending { width: 236px; }
-.appr-table col.c-actions.approved { width: 170px; }
+.appr-table col.c-date { width: 100px; }
+.appr-table col.c-who { width: 140px; }
+.appr-table col.c-hours { width: 56px; }
+.appr-table col.c-rate { width: 80px; }
+.appr-table col.c-billed { width: 90px; }
+.appr-table col.c-actions.pending { width: 222px; }
+.appr-table col.c-actions.approved { width: 150px; }
 .appr-table col.c-actions.internal { width: 80px; }
 .appr-table td.appr-rate-col { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .appr-table td.appr-who { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4199,7 +4199,6 @@ table.appr-table.appr-no-money { min-width: 700px; }
 .appr-table tr.appr-entry .appr-move { font-size: 12px; color: var(--text-muted); }
 .appr-table tr.appr-entry .appr-move:hover { color: var(--navy); }
 .appr-table tr.appr-group td { background: #fff; font-weight: 700; }
-main.wide { max-width: 1280px; }
 .appr-table th.num, .appr-table td.num { text-align: right; white-space: nowrap; }
 .appr-table th.num + th:not(.num), .appr-table td.num + td:not(.num) { padding-left: 18px; }
 .inv-expenses th.c-cat { width: 130px; }
@@ -4209,3 +4208,16 @@ main.wide { max-width: 1280px; }
 .inv-subs-missing strong { color: var(--text); }
 .inv-subs-missing .link-btn { margin: 0; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .inv-actions .btn-void { margin-right: auto; }
+/* An open row's entries: a tinted band with a purple edge, closed off before
+   the next person so it's clear where they end. */
+.appr-table tr.appr-row.open td { background: #ece0f3; font-weight: 600; }
+.appr-table tr.appr-sub-head td,
+.appr-table tr.appr-entry td,
+.appr-table tr.appr-entry.stripe td,
+.appr-table tr.appr-open-end td { background: #fbf8fd; }
+.appr-table tr.appr-entry.stripe td { background: #f5eff9; }
+.appr-table tr.appr-sub-head td:first-child,
+.appr-table tr.appr-entry td:first-child,
+.appr-table tr.appr-open-end td:first-child { box-shadow: inset 3px 0 0 var(--navy-light); }
+.appr-table tr.appr-open-end td { height: 10px; padding: 0; border-bottom: 2px solid #d9c8e4; }
+.appr-table tr.appr-row.open + tr.appr-sub-head td { padding-top: 10px; }

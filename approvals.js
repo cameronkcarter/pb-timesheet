@@ -217,11 +217,12 @@ export function createApprovals({ getData, sessionPersonId }) {
     return `<div class="appr-btns">${edit}<span class="appr-split"><button type="button" class="split-decline" data-action="decline-entry" ${id}>Decline</button>${noCharge}<button type="button" class="split-approve" data-action="approve-entry" ${id}>Approve</button></span></div>`;
   }
 
-  // An open row: its entries under a line per task (or person).
+  // An open row: its entries under a line per task (or person), in a tinted
+  // band that closes before the next row.
   function openRowHtml(r) {
     return subGroups(r.entries).map((s) => `
       <tr class="appr-sub-head"><td colspan="${cols()}">${esc(s.label)}${s.key === "~expenses" ? "" : ` <span class="appr-muted">· ${fmtHrs(s.hours)} hrs</span>`}</td></tr>
-      ${s.entries.map(entryRowHtml).join("")}`).join("");
+      ${s.entries.map(entryRowHtml).join("")}`).join("") + `<tr class="appr-open-end"><td colspan="${cols()}"></td></tr>`;
   }
 
   function tableHtml() {

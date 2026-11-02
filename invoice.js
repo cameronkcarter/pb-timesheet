@@ -344,7 +344,7 @@ function fieldsHtml(row) {
   </div>`;
 }
 
-// Subconsultants on the project with no invoice recorded since its last
+// Subconsultants on the project with no bill added since its last
 // invoice — a reminder before billing the client. Nothing goes on the
 // client's invoice for them.
 function missingSubsHtml(row) {
@@ -352,8 +352,8 @@ function missingSubsHtml(row) {
   const missing = (row.project.subconsultants || []).filter((sub) => sub.name && !recorded.has(sub.id));
   if (!missing.length) return "";
   return `<div class="inv-subs-missing">${missing.map((sub) => `<div>
-      <span>No invoice recorded from <strong>${esc(sub.name)}</strong> this period.</span>
-      <button type="button" class="link-btn" data-action="record-sub" data-sub="${esc(sub.id)}">+ Record Invoice</button>
+      <span>No bill from <strong>${esc(sub.name)}</strong> added this period.</span>
+      <button type="button" class="link-btn" data-action="record-sub" data-sub="${esc(sub.id)}">+ Add Bill</button>
     </div>`).join("")}</div>`;
 }
 
@@ -476,8 +476,8 @@ function render() {
   </table></div>` : `<div class="empty">${paidCount ? "Nothing outstanding." : "No invoices yet."}</div>`;
 }
 
-// ---------- Subconsultant invoices ----------
-// Invoices received from subconsultants: recorded here (or on the Projects
+// ---------- Subconsultant bills ----------
+// Bills (invoices) received from subconsultants: added here (or on the Projects
 // tab), then billed to the client on that project's next invoice.
 function renderSubInvoices() {
   const subs = expenses.filter((e) => e.kind === "sub").sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -487,7 +487,7 @@ function renderSubInvoices() {
   subTotal.textContent = [notInvoiced ? `${formatCurrency(notInvoiced)} not invoiced` : "", owed ? `${formatCurrency(owed)} owed to subs` : ""]
     .filter(Boolean).join(" · ");
   if (!subs.length) {
-    subBody.innerHTML = '<div class="empty">None recorded yet.</div>';
+    subBody.innerHTML = '<div class="empty">No subconsultant bills yet.</div>';
     return;
   }
   subBody.innerHTML = `<div class="pay-scroll"><table class="pay-table inv-table">

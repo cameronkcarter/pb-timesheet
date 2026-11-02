@@ -346,7 +346,7 @@ function renderBudget() {
 // ---------- Expenses in the Budget table ----------
 // Under the tasks: Tasks subtotal, Project expenses, one row per
 // subconsultant, Expenses subtotal and the grand Total. Expense rows open to
-// list what was recorded, with "+ Expense" / "+ Sub invoice".
+// list what was recorded, with "+ Add Expense" / "+ Add Bill".
 function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = "") {
   const remaining = budget - spent;
   return `<td>${formatCurrency(budget)}</td><td>${formatCurrency(spent)}</td>
@@ -408,9 +408,9 @@ function expenseListHtml(g) {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
   const canRecordSub = isAdmin() || isPmOf(project.id);
   const addBtn = g.sub
-    ? (canRecordSub ? `<button class="link-btn" data-action="add-expense" data-kind="sub" data-sub-id="${g.sub.id}">+ Sub invoice</button>` : "")
-    : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Expense</button>`;
-  if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">Nothing recorded yet.</div>${addBtn}`;
+    ? (canRecordSub ? `<button class="link-btn" data-action="add-expense" data-kind="sub" data-sub-id="${g.sub.id}">+ Add Bill</button>` : "")
+    : `<button class="link-btn" data-action="add-expense" data-kind="project">+ Add Expense</button>`;
+  if (!items.length) return `<div class="empty" style="padding:2px 0 6px;">${g.sub ? "No bills yet." : "No expenses yet."}</div>${addBtn}`;
   const shortDate = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
   // Laid out like subtasks: a header, then the rows in a tinted band. Project
   // expenses: Description | Type | Date | Paid by | Amount (quantity × rate
