@@ -4167,14 +4167,14 @@ button.appr-panel-toggle:hover { background: #faf7fc; }
 .appr-panel-body .empty { padding: 18px 20px; }
 .appr-panel-body .pay-scroll { padding: 0 12px 8px; }
 
-table.appr-table { min-width: 860px; }
+table.appr-table { min-width: 900px; }
 table.appr-table.appr-no-money { min-width: 700px; }
-.appr-table col.c-date { width: 100px; }
-.appr-table col.c-who { width: 140px; }
+.appr-table col.c-date { width: 128px; }
+.appr-table col.c-who { width: 150px; }
 .appr-table col.c-hours { width: 56px; }
 .appr-table col.c-rate { width: 80px; }
 .appr-table col.c-billed { width: 90px; }
-.appr-table col.c-actions.pending { width: 222px; }
+.appr-table col.c-actions.pending { width: 214px; }
 .appr-table col.c-actions.approved { width: 150px; }
 .appr-table col.c-actions.internal { width: 80px; }
 .appr-table td.appr-rate-col { color: var(--text-muted); font-variant-numeric: tabular-nums; }
@@ -4208,16 +4208,6 @@ table.appr-table.appr-no-money { min-width: 700px; }
 .inv-subs-missing strong { color: var(--text); }
 .inv-subs-missing .link-btn { margin: 0; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .inv-actions .btn-void { margin-right: auto; }
-/* An open row's entries: a tinted band with a purple edge, closed off before
-   the next person so it's clear where they end. */
-.appr-table tr.appr-row.open td { background: #ece0f3; font-weight: 600; }
-.appr-table tr.appr-sub-head td,
-.appr-table tr.appr-entry td,
-.appr-table tr.appr-entry.stripe td,
-.appr-table tr.appr-open-end td { background: #fbf8fd; }
-.appr-table tr.appr-entry.stripe td { background: #f5eff9; }
-.appr-table tr.appr-sub-head td:first-child,
-.appr-table tr.appr-entry td:first-child,
-.appr-table tr.appr-open-end td:first-child { box-shadow: inset 3px 0 0 var(--navy-light); }
-.appr-table tr.appr-open-end td { height: 10px; padding: 0; border-bottom: 2px solid #d9c8e4; }
-.appr-table tr.appr-row.open + tr.appr-sub-head td { padding-top: 10px; }
+/* Where an open row's entries end: a line before the next person. */
+.appr-table tr.appr-open-end td { height: 8px; padding: 0; background: #fff; border-bottom: 2px solid #d9c8e4; }
+.appr-table td.appr-date { overflow: hidden; text-overflow: ellipsis; }
