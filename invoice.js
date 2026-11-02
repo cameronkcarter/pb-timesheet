@@ -79,10 +79,11 @@ function nextInvoiceNumber() {
 
 // ---------- Invoices tables ----------
 // "Ready to invoice": a row per billable project for approved hours not invoiced
-// yet (its next invoice). "Sent invoices": ones already generated, newest first,
-// paid ones hidden unless asked for. Clicking a row shows each person's
+// yet (its next invoice). "Invoices": ones already created, newest first —
+// Not sent, then Outstanding once marked sent, then Paid (paid ones hidden
+// unless asked for). Clicking a row shows each person's
 // hours (with their notes). The next invoice's # and billing period can be
-// edited until it's generated; after that they're locked.
+// edited until it's created; after that they're locked.
 const drafts = {};        // projectId -> { number, label } typed over
 let openRow = null;       // "next:<projectId>" or "inv:<invoiceId>"
 let openNotes = null;     // personId whose notes show in the open row
@@ -260,6 +261,9 @@ function invoiceRows() {
     });
 }
 
+// Invoices made before "Mark Sent" existed count as sent.
+const isSent = (inv) => inv.sent !== false;
+
 function statusHtml(row) {
   if (row.kind === "next") {
     return row.entries.length || row.exps.length
@@ -270,7 +274,7 @@ function statusHtml(row) {
   if (inv.void) return '<span class="pay-status void">Void</span>';
   return (inv.paid
     ? `<span class="pay-status paid">Paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}</span>`
-    : '<span class="pay-status invoiced">Outstanding</span>') +
+    : isSent(inv) ? '<span class="pay-status invoiced">Outstanding</span>' : '<span class="pay-status pending">Not sent</span>') +
     (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — Sync is on Admin">Not in sheet</span>' : "");
 }
 
@@ -340,21 +344,34 @@ function fieldsHtml(row) {
   </div>`;
 }
 
+// Subconsultants on the project with no invoice recorded since its last
+// invoice — a reminder before billing the client. Nothing goes on the
+// client's invoice for them.
+function missingSubsHtml(row) {
+  const recorded = new Set([...row.exps, ...row.pendingExps].filter((e) => e.kind === "sub").map((e) => e.subId));
+  const missing = (row.project.subconsultants || []).filter((sub) => sub.name && !recorded.has(sub.id));
+  if (!missing.length) return "";
+  return `<div class="inv-subs-missing">${missing.map((sub) => `<div>
+      <span>No invoice recorded from <strong>${esc(sub.name)}</strong> this period.</span>
+      <button type="button" class="link-btn" data-action="record-sub" data-sub="${esc(sub.id)}">+ Record Invoice</button>
+    </div>`).join("")}</div>`;
+}
+
 function detailHtml(row) {
   if (row.kind === "next") {
     const waiting = [
       row.pending.length ? `${fmtHrs(sumHours(row.pending))} hrs` : "",
       row.pendingExps.length ? `${formatCurrency(sumAmount(row.pendingExps))} in expenses` : "",
     ].filter(Boolean).join(" and ");
-    const canGenerate = row.entries.length || row.exps.length;
+    const canCreate = row.entries.length || row.exps.length;
     return `${fieldsHtml(row)}
       ${row.entries.length ? peopleHtml(row.key, row.entries) : ""}
       ${unbilledNoteHtml(row.unbilled, "Also closes out")}
       ${expenseTableHtml(expenseRowsFor(row.project, row.exps))}
+      ${missingSubsHtml(row)}
       <div class="inv-actions">
         ${waiting ? `<a class="entry-status warn inv-warn" href="approvals.html"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See approvals</u></a>` : ""}
-        <button type="button" class="secondary" data-action="preview" ${canGenerate ? "" : "disabled"}>Preview PDF</button>
-        <button type="button" data-action="generate" ${canGenerate ? "" : "disabled"}>Generate invoice</button>
+        <button type="button" data-action="create" ${canCreate ? "" : "disabled"}>Create Invoice</button>
       </div>`;
   }
   const inv = row.inv;
@@ -362,16 +379,23 @@ function detailHtml(row) {
   if (inv.void) {
     return `<div class="inv-note">${esc(inv.periodLabel || "")} &middot; Voided${inv.voidedDate ? " " + shortDate(inv.voidedDate) : ""} — its hours and expenses went back to Unbilled hours.</div>
       ${expenseTableHtml(inv.expenseRows || [])}
-      <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}</div>`;
+      <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}</div>`;
   }
-  return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}</div>` : ""}
+  // Not sent: Mark Sent once it's emailed. Sent: Mark Paid once the client pays.
+  const next = inv.paid
+    ? '<button type="button" class="secondary" data-action="mark-unpaid">Undo Paid</button>'
+    : isSent(inv)
+      ? `<button type="button" class="link-btn" data-action="mark-unsent">Undo Sent</button>
+         <button type="button" data-action="mark-paid">Mark Paid</button>`
+      : '<button type="button" data-action="mark-sent">Mark Sent</button>';
+  return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}${isSent(inv) && inv.sentDate ? ` &middot; Sent ${shortDate(inv.sentDate)}` : ""}</div>` : ""}
     ${peopleHtml(row.key, row.entries, inv.laborRows)}
     ${unbilledNoteHtml(row.unbilled, "Closed out")}
     ${expenseTableHtml(inv.expenseRows || [])}
     <div class="inv-actions">
-      ${canPdf ? '<button type="button" class="secondary" data-action="pdf">Download PDF</button>' : ""}
-      ${!inv.paid ? '<button type="button" class="btn-void" data-action="void">Void invoice</button>' : ""}
-      ${!inv.paid ? '<button type="button" data-action="mark-paid">Mark paid</button>' : '<button type="button" class="secondary" data-action="mark-unpaid">Undo paid</button>'}
+      ${!inv.paid ? '<button type="button" class="btn-void" data-action="void">Void Invoice</button>' : ""}
+      ${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}
+      ${next}
     </div>`;
 }
 
@@ -392,7 +416,8 @@ function render() {
   const shownPast = past.filter((r) => showPaid || !done(r));
 
   const outstanding = past.filter((r) => !done(r)).reduce((s, r) => s + r.amount, 0);
-  pastTotal.textContent = outstanding ? `${formatCurrency(outstanding)} outstanding` : "";
+  const unsent = past.filter((r) => !done(r) && !isSent(r.inv)).length;
+  pastTotal.textContent = [outstanding ? `${formatCurrency(outstanding)} outstanding` : "", unsent ? `${unsent} not sent` : ""].filter(Boolean).join(" · ");
   togglePaidBtn.style.display = paidCount ? "" : "none";
   togglePaidBtn.textContent = showPaid
     ? (voidCount ? "Hide paid & void" : "Hide paid")
@@ -566,8 +591,11 @@ invoiceBody.addEventListener("click", async (e) => {
     return;
   }
   if (!row) return;
-  if (action === "preview" || action === "generate") return generate(row, action === "preview", btn);
-  if (action === "pdf") return downloadPdf(row.inv);
+  if (action === "create") return createInvoice(row);
+  if (action === "record-sub") return subEditor.open(null, { kind: "sub", projectId: row.project.id, subId: btn.dataset.sub });
+  if (action === "pdf") return viewPdf(row.inv);
+  if (action === "mark-sent") return markSent(row.inv, true);
+  if (action === "mark-unsent") return markSent(row.inv, false);
   if (action === "mark-paid") return markPaid(row.inv);
   if (action === "mark-unpaid") return markUnpaid(row.inv);
   if (action === "void") return voidInvoice(row.inv);
@@ -760,12 +788,6 @@ async function buildPdf(data) {
   doc.setFontSize(26);
   doc.setTextColor(...PURPLE);
   doc.text("INVOICE", marginX, 24);
-
-  if (data.isPreview) {
-    doc.setFontSize(10);
-    doc.setTextColor(200, 40, 40);
-    doc.text("PREVIEW - not yet invoiced", marginX, 31);
-  }
 
   try {
     const logoData = await loadLogo();
@@ -975,24 +997,24 @@ async function buildPdf(data) {
   }
 
   const periodKey = `${data.invoiceDate.getFullYear()}.${String(data.invoiceDate.getMonth() + 1).padStart(2, "0")}`;
-  const prefix = data.isPreview ? "PREVIEW_" : "";
-  const filename = `${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`;
-  if (data.isPreview) showPdfPreview(doc, filename);
-  else doc.save(filename);
+  return { doc, filename: `Place Builders Invoice_${data.project.name}_${periodKey}.pdf` };
 }
 
-// Shows a PDF in a popup on the page (Preview PDF), with Download and Close.
-function showPdfPreview(doc, filename) {
+// Shows an invoice PDF in a popup on the page. A new invoice isn't saved
+// until "Save & Download" (onSave); closing the popup leaves everything as
+// it was. A saved one can be downloaded again.
+function showPdfPreview(doc, filename, { title, note, onSave }) {
   const url = URL.createObjectURL(doc.output("blob"));
   const overlay = document.createElement("div");
   overlay.className = "pdf-preview";
-  overlay.innerHTML = `<div class="pdf-preview-box" role="dialog" aria-label="Invoice preview">
+  overlay.innerHTML = `<div class="pdf-preview-box" role="dialog" aria-label="${esc(title)}">
       <div class="pdf-preview-head">
-        <strong>Preview</strong><span>Not invoiced yet — nothing is saved</span>
-        <button type="button" class="secondary small" data-pdf="download">Download</button>
-        <button type="button" class="small" data-pdf="close">Close</button>
+        <strong>${esc(title)}</strong><span>${esc(note)}</span>
+        ${onSave
+          ? '<button type="button" class="secondary small" data-pdf="close">Cancel</button><button type="button" class="small" data-pdf="save">Save &amp; Download</button>'
+          : '<button type="button" class="secondary small" data-pdf="download">Download</button><button type="button" class="secondary small" data-pdf="close">Close</button>'}
       </div>
-      <iframe src="${url}" title="Invoice preview"></iframe>
+      <iframe src="${url}" title="${esc(title)}"></iframe>
     </div>`;
   const close = () => {
     overlay.remove();
@@ -1000,88 +1022,110 @@ function showPdfPreview(doc, filename) {
     document.removeEventListener("keydown", onKey);
   };
   const onKey = (e) => { if (e.key === "Escape") close(); };
-  overlay.addEventListener("click", (e) => {
+  overlay.addEventListener("click", async (e) => {
     const action = e.target.closest("[data-pdf]")?.dataset.pdf;
     if (action === "download") doc.save(filename);
     if (action === "close" || e.target === overlay) close();
+    if (action === "save") {
+      const btns = overlay.querySelectorAll("button");
+      btns.forEach((x) => { x.disabled = true; });
+      if (await onSave()) {
+        doc.save(filename);
+        close();
+      } else {
+        btns.forEach((x) => { x.disabled = false; });
+      }
+    }
   });
   document.addEventListener("keydown", onKey);
   document.body.appendChild(overlay);
 }
 
-async function generate(row, isPreview, btn) {
+// Create Invoice: builds the PDF and shows it. Saving it locks the hours and
+// expenses onto the invoice, which lands under Invoices as Not sent.
+async function createInvoice(row) {
   const { project, entries, exps } = row;
   if (!project || (entries.length === 0 && exps.length === 0)) return;
   const periodLabel = row.label.trim() || periodLabelFor(row.from, row.to);
   const invoiceNumber = row.number.trim() || nextInvoiceNumber();
-  if (!isPreview && invoices.some((i) => i.invoiceNumber === invoiceNumber) &&
+  if (invoices.some((i) => i.invoiceNumber === invoiceNumber) &&
     !(await confirmDialog(`Invoice # ${invoiceNumber} has already been used.`, { title: "Use this number again?", confirmText: "Use it anyway" }))) return;
 
   const buttons = [...invoiceBody.querySelectorAll(".inv-actions button")];
-  buttons.forEach((b) => { b.disabled = true; });
+  buttons.forEach((x) => { x.disabled = true; });
   try {
     const computed = computeInvoiceData(project, entries, exps);
     const invoiceDate = new Date();
     const dueDate = lastDayOfMonth(invoiceDate);
-
-    await buildPdf({
-      project, invoiceNumber, invoiceDate, dueDate,
-      periodLabel, isPreview, ...computed,
+    const { doc, filename } = await buildPdf({ project, invoiceNumber, invoiceDate, dueDate, periodLabel, ...computed });
+    showPdfPreview(doc, filename, {
+      title: `Invoice ${invoiceNumber}`,
+      note: "Not saved yet",
+      onSave: () => saveInvoice(row, { invoiceNumber, invoiceDate, dueDate, periodLabel, computed }),
     });
-
-    if (!isPreview) {
-      const ref = await Invoices.add({
-        projectId: project.id,
-        projectName: project.name,
-        invoiceNumber,
-        date: toISODate(invoiceDate),
-        dueDate: toISODate(dueDate),
-        periodLabel,
-        periodStart: row.from,
-        periodEnd: row.to,
-        taskRows: computed.taskRows,
-        laborRows: computed.laborRows,
-        feeTotal: computed.feeTotal,
-        billedTotal: computed.billedTotal,
-        currentTotal: computed.currentTotal,
-        remainingTotal: computed.remainingTotal,
-        pctTotal: computed.pctTotal,
-        laborTotal: computed.laborTotal,
-        expenseRows: computed.expenseRows,
-        expenseSummary: computed.expenseSummary,
-        expenseTotal: computed.expenseTotal,
-        total: Math.round((computed.laborTotal + computed.expenseTotal) * 100) / 100,
-        sheetSynced: false,
-      });
-      const closing = [...entries, ...row.unbilled];
-      const billRates = Object.fromEntries(closing.map((e) => [e.id, entryRate(e)]));
-      if (closing.length) await TimeEntries.markInvoiced(closing.map((e) => e.id), ref.id, billRates);
-      if (exps.length) await Expenses.markInvoiced(exps.map((e) => e.id), ref.id);
-      notifyEntries([...closing, ...exps.map((e) => ({ ...e, isExpense: true }))], { by: sessionPersonId, data: { people, projects }, verb: "invoiced" });
-      delete drafts[project.id];
-      openRow = `inv:${ref.id}`;
-      showToast("Invoice generated.");
-      sheet.sync();
-    }
   } catch (err) {
     showToast("Error: " + err.message);
   } finally {
-    buttons.forEach((b) => { b.disabled = false; });
-    render();
+    buttons.forEach((x) => { x.disabled = false; });
   }
 }
 
-// Re-download a past invoice's PDF from what was saved when it was made.
-async function downloadPdf(inv) {
+// Saves a new invoice (Not sent) and marks its hours and expenses invoiced.
+// True when it worked.
+async function saveInvoice(row, { invoiceNumber, invoiceDate, dueDate, periodLabel, computed }) {
+  const { project, entries, exps } = row;
+  try {
+    const ref = await Invoices.add({
+      projectId: project.id,
+      projectName: project.name,
+      invoiceNumber,
+      date: toISODate(invoiceDate),
+      dueDate: toISODate(dueDate),
+      periodLabel,
+      periodStart: row.from,
+      periodEnd: row.to,
+      taskRows: computed.taskRows,
+      laborRows: computed.laborRows,
+      feeTotal: computed.feeTotal,
+      billedTotal: computed.billedTotal,
+      currentTotal: computed.currentTotal,
+      remainingTotal: computed.remainingTotal,
+      pctTotal: computed.pctTotal,
+      laborTotal: computed.laborTotal,
+      expenseRows: computed.expenseRows,
+      expenseSummary: computed.expenseSummary,
+      expenseTotal: computed.expenseTotal,
+      total: Math.round((computed.laborTotal + computed.expenseTotal) * 100) / 100,
+      sent: false,
+      sheetSynced: false,
+    });
+    const closing = [...entries, ...row.unbilled];
+    const billRates = Object.fromEntries(closing.map((e) => [e.id, entryRate(e)]));
+    if (closing.length) await TimeEntries.markInvoiced(closing.map((e) => e.id), ref.id, billRates);
+    if (exps.length) await Expenses.markInvoiced(exps.map((e) => e.id), ref.id);
+    notifyEntries([...closing, ...exps.map((e) => ({ ...e, isExpense: true }))], { by: sessionPersonId, data: { people, projects }, verb: "invoiced" });
+    delete drafts[project.id];
+    openRow = `inv:${ref.id}`;
+    showToast("Invoice saved. Mark it sent once it's emailed.");
+    sheet.sync();
+    render();
+    return true;
+  } catch (err) {
+    showToast("Error: " + err.message);
+    return false;
+  }
+}
+
+// A past invoice's PDF, rebuilt from what was saved when it was made.
+async function viewPdf(inv) {
   const project = projects.find((p) => p.id === inv.projectId) || { name: inv.projectName || "Project" };
   try {
-    await buildPdf({
+    const { doc, filename } = await buildPdf({
       project,
       invoiceNumber: inv.invoiceNumber,
       invoiceDate: new Date(inv.date + "T00:00:00"),
       dueDate: new Date((inv.dueDate || inv.date) + "T00:00:00"),
       periodLabel: inv.periodLabel || "",
-      isPreview: false,
       taskRows: inv.taskRows,
       feeTotal: inv.feeTotal,
       billedTotal: inv.billedTotal,
@@ -1095,6 +1139,7 @@ async function downloadPdf(inv) {
       expenseTotal: inv.expenseTotal || 0,
       workRows: workRowsFor(project, timeEntries.filter((e) => e.invoiceId === inv.id && isBillable(e))),
     });
+    showPdfPreview(doc, filename, { title: `Invoice ${inv.invoiceNumber}`, note: inv.void ? "Void" : "" });
   } catch (err) {
     showToast("Error: " + err.message);
   }
@@ -1103,7 +1148,7 @@ async function downloadPdf(inv) {
 // Voiding keeps the invoice (marked Void, number not reused) but sends its
 // hours, expenses and subconsultant invoices back to Unbilled hours.
 async function voidInvoice(inv) {
-  if (!(await confirmDialog("Its hours and expenses go back to Unbilled hours so they can go on a new invoice. The voided invoice stays in the list for the record.", { title: `Void invoice ${inv.invoiceNumber}?`, confirmText: "Void invoice", danger: true }))) return;
+  if (!(await confirmDialog("Its hours and expenses go back to Unbilled hours so they can go on a new invoice. The voided invoice stays in the list for the record.", { title: `Void invoice ${inv.invoiceNumber}?`, confirmText: "Void Invoice", danger: true }))) return;
   try {
     const entries = timeEntries.filter((e) => e.invoiceId === inv.id);
     const exps = expenses.filter((e) => e.invoiceId === inv.id);
@@ -1119,8 +1164,17 @@ async function voidInvoice(inv) {
   }
 }
 
+async function markSent(inv, sent) {
+  try {
+    await Invoices.update(inv.id, { sent, sentDate: sent ? new Date().toISOString() : null });
+    showToast(sent ? "Marked sent." : "Back to Not sent.");
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
 async function markUnpaid(inv) {
-  if (!(await confirmDialog("This invoice and its hours go back to outstanding.", { title: "Undo paid?", confirmText: "Undo paid" }))) return;
+  if (!(await confirmDialog("This invoice and its hours go back to outstanding.", { title: "Undo paid?", confirmText: "Undo Paid" }))) return;
   try {
     const linked = timeEntries.filter((entry) => entry.invoiceId === inv.id);
     await Promise.all(linked.map((entry) => TimeEntries.update(entry.id, { paid: false, paidDate: null })));
@@ -1133,11 +1187,11 @@ async function markUnpaid(inv) {
 }
 
 async function markPaid(inv) {
-  if (!(await confirmDialog("Its hours will show as client-paid.", { title: "Mark this invoice paid?", confirmText: "Mark paid" }))) return;
+  if (!(await confirmDialog("Its hours will show as client-paid.", { title: "Mark this invoice paid?", confirmText: "Mark Paid" }))) return;
   try {
     const linkedEntries = timeEntries.filter((entry) => entry.invoiceId === inv.id);
     await TimeEntries.markPaid(linkedEntries.map((entry) => entry.id));
-    await Invoices.update(inv.id, { paid: true, paidDate: new Date().toISOString(), sheetSynced: false });
+    await Invoices.update(inv.id, { paid: true, paidDate: new Date().toISOString(), ...(isSent(inv) ? {} : { sent: true, sentDate: new Date().toISOString() }), sheetSynced: false });
     showToast("Invoice marked as paid.");
     sheet.sync();
   } catch (err) {
@@ -1146,7 +1200,7 @@ async function markPaid(inv) {
 }
 
 // ---------- Google Sheet ----------
-// Synced automatically after generating, marking paid or voiding; status and
+// Synced automatically after creating, marking paid or voiding; status and
 // a manual Sync are on Admin.
 const sheet = createSheetSync({
   getData: () => ({ invoices, timeEntries, tasks, people, projects }),

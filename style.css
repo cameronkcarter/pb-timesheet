@@ -4203,3 +4203,9 @@ main.wide { max-width: 1280px; }
 .appr-table th.num, .appr-table td.num { text-align: right; white-space: nowrap; }
 .appr-table th.num + th:not(.num), .appr-table td.num + td:not(.num) { padding-left: 18px; }
 .inv-expenses th.c-cat { width: 130px; }
+/* Invoices: subconsultants with nothing recorded this period. */
+.inv-subs-missing { margin-top: 10px; padding: 8px 12px; border: 1px dashed #d9cbe2; border-radius: 8px; font-size: 13px; color: var(--text-muted); }
+.inv-subs-missing > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 3px 0; }
+.inv-subs-missing strong { color: var(--text); }
+.inv-subs-missing .link-btn { margin: 0; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.inv-actions .btn-void { margin-right: auto; }
