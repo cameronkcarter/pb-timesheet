@@ -79,11 +79,10 @@ function nextInvoiceNumber() {
 
 // ---------- Invoices tables ----------
 // "Ready to invoice": a row per billable project for approved hours not invoiced
-// yet (its next invoice). "Invoices": ones already created, newest first —
-// Not sent, then Outstanding once marked sent, then Paid (paid ones hidden
-// unless asked for). Clicking a row shows each person's
+// yet (its next invoice). "Sent invoices": ones already generated, newest first,
+// paid ones hidden unless asked for. Clicking a row shows each person's
 // hours (with their notes). The next invoice's # and billing period can be
-// edited until it's created; after that they're locked.
+// edited until it's generated; after that they're locked.
 const drafts = {};        // projectId -> { number, label } typed over
 let openRow = null;       // "next:<projectId>" or "inv:<invoiceId>"
 let openNotes = null;     // personId whose notes show in the open row
@@ -261,9 +260,6 @@ function invoiceRows() {
     });
 }
 
-// Invoices made before "Mark Sent" existed count as sent.
-const isSent = (inv) => inv.sent !== false;
-
 function statusHtml(row) {
   if (row.kind === "next") {
     return row.entries.length || row.exps.length
@@ -274,7 +270,7 @@ function statusHtml(row) {
   if (inv.void) return '<span class="pay-status void">Void</span>';
   return (inv.paid
     ? `<span class="pay-status paid">Paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}</span>`
-    : isSent(inv) ? '<span class="pay-status invoiced">Outstanding</span>' : '<span class="pay-status pending">Not sent</span>') +
+    : '<span class="pay-status invoiced">Outstanding</span>') +
     (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — Sync is on Admin">Not in sheet</span>' : "");
 }
 
@@ -382,14 +378,10 @@ function detailHtml(row) {
       ${expenseTableHtml(inv.expenseRows || [])}
       <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}</div>`;
   }
-  // Not sent: Mark Sent once it's emailed. Sent: Mark Paid once the client pays.
   const next = inv.paid
     ? '<button type="button" class="secondary" data-action="mark-unpaid">Undo Paid</button>'
-    : isSent(inv)
-      ? `<button type="button" class="link-btn" data-action="mark-unsent">Undo Sent</button>
-         <button type="button" data-action="mark-paid">Mark Paid</button>`
-      : '<button type="button" data-action="mark-sent">Mark Sent</button>';
-  return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}${isSent(inv) && inv.sentDate ? ` &middot; Sent ${shortDate(inv.sentDate)}` : ""}</div>` : ""}
+    : '<button type="button" data-action="mark-paid">Mark Paid</button>';
+  return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}</div>` : ""}
     ${peopleHtml(row.key, row.entries, inv.laborRows)}
     ${unbilledNoteHtml(row.unbilled, "Closed out")}
     ${expenseTableHtml(inv.expenseRows || [])}
@@ -417,8 +409,7 @@ function render() {
   const shownPast = past.filter((r) => showPaid || !done(r));
 
   const outstanding = past.filter((r) => !done(r)).reduce((s, r) => s + r.amount, 0);
-  const unsent = past.filter((r) => !done(r) && !isSent(r.inv)).length;
-  pastTotal.textContent = [outstanding ? `${formatCurrency(outstanding)} outstanding` : "", unsent ? `${unsent} not sent` : ""].filter(Boolean).join(" · ");
+  pastTotal.textContent = outstanding ? `${formatCurrency(outstanding)} outstanding` : "";
   togglePaidBtn.style.display = paidCount ? "" : "none";
   togglePaidBtn.textContent = showPaid
     ? (voidCount ? "Hide paid & void" : "Hide paid")
@@ -595,8 +586,6 @@ invoiceBody.addEventListener("click", async (e) => {
   if (action === "preview" || action === "generate") return generate(row, action === "preview");
   if (action === "record-sub") return subEditor.open(null, { kind: "sub", projectId: row.project.id, subId: btn.dataset.sub });
   if (action === "pdf") return viewPdf(row.inv);
-  if (action === "mark-sent") return markSent(row.inv, true);
-  if (action === "mark-unsent") return markSent(row.inv, false);
   if (action === "mark-paid") return markPaid(row.inv);
   if (action === "mark-unpaid") return markUnpaid(row.inv);
   if (action === "void") return voidInvoice(row.inv);
@@ -1037,7 +1026,7 @@ function showPdfPreview(doc, filename, { title, note }) {
 }
 
 // Preview PDF: the invoice in a popup, marked PREVIEW; nothing is saved.
-// Generate Invoice: saves it (under Invoices as Not sent), locks its hours and
+// Generate Invoice: saves it (under Sent Invoices), locks its hours and
 // expenses, and downloads the PDF.
 async function generate(row, isPreview) {
   const { project, entries, exps } = row;
@@ -1063,7 +1052,7 @@ async function generate(row, isPreview) {
   }
 }
 
-// Saves a new invoice (Not sent) and marks its hours and expenses invoiced.
+// Saves a new invoice and marks its hours and expenses invoiced.
 // True when it worked.
 async function saveInvoice(row, { invoiceNumber, invoiceDate, dueDate, periodLabel, computed }) {
   const { project, entries, exps } = row;
@@ -1089,7 +1078,6 @@ async function saveInvoice(row, { invoiceNumber, invoiceDate, dueDate, periodLab
       expenseSummary: computed.expenseSummary,
       expenseTotal: computed.expenseTotal,
       total: Math.round((computed.laborTotal + computed.expenseTotal) * 100) / 100,
-      sent: false,
       sheetSynced: false,
     });
     const closing = [...entries, ...row.unbilled];
@@ -1099,7 +1087,7 @@ async function saveInvoice(row, { invoiceNumber, invoiceDate, dueDate, periodLab
     notifyEntries([...closing, ...exps.map((e) => ({ ...e, isExpense: true }))], { by: sessionPersonId, data: { people, projects }, verb: "invoiced" });
     delete drafts[project.id];
     openRow = `inv:${ref.id}`;
-    showToast("Invoice generated. Mark it sent once it's emailed.");
+    showToast("Invoice generated.");
     sheet.sync();
     render();
     return true;
@@ -1157,15 +1145,6 @@ async function voidInvoice(inv) {
   }
 }
 
-async function markSent(inv, sent) {
-  try {
-    await Invoices.update(inv.id, { sent, sentDate: sent ? new Date().toISOString() : null });
-    showToast(sent ? "Marked sent." : "Back to Not sent.");
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-}
-
 async function markUnpaid(inv) {
   if (!(await confirmDialog("This invoice and its hours go back to outstanding.", { title: "Undo paid?", confirmText: "Undo Paid" }))) return;
   try {
@@ -1184,7 +1163,7 @@ async function markPaid(inv) {
   try {
     const linkedEntries = timeEntries.filter((entry) => entry.invoiceId === inv.id);
     await TimeEntries.markPaid(linkedEntries.map((entry) => entry.id));
-    await Invoices.update(inv.id, { paid: true, paidDate: new Date().toISOString(), ...(isSent(inv) ? {} : { sent: true, sentDate: new Date().toISOString() }), sheetSynced: false });
+    await Invoices.update(inv.id, { paid: true, paidDate: new Date().toISOString(), sheetSynced: false });
     showToast("Invoice marked as paid.");
     sheet.sync();
   } catch (err) {
