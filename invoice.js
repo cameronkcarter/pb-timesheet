@@ -7,7 +7,7 @@ import {
 import { sheetSyncEnabled } from "./sheets.js";
 import { createSheetSync } from "./sheet-sync.js";
 import { billRateOf, paidAmount, isBillable } from "./rates.js";
-import { expenseLabel, expenseQtyText, createExpenseEditor } from "./expenses.js";
+import { expenseLabel, expenseQtyText, createExpenseEditor, categoryGroup } from "./expenses.js";
 import { notifyEntries } from "./notifications.js";
 
 const sessionPersonId = requireSession();
@@ -154,22 +154,38 @@ function nextRows() {
 const sumAmount = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
 
 // Lines for an invoice's Expenses table: each project expense, then each
-// subconsultant invoice. [{ description, quantity, rate, amount }]
+// subconsultant invoice. [{ group, description, quantity, rate, amount }]
 function expenseRowsFor(project, exps) {
   const byDate = (a, b) => (a.date < b.date ? -1 : 1);
   const projectLines = exps.filter((e) => e.kind !== "sub").sort(byDate).map((e) => ({
-    kind: "project", date: e.date, label: expenseLabel(e, project), qtyText: expenseQtyText(e),
+    kind: "project", group: categoryGroup(e.category), date: e.date, label: expenseLabel(e, project), qtyText: expenseQtyText(e),
     description: expenseLabel(e, project),
     quantity: e.quantity == null ? null : Number(e.quantity),
     rate: e.rate == null ? null : Number(e.rate),
     amount: Number(e.amount || 0),
   }));
   const subLines = exps.filter((e) => e.kind === "sub").sort(byDate).map((e) => ({
-    kind: "sub", date: e.date, label: expenseLabel(e, project), qtyText: "",
+    kind: "sub", group: "Subconsultants", date: e.date, label: expenseLabel(e, project), qtyText: "",
     description: `Subconsultant: ${expenseLabel(e, project)}`, quantity: null, rate: null,
     amount: Number(e.amount || 0),
   }));
   return [...projectLines, ...subLines];
+}
+
+// What the client sees for an expense line on page 1 of the PDF: its group
+// ("Travel"). Lines saved before groups existed are worked out from their
+// description ("Mileage · Site visit").
+function expenseGroupOf(r) {
+  if (r.group) return r.group;
+  if (r.kind === "sub" || String(r.description || "").startsWith("Subconsultant:")) return "Subconsultants";
+  return categoryGroup(String(r.description || "").split(" · ")[0]);
+}
+
+// Expense amounts by group, in the order each group first appears.
+function expenseGroupsOf(rows) {
+  const groups = new Map();
+  rows.forEach((r) => groups.set(expenseGroupOf(r), (groups.get(expenseGroupOf(r)) || 0) + Number(r.amount || 0)));
+  return [...groups].map(([group, amount]) => ({ group, amount }));
 }
 
 // Expenses on an invoice: project expenses, then subconsultant invoices
@@ -603,7 +619,8 @@ function pdfText(text) {
 }
 
 // Page 2: what was done, grouped by task — each entry's date, person, hours
-// and note — in the same purple-header style as page 1.
+// and note — then each expense in detail, in the same purple-header style as
+// page 1.
 async function addWorkSummaryPage(doc, data, { marginX, rightX, tableStyles, headStyles }) {
   doc.addPage();
   doc.setFont(undefined, "bold");
@@ -634,7 +651,7 @@ async function addWorkSummaryPage(doc, data, { marginX, rightX, tableStyles, hea
     ]));
   });
 
-  doc.autoTable({
+  if (body.length) doc.autoTable({
     startY: 38,
     theme: "grid",
     head: [["Date", "Staff", "Hours", "Work Performed"]],
@@ -651,6 +668,40 @@ async function addWorkSummaryPage(doc, data, { marginX, rightX, tableStyles, hea
       if (hd.section === "body" && groupRows.has(hd.row.index)) {
         hd.cell.styles.fontStyle = "bold";
         hd.cell.styles.fillColor = [240, 232, 245];
+      }
+    },
+  });
+
+  const exps = data.expenseRows || [];
+  if (!exps.length) return;
+  const money = (v) => (v == null ? "" : formatCurrency(v));
+  const expBody = exps.map((r) => [
+    r.date ? formatShortMDY(new Date(String(r.date).slice(0, 10) + "T00:00:00")) : "",
+    pdfText(r.description),
+    r.quantity == null ? "" : String(Math.round(r.quantity * 100) / 100),
+    money(r.rate),
+    formatCurrency(r.amount),
+  ]);
+  const totalRow = expBody.length;
+  expBody.push(["", "Expense Total", "", "", formatCurrency(exps.reduce((t, r) => t + Number(r.amount || 0), 0))]);
+  doc.autoTable({
+    startY: body.length ? doc.lastAutoTable.finalY + 8 : 38,
+    theme: "grid",
+    head: [["Date", "Expenses", "Quantity", "Rate", "Amount"]],
+    body: expBody,
+    styles: { ...tableStyles, valign: "top" },
+    headStyles,
+    columnStyles: {
+      0: { cellWidth: 20 },
+      1: { cellWidth: "auto" },
+      2: { cellWidth: 20, halign: "right" },
+      3: { cellWidth: 20, halign: "right" },
+      4: { cellWidth: 24, halign: "right" },
+    },
+    didParseCell: (hd) => {
+      if (hd.section === "body" && hd.row.index === totalRow) {
+        hd.cell.styles.fontStyle = "bold";
+        hd.cell.styles.fillColor = [246, 246, 248];
       }
     },
   });
@@ -672,7 +723,7 @@ async function buildPdf(data) {
   if (data.isPreview) {
     doc.setFontSize(10);
     doc.setTextColor(200, 40, 40);
-    doc.text("PREVIEW — not yet invoiced", marginX, 31);
+    doc.text("PREVIEW - not yet invoiced", marginX, 31);
   }
 
   try {
@@ -706,8 +757,8 @@ async function buildPdf(data) {
   doc.setFontSize(9);
   const billLines = [
     data.project.billToName, data.project.billToCompany,
-    data.project.billToAddress1, data.project.billToAddress2,
-  ].filter(Boolean);
+    data.project.billToAddress1, data.project.billToAddress2, data.project.billToEmail,
+  ].filter(Boolean).map(pdfText);
   billLines.forEach((line, i) => doc.text(line, marginX, y + i * 5));
 
   const detailsLabelX = marginX + 100;
@@ -795,39 +846,22 @@ async function buildPdf(data) {
 
   y = doc.lastAutoTable.finalY + 8;
 
-  const laborBody = data.laborRows.map((r) => [
-    r.name,
-    r.hours.toFixed(2),
-    formatCurrency(r.rate),
-    formatCurrency(r.total),
-  ]);
-  const laborTotalRowIndex = laborBody.length;
-  laborBody.push(["Labor Total", "", "", formatCurrency(data.laborTotal)]);
-
+  // Labor: one total (who worked and when is on the Work Summary page).
   doc.autoTable({
     startY: y,
     theme: "grid",
-    head: [["Labor (Staff)", "Hours", "Rate", "Total"]],
-    body: laborBody,
+    head: [["Labor", "Total"]],
+    body: [["Labor Total", formatCurrency(data.laborTotal)]],
     styles: tableStyles,
     headStyles,
     columnStyles: {
-      0: { cellWidth: 110 },
+      0: { cellWidth: 158 },
       1: { cellWidth: 24, halign: "right" },
-      2: { cellWidth: 24, halign: "right" },
-      3: { cellWidth: 24, halign: "right" },
     },
     didParseCell: (hd) => {
-      if (hd.section === "body" && hd.row.index === laborTotalRowIndex) {
+      if (hd.section === "body") {
         hd.cell.styles.fontStyle = "bold";
         hd.cell.styles.fillColor = [246, 246, 248];
-      }
-    },
-    didDrawCell: (hd) => {
-      if (hd.section === "body" && hd.column.index === 3 && hd.row.index === laborTotalRowIndex) {
-        doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.5);
-        doc.line(marginX, hd.cell.y, rightX, hd.cell.y);
       }
     },
   });
@@ -835,28 +869,22 @@ async function buildPdf(data) {
   y = doc.lastAutoTable.finalY + 8;
 
   const expenseTotal = data.expenseTotal || 0;
-  const expenseLines = (data.expenseRows || []).map((r) => [
-    pdfText(r.description),
-    r.quantity == null ? "" : String(Math.round(r.quantity * 100) / 100),
-    r.rate == null ? "" : formatCurrency(r.rate),
-    formatCurrency(r.amount),
-  ]);
+  // Expenses: one line per group ("Travel"); the details are on the Work Summary page.
+  const expenseLines = expenseGroupsOf(data.expenseRows || []).map((g) => [pdfText(g.group), formatCurrency(g.amount)]);
   const expenseTotalRowIndex = expenseLines.length || 1;
   doc.autoTable({
     startY: y,
     theme: "grid",
-    head: [["Expenses (Description)", "Quantity", "Cost", "Total"]],
+    head: [["Expenses (Category)", "Total"]],
     body: [
-      ...(expenseLines.length ? expenseLines : [["", "", "", ""]]),
-      ["Expense Total", "", "", expenseTotal ? formatCurrency(expenseTotal) : "-"],
+      ...(expenseLines.length ? expenseLines : [["", ""]]),
+      ["Expense Total", expenseTotal ? formatCurrency(expenseTotal) : "-"],
     ],
     styles: tableStyles,
     headStyles,
     columnStyles: {
-      0: { cellWidth: 110 },
+      0: { cellWidth: 158 },
       1: { cellWidth: 24, halign: "right" },
-      2: { cellWidth: 24, halign: "right" },
-      3: { cellWidth: 24, halign: "right" },
     },
     didParseCell: (hd) => {
       if (hd.section === "body" && hd.row.index === expenseTotalRowIndex) {
@@ -865,7 +893,7 @@ async function buildPdf(data) {
       }
     },
     didDrawCell: (hd) => {
-      if (hd.section === "body" && hd.column.index === 3 && hd.row.index === expenseTotalRowIndex) {
+      if (hd.section === "body" && hd.column.index === 1 && hd.row.index === expenseTotalRowIndex) {
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
         doc.line(marginX, hd.cell.y, rightX, hd.cell.y);
@@ -901,13 +929,43 @@ async function buildPdf(data) {
   doc.setTextColor(0, 0, 0);
   doc.text(`${FIRM.contactName} at ${FIRM.contactPhone} or ${FIRM.contactEmail}`, pageWidth / 2, disclaimerY + 5, { align: "center" });
 
-  if (data.workRows && data.workRows.length) {
+  if ((data.workRows && data.workRows.length) || (data.expenseRows && data.expenseRows.length)) {
     await addWorkSummaryPage(doc, data, { marginX, rightX, tableStyles, headStyles });
   }
 
   const periodKey = `${data.invoiceDate.getFullYear()}.${String(data.invoiceDate.getMonth() + 1).padStart(2, "0")}`;
   const prefix = data.isPreview ? "PREVIEW_" : "";
-  doc.save(`${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`);
+  const filename = `${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`;
+  if (data.isPreview) showPdfPreview(doc, filename);
+  else doc.save(filename);
+}
+
+// Shows a PDF in a popup on the page (Preview PDF), with Download and Close.
+function showPdfPreview(doc, filename) {
+  const url = URL.createObjectURL(doc.output("blob"));
+  const overlay = document.createElement("div");
+  overlay.className = "pdf-preview";
+  overlay.innerHTML = `<div class="pdf-preview-box" role="dialog" aria-label="Invoice preview">
+      <div class="pdf-preview-head">
+        <strong>Preview</strong><span>Not invoiced yet — nothing is saved</span>
+        <button type="button" class="secondary small" data-pdf="download">Download</button>
+        <button type="button" class="small" data-pdf="close">Close</button>
+      </div>
+      <iframe src="${url}" title="Invoice preview"></iframe>
+    </div>`;
+  const close = () => {
+    overlay.remove();
+    URL.revokeObjectURL(url);
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  overlay.addEventListener("click", (e) => {
+    const action = e.target.closest("[data-pdf]")?.dataset.pdf;
+    if (action === "download") doc.save(filename);
+    if (action === "close" || e.target === overlay) close();
+  });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(overlay);
 }
 
 async function generate(row, isPreview, btn) {
@@ -964,7 +1022,6 @@ async function generate(row, isPreview, btn) {
       showToast("Invoice generated.");
       sheet.sync();
     } else {
-      showToast("Preview downloaded — nothing was marked invoiced.");
     }
   } catch (err) {
     showToast("Error: " + err.message);

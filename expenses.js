@@ -5,20 +5,23 @@ import { Expenses, Settings } from "./db.js";
 import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO, confirmDialog } from "./util.js";
 import { notifyEntries } from "./notifications.js";
 
-// Expense categories are set by admins (Admin > Expense categories, saved as
-// settings/app.expenseCategories). Each is { name, unit, rate, receipt }:
+// Expense categories are set by admins (Project setup > Defaults, saved as
+// settings/app.expenseCategories). Each is { name, group, unit, rate, receipt }:
+//   group   — what the client sees on invoices (e.g. Mileage and Meals both
+//             show as "Travel"). Blank: the category's own name.
 //   unit    — "mile", "night"…: entered as a quantity × rate (rate is the
-//             default, editable per expense). Blank: entered as an amount.
+//             default, editable per expense; a project can override it in
+//             project.expenseRates). Blank: entered as an amount.
 //   receipt — prompt to email the receipt to the project's PM.
 // Expenses store the category's name (and unit), so renaming or removing a
 // category never changes past expenses.
 export const DEFAULT_CATEGORIES = [
-  { name: "Mileage", unit: "mile", rate: 0.7, receipt: false },
-  { name: "Transit", unit: "", rate: null, receipt: true },
-  { name: "Lodging", unit: "night", rate: 150, receipt: true },
-  { name: "Meals", unit: "", rate: null, receipt: true },
-  { name: "Materials", unit: "", rate: null, receipt: true },
-  { name: "Other", unit: "", rate: null, receipt: true },
+  { name: "Mileage", group: "Travel", unit: "mile", rate: 0.7, receipt: false },
+  { name: "Transit", group: "Travel", unit: "", rate: null, receipt: true },
+  { name: "Lodging", group: "Travel", unit: "night", rate: 150, receipt: true },
+  { name: "Meals", group: "Travel", unit: "", rate: null, receipt: true },
+  { name: "Materials", group: "Materials", unit: "", rate: null, receipt: true },
+  { name: "Other", group: "Other", unit: "", rate: null, receipt: true },
 ];
 
 let categories = DEFAULT_CATEGORIES;
@@ -31,6 +34,19 @@ export function applyExpenseSettings(settings) {
 export const expenseCategories = () => categories;
 export const categoryInfo = (name) => categories.find((c) => c.name === name) || null;
 const unitOf = (name) => categoryInfo(name)?.unit || "";
+
+// The invoice group a category shows as ("Travel"). Categories saved before
+// groups existed use the default list's group, else their own name.
+export function categoryGroup(name) {
+  const group = categoryInfo(name)?.group || DEFAULT_CATEGORIES.find((c) => c.name === name)?.group;
+  return group || name || "Other";
+}
+
+// A category's rate on a project: the project's own rate if set, else the default.
+export function categoryRate(name, project) {
+  const own = project?.expenseRates?.[name];
+  return own != null && own !== "" ? Number(own) : categoryInfo(name)?.rate ?? null;
+}
 
 // "mile" → "miles" (for 0 or more than 1).
 export const plural = (unit, n = 2) => (unit && Number(n) !== 1 && !unit.endsWith("s") ? `${unit}s` : unit);
@@ -168,6 +184,9 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
 
   function show(id, on) { $(id).style.display = on ? "" : "none"; }
 
+  const currentProject = () => getData().projects.find((p) => p.id === projectSelect.value);
+  const rateFor = (name) => (categoryInfo(name) ? categoryRate(name, currentProject()) : info(name)?.rate);
+
   function fillSubs(projectId, selected) {
     const project = getData().projects.find((p) => p.id === projectId);
     const subs = project?.subconsultants || [];
@@ -188,9 +207,10 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
       const u = plural(unit);
       quantityLabel.textContent = u.charAt(0).toUpperCase() + u.slice(1);
       rateLabel.textContent = `Rate / ${unit}`;
-      // Switching category swaps in its default rate, unless one was typed.
-      const defaults = expenseCategories().map((x) => Number(x.rate)).filter((r) => r > 0);
-      if (fromChange && (rate.value === "" || defaults.includes(Number(rate.value)))) rate.value = c.rate ?? "";
+      // Switching category (or project) swaps in its rate, unless one was typed.
+      const project = currentProject();
+      const defaults = expenseCategories().flatMap((x) => [Number(x.rate), Number(project?.expenseRates?.[x.name])]).filter((r) => r > 0);
+      if (fromChange && (rate.value === "" || defaults.includes(Number(rate.value)))) rate.value = rateFor(c.name) ?? "";
     }
     updateCost();
   }
@@ -244,7 +264,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     category.value = record?.category || expenseCategories()[0].name;
     date.value = record ? record.date : todayISO();
     quantity.value = record?.quantity ?? "";
-    rate.value = record?.rate ?? (info(category.value)?.rate ?? "");
+    rate.value = record?.rate ?? (rateFor(category.value) ?? "");
     amount.value = record && (kind === "sub" || record.quantity == null) ? record.amount : "";
     applyCategory(false);
     description.placeholder = kind === "sub" ? "e.g. Invoice #1042" : "e.g. Mileage to site visit";
@@ -265,7 +285,11 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
 
   function close() { modal.style.display = "none"; }
 
-  projectSelect.addEventListener("change", () => { if (kind === "sub") fillSubs(projectSelect.value); updateReceipt(); });
+  projectSelect.addEventListener("change", () => {
+    if (kind === "sub") fillSubs(projectSelect.value);
+    else applyCategory(true);
+    updateReceipt();
+  });
   category.addEventListener("change", () => { applyCategory(true); updateReceipt(); });
   description.addEventListener("input", () => { fitDescription(); updateReceipt(); });
   quantity.addEventListener("input", updateCost);
