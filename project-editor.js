@@ -21,6 +21,7 @@ export function createProjectEditor({ getData, onSaved }) {
   const modalBillToCompany = $("modalBillToCompany");
   const modalBillToAddress1 = $("modalBillToAddress1");
   const modalBillToAddress2 = $("modalBillToAddress2");
+  const modalBillToEmail = $("modalBillToEmail");
   const modalProjectNumber = $("modalProjectNumber");
   const modalProjectShortName = $("modalProjectShortName");
   const modalProjectColor = $("modalProjectColor");
@@ -148,6 +149,7 @@ export function createProjectEditor({ getData, onSaved }) {
     modalBillToCompany.value = project ? project.billToCompany || "" : "";
     modalBillToAddress1.value = project ? project.billToAddress1 || "" : "";
     modalBillToAddress2.value = project ? project.billToAddress2 || "" : "";
+    modalBillToEmail.value = project ? project.billToEmail || "" : "";
     modalProjectNumber.value = project ? project.projectNumber || "" : "";
     modalProjectShortName.value = project ? project.shortName || "" : "";
     modalProjectShortName.placeholder = project ? projectShortName({ name: project.name }) : "Short name";
@@ -310,6 +312,7 @@ This can't be undone.`.trim(), { title: `Remove "${project.name}"?`, confirmText
       billToCompany: modalBillToCompany.value.trim(),
       billToAddress1: modalBillToAddress1.value.trim(),
       billToAddress2: modalBillToAddress2.value.trim(),
+      billToEmail: modalBillToEmail.value.trim(),
       projectNumber: modalProjectNumber.value.trim(),
       shortName: modalProjectShortName.value.trim() || null,
       color: modalColor,
