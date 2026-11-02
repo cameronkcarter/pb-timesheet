@@ -19,18 +19,9 @@ let navDone = false;
 
 wireLogout("logoutLink");
 
-const summary = document.getElementById("approvalSummary");
 const approvals = createApprovals({
   getData: () => ({ people, projects, tasks, assignments, timeEntries, expenses }),
   sessionPersonId,
-  onChange: (s) => {
-    summary.textContent = s.count
-      ? `${[
-        s.hours ? `${fmtHrs(s.hours)} hrs` : "",
-        s.expenses ? `${formatCurrency(s.expenses)} expenses` : "",
-      ].filter(Boolean).join(" · ")} waiting from ${s.people} ${s.people === 1 ? "person" : "people"}.`
-      : "Nothing waiting.";
-  },
 });
 
 function render() {

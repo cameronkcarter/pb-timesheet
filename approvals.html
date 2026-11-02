@@ -17,34 +17,39 @@
   <a href="dashboard.html">Dashboard</a>
   <a href="timesheet.html">Timesheet</a>
   <a href="projects.html">Projects</a>
-  <span class="nav-divider" data-nav="mgr" hidden></span>
-  <a href="approvals.html" class="active" data-nav="mgr" hidden>Approvals</a>
-  <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
-  <a href="setup.html" data-nav="admin" hidden>Project setup</a>
-  <a href="staff.html" data-nav="admin" hidden>Staff</a>
-  <a href="admin.html" data-nav="admin" hidden>Analytics</a>
+  <div class="nav-manage" data-nav="mgr" hidden>
+    <span class="nav-manage-label">Manage</span>
+    <a href="approvals.html" class="active" data-nav="mgr" hidden>Approvals</a>
+    <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
+    <a href="setup.html" data-nav="admin" hidden>Setup</a>
+    <a href="staff.html" data-nav="admin" hidden>Staff</a>
+    <a href="admin.html" data-nav="admin" hidden>Analytics</a>
+  </div>
   <span id="navUserName" class="nav-user-name" style="margin-left:auto;"></span>
   <a href="#" id="logoutLink">Log Out</a>
 </nav>
 
-<main>
-  <h1>Approvals</h1>
-  <p class="page-intro" id="approvalSummary"></p>
-
-  <div class="card appr-card">
-    <div class="appr-head">
-      <div class="segmented segmented-small" id="approvalView" role="radiogroup" aria-label="Show">
-        <button type="button" data-value="pending" role="radio" class="on">Pending</button>
-        <button type="button" data-value="approved" role="radio">Approved</button>
-        <button type="button" data-value="internal" role="radio">Internal</button>
-      </div>
-      <div class="segmented segmented-small" id="approvalScope" role="radiogroup" aria-label="Projects">
-        <button type="button" data-value="mine" role="radio" class="on">Mine</button>
-        <button type="button" data-value="all" role="radio">All projects</button>
-      </div>
+<main class="wide">
+  <div class="page-head">
+    <h1>Approvals</h1>
+    <div class="segmented segmented-small" id="approvalScope" role="radiogroup" aria-label="Projects" hidden>
+      <button type="button" data-value="mine" role="radio" class="on">My Projects</button>
+      <button type="button" data-value="all" role="radio">All Projects</button>
     </div>
-    <div id="pendingBody"></div>
   </div>
+
+  <section class="card appr-panel" data-view="pending">
+    <h2 class="appr-panel-head"><button type="button" class="appr-panel-toggle" aria-expanded="false"><span class="appr-panel-title">Waiting for Approval</span><span class="appr-panel-meta"></span><span class="chev">&#9662;</span></button></h2>
+    <div class="appr-panel-body"></div>
+  </section>
+  <section class="card appr-panel" data-view="approved">
+    <h2 class="appr-panel-head"><button type="button" class="appr-panel-toggle" aria-expanded="false"><span class="appr-panel-title">Approved, Not Yet Invoiced</span><span class="appr-panel-meta"></span><span class="chev">&#9662;</span></button></h2>
+    <div class="appr-panel-body"></div>
+  </section>
+  <section class="card appr-panel" data-view="internal">
+    <h2 class="appr-panel-head"><button type="button" class="appr-panel-toggle" aria-expanded="false"><span class="appr-panel-title">Internal Hours</span><span class="appr-panel-meta"></span><span class="chev">&#9662;</span></button></h2>
+    <div class="appr-panel-body"></div>
+  </section>
 </main>
 
 <div id="toast" class="toast"></div>

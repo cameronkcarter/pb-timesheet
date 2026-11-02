@@ -35,9 +35,9 @@ export async function deleteItem(d) {
 const MARKUP = `
 <div id="itemModal" class="modal-overlay" style="display:none;">
   <div class="modal sheet-modal sheet-small item-sheet" role="dialog" aria-labelledby="itemHeading">
-    <div class="item-head">
-      <h2 id="itemHeading">New subtask</h2>
-      <button type="button" id="itemClose" class="icon-btn" aria-label="Close">&times;</button>
+    <div class="sheet-head">
+      <h2 id="itemHeading">New Subtask</h2>
+      <button type="button" id="itemClose" class="icon-btn sheet-close" aria-label="Close">&times;</button>
     </div>
     <div class="sheet-body">
       <label for="itemTitle" class="item-label" id="itemTitleLabel">Subtask</label>
@@ -138,11 +138,12 @@ export function createItemEditor({ getData, sessionPersonId, projectChoices, can
     editing = record || null;
     mode = record ? (isSubtask(record) ? "subtask" : "event") : (preset.mode || "subtask");
     const noun = mode === "event" ? "event" : "subtask";
-    heading.textContent = `${record ? "Edit" : "New"} ${noun}`;
+    const Noun = noun === "event" ? "Event" : "Subtask";
+    heading.textContent = `${record ? "Edit" : "New"} ${Noun}`;
     titleLabel.textContent = mode === "event" ? "Event" : "Subtask";
     titleInput.placeholder = mode === "event" ? "e.g. Community Workshop" : "e.g. Draft plan review memo";
     dateLabel.textContent = mode === "event" ? "Date" : "Due date";
-    saveBtn.textContent = record ? "Save changes" : `Add ${noun}`;
+    saveBtn.textContent = record ? "Save Changes" : `Add ${Noun}`;
     peopleField.style.display = mode === "subtask" ? "block" : "none";
 
     const choices = projectChoices();

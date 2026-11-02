@@ -10,6 +10,7 @@ import {
   billedAmount, assignedHours, assignmentRate, isInternal, taskBudgetUse,
 } from "./rates.js";
 import { createProjectEditor } from "./project-editor.js";
+import { createProjectPicker } from "./project-picker.js";
 import { notify, notifyEntries } from "./notifications.js";
 import { createExpenseEditor, expenseStatus, expenseQtyText, countsToward } from "./expenses.js";
 
@@ -24,7 +25,6 @@ let dueDates = [];
 let invoices = [];
 let expenses = [];
 let navChecked = false;
-let othersOpen = false; // the "Other projects" list is open
 // ?project=<id> (e.g. from a Message Board post) opens that project;
 // otherwise the first (newest) is selected until you pick one.
 let selectedProjectId = new URLSearchParams(location.search).get("project");
@@ -32,7 +32,6 @@ let projectPicked = !!selectedProjectId;
 let expandedTaskId = null;
 let showCompleted = false; // completed subtasks and past events are hidden unless shown
 
-const projectCardsEl = document.getElementById("projectCards");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
 const projectDetail = document.getElementById("projectDetail");
 
@@ -40,7 +39,6 @@ const projectHead = document.getElementById("projectHead");
 const projectHeadName = document.getElementById("projectHeadName");
 const projectHeadMeta = document.getElementById("projectHeadMeta");
 const projectStats = document.getElementById("projectStats");
-const otherProjectsEl = document.getElementById("otherProjects");
 const budgetHeading = document.getElementById("budgetHeading");
 const budgetTbody = document.querySelector("#budgetTable tbody");
 const budgetEmpty = document.getElementById("budgetEmpty");
@@ -54,7 +52,6 @@ const ganttEmpty = document.getElementById("ganttEmpty");
 const schedList = document.getElementById("schedList");
 
 const timelineModal = document.getElementById("timelineModal");
-const timelineModalTitle = document.getElementById("timelineModalTitle");
 const timelineModalRows = document.getElementById("timelineModalRows");
 
 wireLogout("logoutLink");
@@ -168,15 +165,19 @@ function renderAll() {
 }
 
 // ---------- Project picker ----------
-// One card: the open project (name, client, PM, a few numbers, Edit project),
-// then your projects as chips, then "Other projects (N)", which opens a list
-// of every other project's name. Picking one from that list shows it as a
-// chip too while it's open.
+// One card: search and your projects as chips (see project-picker.js), then
+// the open project (name, client, PM, a few numbers, Edit Project Info).
+const picker = createProjectPicker({
+  root: document.getElementById("projectPicker"),
+  getData: () => ({ projects, mine: myProjects(), selectedId: selectedProjectId }),
+  onPick: (id) => pickProject(id),
+  action: '<a id="openAddProject" class="btn-primary small" href="setup.html?new=1" hidden>+ New Project</a>',
+});
+
 function renderProjectCards() {
-  document.getElementById("openAddProject").style.display = isAdmin() ? "" : "none";
+  document.getElementById("openAddProject").hidden = !isAdmin();
   if (projects.length === 0) {
-    projectCardsEl.innerHTML = "";
-    otherProjectsEl.hidden = true;
+    picker.render();
     projectHead.hidden = true;
     projectCardsEmpty.style.display = "block";
     projectDetail.style.display = "none";
@@ -187,25 +188,14 @@ function renderProjectCards() {
   projectDetail.style.display = "block";
 
   const mine = myProjects();
-  const mineIds = new Set(mine.map((p) => p.id));
-  const others = projects.filter((p) => !mineIds.has(p.id)).sort((x, y) => x.name.localeCompare(y.name));
   if (!projectPicked || !projects.some((p) => p.id === selectedProjectId)) {
     selectedProjectId = (mine[0] || sortProjects(projects)[0]).id;
   }
-  const selected = projects.find((p) => p.id === selectedProjectId);
-  const chip = (p) => `<button type="button" class="project-chip ${p.id === selectedProjectId ? "on" : ""}" data-project-card="${p.id}"
-    style="--c:${projectColor(p.id)};" title="${esc(p.name)}"><i aria-hidden="true"></i>${esc(projectShortName(p))}</button>`;
-  projectCardsEl.innerHTML = [...mine, ...(mineIds.has(selectedProjectId) ? [] : [selected])].map(chip).join("")
-    + (others.length ? `<button type="button" class="project-chip project-chip-more" data-action="other-projects" aria-expanded="${othersOpen}">
-        Other projects (${others.length}) <span class="chev ${othersOpen ? "up" : ""}" aria-hidden="true">&#9662;</span></button>` : "");
-  otherProjectsEl.hidden = !othersOpen || !others.length;
-  otherProjectsEl.innerHTML = others.map((p) => `<button type="button" class="other-project ${p.id === selectedProjectId ? "on" : ""}"
-    data-project-card="${p.id}" style="--c:${projectColor(p.id)};"><i aria-hidden="true"></i>${esc(p.name)}</button>`).join("");
+  picker.render();
 }
 
 function pickProject(id) {
-  othersOpen = false;
-  if (id === selectedProjectId) { renderProjectCards(); return; }
+  if (id === selectedProjectId) return;
   selectedProjectId = id;
   projectPicked = true;
   finishEditing();
@@ -214,15 +204,6 @@ function pickProject(id) {
   renderAll();
 }
 
-[projectCardsEl, otherProjectsEl].forEach((el) => el.addEventListener("click", (e) => {
-  if (e.target.closest('[data-action="other-projects"]')) {
-    othersOpen = !othersOpen;
-    renderProjectCards();
-    return;
-  }
-  const btn = e.target.closest("[data-project-card]");
-  if (btn) pickProject(btn.dataset.projectCard);
-}));
 
 // The open project's numbers: budget used, hours logged and hours waiting
 // for approval (billable); hours and open tasks (internal).
@@ -298,7 +279,7 @@ function renderBudget() {
 
   const pm = people.find((x) => x.id === project.pmPersonId);
   // The selected project: name, then client / internal and its PM, with
-  // a link to its Project setup (admins) beside them.
+  // a link to its Setup (admins) beside them.
   projectHead.style.setProperty("--c", projectColor(project.id));
   renderProjectStats(project);
   projectHeadName.textContent = project.name;
@@ -307,7 +288,7 @@ function renderBudget() {
     project.client && internal ? "Internal" : "",
     pm ? `PM: ${pm.name}` : "",
   ].filter(Boolean).join(" · ");
-  budgetHeading.textContent = internal ? "Tasks" : "Tasks & Budget";
+  budgetHeading.textContent = internal ? "Tasks" : "Tasks & Budgets";
   editProjectBtn.style.display = admin ? "" : "none";
   editInfoLink.style.display = admin ? "" : "none";
   editInfoLink.href = `setup.html?project=${project.id}`;
@@ -746,21 +727,12 @@ budgetTbody.addEventListener("click", async (e) => {
   renderBudget();
 });
 
-// ---------- Admin tools: add a project, edit tasks & budgets ----------
+// ---------- Admin tools: edit tasks & budgets ----------
 const projectEditor = createProjectEditor({
   getData: () => ({ people, projects, tasks, assignments, dueDates, timeEntries, invoices, expenses }),
-  onSaved: (projectId) => {
-    if (projectId) {
-      selectedProjectId = projectId;
-      projectPicked = true;
-    } else {
-      projectPicked = false;
-    }
-    renderAll();
-  },
+  onSaved: () => renderAll(),
 });
 
-document.getElementById("openAddProject").addEventListener("click", () => projectEditor.open(null));
 editProjectBtn.addEventListener("click", () => projectEditor.open(projects.find((p) => p.id === selectedProjectId)));
 editTimelineBtn.addEventListener("click", () => openTimelineModal(selectedProjectId));
 
@@ -941,7 +913,7 @@ function openTimelineModal(projectId) {
   const projectTasks = tasks.filter((t) => t.projectId === projectId)
     .sort((a, b) => (!!a.closed - !!b.closed) || a.name.localeCompare(b.name, undefined, { numeric: true }));
 
-  timelineModalTitle.textContent = project ? `Edit Timeline — ${project.name}` : "Edit Timeline";
+  document.getElementById("timelineModalName").textContent = project ? project.name : "";
   timelineModalRows.innerHTML = projectTasks.length ? `
     <div class="tl-table">
       <div class="tl-head"><span>Task</span><span>Start</span><span>End</span><span class="tl-len">Length</span></div>
@@ -985,6 +957,7 @@ function closeTimelineModal() {
 }
 
 document.getElementById("modalCancelTimeline").addEventListener("click", closeTimelineModal);
+document.getElementById("modalCloseTimeline").addEventListener("click", closeTimelineModal);
 closeOnBackdropClick(timelineModal, closeTimelineModal);
 
 document.getElementById("modalSaveTimeline").addEventListener("click", async () => {

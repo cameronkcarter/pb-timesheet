@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
-<title>Project setup — Place Builders</title>
+<title>Setup — Place Builders</title>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
 <link rel="icon" type="image/png" href="brand/favicon.png" />
@@ -17,32 +17,42 @@
   <a href="dashboard.html">Dashboard</a>
   <a href="timesheet.html">Timesheet</a>
   <a href="projects.html">Projects</a>
-  <span class="nav-divider" data-nav="mgr" hidden></span>
-  <a href="approvals.html" data-nav="mgr" hidden>Approvals</a>
-  <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
-  <a href="setup.html" class="active" data-nav="admin" hidden>Project setup</a>
-  <a href="staff.html" data-nav="admin" hidden>Staff</a>
-  <a href="admin.html" data-nav="admin" hidden>Analytics</a>
+  <div class="nav-manage" data-nav="mgr" hidden>
+    <span class="nav-manage-label">Manage</span>
+    <a href="approvals.html" data-nav="mgr" hidden>Approvals</a>
+    <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
+    <a href="setup.html" class="active" data-nav="admin" hidden>Setup</a>
+    <a href="staff.html" data-nav="admin" hidden>Staff</a>
+    <a href="admin.html" data-nav="admin" hidden>Analytics</a>
+  </div>
   <span id="navUserName" class="nav-user-name" style="margin-left:auto;"></span>
   <a href="#" id="logoutLink">Log Out</a>
 </nav>
 
 <main>
-  <h1>Project setup</h1>
+  <h1>Setup</h1>
 
-  <div class="card setup-pick">
-    <label for="setupProject" class="setup-pick-label">Project</label>
-    <select id="setupProject"></select>
-    <a href="projects.html" id="setupTasksLink" class="setup-tasks-link">Tasks &amp; budgets ›</a>
+  <div class="card project-switch">
+    <div id="projectPicker"></div>
+    <div class="project-head" id="setupHead">
+      <div class="project-head-top">
+        <div>
+          <h2 id="setupHeadName"></h2>
+          <div class="project-head-meta" id="setupHeadMeta"></div>
+        </div>
+        <a id="setupTasksLink" class="head-info-link" href="projects.html">Tasks &amp; Budgets ›</a>
+      </div>
+    </div>
   </div>
 
-  <div id="setupProjectCards">
+  <div id="setupForm">
     <div class="card">
-      <div class="setup-name-wrap">
-        <label for="setupName" class="setup-name-label">Full project name</label>
-        <input type="text" id="setupName" class="setup-name" placeholder="Project name" />
-      </div>
+      <h2>Project Details</h2>
       <div class="field-grid">
+        <div class="field field-wide">
+          <label for="setupName">Full name <span class="field-optional">as it appears on invoices</span></label>
+          <input type="text" id="setupName" placeholder="Roy 1900 West Corridor Study" />
+        </div>
         <div class="field">
           <label for="setupClient">Client</label>
           <input type="text" id="setupClient" placeholder="Roy City" />
@@ -52,34 +62,38 @@
           <input type="text" id="setupNumber" placeholder="Client's reference or PO #" />
         </div>
         <div class="field">
-          <label for="setupShortName">Short name <span class="field-optional">for the project list</span></label>
+          <label for="setupShortName">Short name <span class="field-optional">for project lists</span></label>
           <input type="text" id="setupShortName" maxlength="24" />
         </div>
         <div class="field">
-          <label for="setupPm">Project manager</label>
+          <label for="setupPm">Project manager <span class="field-optional">approves hours</span></label>
           <select id="setupPm"></select>
-          <div class="field-hint">Approves hours on this project</div>
+        </div>
+        <div class="field">
+          <label>Billing</label>
+          <div class="segmented" id="setupType" role="radiogroup">
+            <button type="button" data-value="rates" role="radio">Billed to a client</button>
+            <button type="button" data-value="internal" role="radio">Internal</button>
+          </div>
+          <div class="field-hint" id="setupTypeHint"></div>
         </div>
         <div class="field">
           <label>Color</label>
           <div class="color-swatches" id="setupColor" role="radiogroup" aria-label="Project color"></div>
         </div>
-        <div class="field">
-          <label>Billing</label>
-          <div class="segmented" id="setupType" role="radiogroup">
-            <button type="button" data-value="rates" role="radio">Staff bill rates</button>
-            <button type="button" data-value="internal" role="radio">Internal</button>
-          </div>
-        </div>
       </div>
     </div>
 
     <div class="card" id="setupBilling">
-      <h2>Invoice to</h2>
+      <h2>Invoice To</h2>
       <div class="field-grid">
         <div class="field">
           <label for="setupBillToName">Contact</label>
           <input type="text" id="setupBillToName" placeholder="Jane Smith" />
+        </div>
+        <div class="field">
+          <label for="setupBillToEmail">Email</label>
+          <input type="email" id="setupBillToEmail" placeholder="jane@roycity.gov" autocomplete="off" />
         </div>
         <div class="field">
           <label for="setupBillToCompany">Company</label>
@@ -93,44 +107,33 @@
           <label for="setupBillToAddress2">City, State ZIP</label>
           <input type="text" id="setupBillToAddress2" placeholder="Roy, Utah 84067" />
         </div>
-        <div class="field">
-          <label for="setupBillToEmail">Email</label>
-          <input type="email" id="setupBillToEmail" placeholder="jane@roycity.gov" autocomplete="off" />
-        </div>
       </div>
     </div>
 
     <div class="card" id="rates">
-      <h2>Rates on this project</h2>
-      <p class="setup-hint">Leave a box blank to use the usual rate.</p>
-      <div class="setup-rates">
+      <div class="card-head">
+        <h2 style="margin:0;">Rates</h2>
+        <button type="button" id="ratesToggle" class="secondary small">Set Project Rates</button>
+      </div>
+      <div id="ratesSummary" class="rates-summary"></div>
+      <div id="ratesEditor" class="setup-rates" hidden>
         <div>
-          <h3>Bill rates</h3>
+          <h3>Bill Rates</h3>
           <div id="setupBillRates"></div>
         </div>
         <div>
-          <h3>Expense rates</h3>
+          <h3>Expense Rates</h3>
           <div id="setupExpenseRates"></div>
         </div>
       </div>
     </div>
 
-    <div class="setup-save">
-      <span id="setupDirty"></span>
-      <button type="button" id="setupRevert" class="secondary">Undo changes</button>
-      <button type="button" id="setupSave">Save project</button>
+    <div class="save-bar">
+      <button type="button" id="setupRemove" class="link-btn item-delete">Remove Project</button>
+      <span id="setupDirty" class="save-bar-note"></span>
+      <button type="button" id="setupRevert" class="secondary">Cancel</button>
+      <button type="button" id="setupSave">Save Changes</button>
     </div>
-  </div>
-
-  <div class="card">
-    <h2>Defaults for all projects</h2>
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-      <h3 class="setup-sub">Expense categories</h3>
-      <button id="addCategory" class="secondary small">+ Add category</button>
-    </div>
-    <p class="setup-hint">Staff pick the category. Invoices show only its group (e.g. Mileage and Meals both show as Travel).</p>
-    <div class="cat-grid cat-head"><span>Name</span><span>Invoice group</span><span>Default rate</span><span>Unit</span><span>Receipt</span><span></span></div>
-    <div id="categoryRows"></div>
   </div>
 </main>
 

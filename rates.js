@@ -8,7 +8,7 @@
 //               changes later never rewrite past invoices. Falls back to the
 //               pay rate if a person has no bill rate set. A project can
 //               bill someone at a different rate (project.billRates, set in
-//               Project setup: { personId: rate }).
+//               Setup: { personId: rate }).
 //
 // Projects either bill at each person's bill rate, or are internal
 // (project.internal: not billed or paid, e.g. Proposals & Pursuits; only

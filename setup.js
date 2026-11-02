@@ -1,23 +1,33 @@
-// The Project setup tab (admins): a project's details, who it invoices, and
-// its own bill and expense rates; then the defaults for every project
-// (expense categories). Tasks and budgets are on the Projects tab.
-import { People, Projects, Assignments, Settings } from "./db.js";
+// The Setup tab (admins): adding projects, and each project's details, who
+// it invoices, and its own bill and expense rates (if it doesn't use the
+// defaults). Tasks and budgets are on the Projects tab; default rates are on
+// the Staff tab.
+import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses, Settings } from "./db.js";
 import {
   formatCurrency, showToast, esc, confirmDialog, PROJECT_COLOR_CHOICES, projectColor, projectShortName, sortProjects,
 } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { personBillRate, isInternal } from "./rates.js";
 import { expenseCategories, applyExpenseSettings } from "./expenses.js";
+import { createProjectPicker } from "./project-picker.js";
+import { removeProject } from "./project-editor.js";
 
 const sessionPersonId = requireSession();
 
 let people = [];
 let projects = [];
+let tasks = [];
 let assignments = [];
-let settings = {};
+let timeEntries = [];
+let dueDates = [];
+let invoices = [];
+let expenses = [];
 let adminCheckDone = false;
-let selectedId = new URLSearchParams(location.search).get("project");
-let shownId = null;      // the project the form was filled from
+let projectsLoaded = false;
+const params = new URLSearchParams(location.search);
+let selectedId = params.get("project");
+let creating = params.has("new"); // filling in a new project
+let shownId = null;      // the project the form was filled from ("new" while creating)
 let saved = "";          // the form as last filled, to tell when it's changed
 let scrolledToHash = false;
 
@@ -32,17 +42,20 @@ if (sessionPersonId) {
       if (!enforceAdmin(me)) return;
       renderNavUserName(me);
     }
-    renderProject();
+    render();
   });
-  Projects.listen((d) => { projects = d; renderProject(); });
-  Assignments.listen((d) => { assignments = d; renderProject(); });
-  Settings.listen((d) => { settings = d; renderCategories(); renderProject(); });
+  Projects.listen((d) => { projects = d; projectsLoaded = true; render(); });
+  Assignments.listen((d) => { assignments = d; render(); });
+  Settings.listen((d) => { applyExpenseSettings(d); render(); });
+  Tasks.listen((d) => { tasks = d; });
+  TimeEntries.listen((d) => { timeEntries = d; });
+  DueDates.listen((d) => { dueDates = d; });
+  Invoices.listen((d) => { invoices = d; });
+  Expenses.listen((d) => { expenses = d; });
 }
 
-// ---------- One project ----------
 const $ = (id) => document.getElementById(id);
-const picker = $("setupProject");
-const cards = $("setupProjectCards");
+const form = $("setupForm");
 const fields = {
   name: $("setupName"), client: $("setupClient"), projectNumber: $("setupNumber"), shortName: $("setupShortName"),
   pmPersonId: $("setupPm"), billToName: $("setupBillToName"), billToCompany: $("setupBillToCompany"),
@@ -50,25 +63,61 @@ const fields = {
 };
 const billRatesEl = $("setupBillRates");
 const expenseRatesEl = $("setupExpenseRates");
+const ratesEditor = $("ratesEditor");
+const ratesSummary = $("ratesSummary");
+const ratesToggle = $("ratesToggle");
 const saveBtn = $("setupSave");
 const revertBtn = $("setupRevert");
-const dirtyNote = $("setupDirty");
-let color = null;   // picked swatch; null keeps the automatic color
-let type = "rates"; // "rates" or "internal"
+let color = null;     // picked swatch; null keeps the automatic color
+let type = "rates";   // "rates" or "internal" (null on a new project until picked)
 let extraPeople = []; // added with "Add someone" before saving
+let ratesOpen = false;
 
 const project = () => projects.find((p) => p.id === shownId);
 
-function renderPicker() {
-  const list = sortProjects([...projects]);
-  if (!list.some((p) => p.id === selectedId)) selectedId = list[0]?.id || null;
-  picker.innerHTML = list.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
-  picker.value = selectedId || "";
-  $("setupTasksLink").href = `projects.html${selectedId ? `?project=${selectedId}` : ""}`;
+// ---------- Picker and heading ----------
+// The picker lists every project; "+ New Project" starts a blank form.
+const picker = createProjectPicker({
+  root: $("projectPicker"),
+  getData: () => ({ projects, mine: myProjects(), selectedId: creating ? null : selectedId }),
+  onPick: (id) => switchTo(id, false),
+  action: '<button type="button" id="newProjectBtn" class="small">+ New Project</button>',
+});
+
+// Your projects as chips: ones you manage or are assigned to.
+function myProjects() {
+  const on = new Set(assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId));
+  return sortProjects(projects.filter((p) => on.has(p.id) || p.pmPersonId === sessionPersonId));
 }
 
+async function switchTo(id, newProject) {
+  if (updateDirty() && !(await confirmDialog("Your changes haven't been saved.", { title: "Discard changes?", confirmText: "Discard" }))) {
+    picker.render();
+    return;
+  }
+  creating = newProject;
+  selectedId = newProject ? selectedId : id;
+  history.replaceState(null, "", newProject ? "?new=1" : `?project=${id}`);
+  shownId = null;
+  render();
+}
+$("newProjectBtn").addEventListener("click", () => switchTo(null, true));
+
+function renderHead() {
+  const p = creating ? null : project();
+  $("setupHead").style.setProperty("--c", p ? projectColor(p.id) : "var(--accent)");
+  $("setupHeadName").textContent = p ? p.name : "New Project";
+  const pm = p && people.find((x) => x.id === p.pmPersonId);
+  $("setupHeadMeta").textContent = p
+    ? [p.client || (isInternal(p) ? "Internal" : ""), pm ? `PM: ${pm.name}` : ""].filter(Boolean).join(" · ")
+    : "Fill in the details below, then Create Project. Add its tasks and budgets on the Projects tab.";
+  $("setupTasksLink").hidden = !p;
+  if (p) $("setupTasksLink").href = `projects.html?project=${p.id}`;
+}
+
+// ---------- Details ----------
 function renderSwatches() {
-  const current = color || (shownId ? projectColor(shownId) : null);
+  const current = color || (shownId && !creating ? projectColor(shownId) : null);
   $("setupColor").innerHTML = PROJECT_COLOR_CHOICES.map((c) => `<button type="button" class="swatch ${c === current ? "on" : ""}"
     style="--c:${c};" data-color="${c}" role="radio" aria-checked="${c === current}" aria-label="Color ${c}"></button>`).join("");
 }
@@ -79,13 +128,16 @@ function renderType() {
     b.classList.toggle("on", on);
     b.setAttribute("aria-checked", on);
   });
+  $("setupTypeHint").textContent = type === "internal" ? "Not billed or paid. Just tracks hours."
+    : type === "rates" ? "Billed at each person's bill rate." : "Choose one.";
   const internal = type === "internal";
   $("setupBilling").hidden = internal;
-  $("rates").hidden = internal;
+  $("rates").hidden = internal || creating;
 }
 
-// People who bill to this project: assigned to a task, its PM, anyone with a
-// rate set here, and anyone just added.
+// ---------- Rates ----------
+// Projects use everyone's default bill rate and each expense category's
+// default rate, unless rates are set for the project here.
 function billPeople(p) {
   const ids = new Set([
     ...assignments.filter((a) => a.projectId === p.id).map((a) => a.personId),
@@ -94,29 +146,55 @@ function billPeople(p) {
   return people.filter((x) => ids.has(x.id)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function rateRow(key, label, usual, value, unit = "hr") {
+function rateRow(key, label, def, value, unit) {
   return `<div class="setup-rate-row" data-key="${esc(key)}">
     <span class="setup-rate-name">${esc(label)}</span>
-    <span class="setup-rate-usual">usually ${formatCurrency(usual)}/${esc(unit)}</span>
+    <span class="setup-rate-default">Default ${formatCurrency(def)}/${esc(unit)}</span>
     <div class="money-input"><span>$</span><input type="number" min="0" step="0.01" value="${value ?? ""}"
-      placeholder="usual" aria-label="${esc(label)} rate on this project" /><span>/${esc(unit)}</span></div>
+      aria-label="${esc(label)} rate on this project" /><span>/${esc(unit)}</span></div>
   </div>`;
 }
 
-function renderRates(p) {
+function renderRateRows(p, billRates, expenseRates) {
   const list = billPeople(p);
   const others = people.filter((x) => !x.inactive && !list.some((y) => y.id === x.id))
     .sort((a, b) => a.name.localeCompare(b.name));
-  billRatesEl.innerHTML = list.map((x) => rateRow(x.id, x.name, personBillRate(x), p.billRates?.[x.id])).join("")
+  billRatesEl.innerHTML = list.map((x) => rateRow(x.id, x.name, personBillRate(x), billRates[x.id], "hr")).join("")
+    + (list.length ? "" : '<div class="setup-none">No one is on this project yet.</div>')
     + (others.length ? `<select class="setup-add-person" aria-label="Add someone">
         <option value="">+ Add someone</option>${others.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}
-      </select>` : "")
-    + (list.length ? "" : '<div class="setup-none">No one is on this project yet.</div>');
+      </select>` : "");
   const unitCats = expenseCategories().filter((c) => c.unit && c.rate != null);
-  expenseRatesEl.innerHTML = unitCats.map((c) => rateRow(c.name, c.name, c.rate, p.expenseRates?.[c.name], c.unit)).join("")
-    || '<div class="setup-none">No categories have a rate (add a unit in Defaults below).</div>';
+  expenseRatesEl.innerHTML = unitCats.map((c) => rateRow(c.name, c.name, c.rate, expenseRates[c.name], c.unit)).join("")
+    || '<div class="setup-none">No expense categories have a rate.</div>';
 }
 
+// One line saying which rates differ from the defaults.
+function renderRatesSummary() {
+  const { billRates, expenseRates } = readForm();
+  const lines = [
+    ...Object.entries(billRates).map(([id, rate]) => {
+      const x = people.find((y) => y.id === id);
+      return x ? `${esc(x.name)} <strong>${formatCurrency(rate)}/hr</strong>` : "";
+    }),
+    ...Object.entries(expenseRates).map(([name, rate]) => {
+      const c = expenseCategories().find((y) => y.name === name);
+      return `${esc(name)} <strong>${formatCurrency(rate)}${c?.unit ? `/${esc(c.unit)}` : ""}</strong>`;
+    }),
+  ].filter(Boolean);
+  ratesSummary.innerHTML = lines.length
+    ? `<span class="rates-custom">Project rates</span> ${lines.join('<span class="rates-sep">·</span>')}<span class="rates-rest">Everything else uses default rates.</span>`
+    : '<span class="rates-default">Using default rates</span>';
+  ratesToggle.textContent = ratesOpen ? "Done" : lines.length ? "Change Rates" : "Set Project Rates";
+}
+
+ratesToggle.addEventListener("click", () => {
+  ratesOpen = !ratesOpen;
+  ratesEditor.hidden = !ratesOpen;
+  renderRatesSummary();
+});
+
+// ---------- The form ----------
 // The form as data: what Save writes.
 function readForm() {
   const rates = (el) => Object.fromEntries([...el.querySelectorAll(".setup-rate-row")]
@@ -131,61 +209,64 @@ function readForm() {
 
 function updateDirty() {
   const dirty = !!shownId && JSON.stringify(readForm()) !== saved;
-  saveBtn.disabled = !dirty;
-  revertBtn.hidden = !dirty;
-  dirtyNote.textContent = dirty ? "Unsaved changes" : "";
+  saveBtn.disabled = !creating && !dirty;
+  revertBtn.hidden = !creating && !dirty;
+  $("setupDirty").textContent = dirty && !creating ? "Unsaved changes" : "";
   return dirty;
 }
 
 function fill(p) {
-  shownId = p.id;
+  shownId = p ? p.id : "new";
   extraPeople = [];
-  Object.entries(fields).forEach(([k, el]) => { if (k !== "pmPersonId") el.value = p[k] || ""; });
-  fields.shortName.placeholder = projectShortName({ name: p.name });
-  const pmChoices = people.filter((x) => !x.inactive || x.id === p.pmPersonId).sort((a, b) => a.name.localeCompare(b.name));
+  const src = p || {};
+  Object.entries(fields).forEach(([k, el]) => { if (k !== "pmPersonId") el.value = src[k] || ""; });
+  fields.shortName.placeholder = p ? projectShortName({ name: p.name }) : "Roy 1900 W";
+  const pmChoices = people.filter((x) => !x.inactive || x.id === src.pmPersonId).sort((a, b) => a.name.localeCompare(b.name));
   fields.pmPersonId.innerHTML = '<option value="">None</option>' + pmChoices.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
-  fields.pmPersonId.value = p.pmPersonId || "";
-  color = p.color || null;
-  type = isInternal(p) ? "internal" : "rates";
+  fields.pmPersonId.value = src.pmPersonId || "";
+  color = src.color || null;
+  type = p ? (isInternal(p) ? "internal" : "rates") : null;
   renderSwatches();
   renderType();
-  renderRates(p);
+  if (p) renderRateRows(p, p.billRates || {}, p.expenseRates || {});
+  else { billRatesEl.innerHTML = ""; expenseRatesEl.innerHTML = ""; }
+  ratesOpen = false;
+  ratesEditor.hidden = true;
+  renderRatesSummary();
+  saveBtn.textContent = p ? "Save Changes" : "Create Project";
+  $("setupRemove").hidden = !p;
   saved = JSON.stringify(readForm());
   updateDirty();
 }
 
 // Redraws from the database unless there are unsaved changes here.
-function renderProject() {
-  if (!adminCheckDone || !projects.length) return;
-  renderPicker();
-  cards.hidden = !selectedId;
-  if (!selectedId) return;
-  if (shownId === selectedId && updateDirty()) return;
-  fill(projects.find((p) => p.id === selectedId));
-  if (!scrolledToHash && location.hash === "#rates") {
+function render() {
+  if (!adminCheckDone || !projectsLoaded) return;
+  if (!creating && !projects.some((p) => p.id === selectedId)) selectedId = sortProjects([...projects])[0]?.id || null;
+  if (!creating && !selectedId) creating = true;
+  picker.render();
+  renderHead();
+  const want = creating ? "new" : selectedId;
+  if (shownId === want && updateDirty()) return;
+  if (shownId === "new" && creating) return; // keep what's typed into a new project
+  fill(creating ? null : projects.find((p) => p.id === selectedId));
+  renderHead();
+  if (!scrolledToHash && location.hash === "#rates" && !creating) {
     scrolledToHash = true;
+    ratesOpen = true;
+    ratesEditor.hidden = false;
+    renderRatesSummary();
     $("rates").scrollIntoView({ block: "start" });
   }
 }
 
-picker.addEventListener("change", async () => {
-  if (updateDirty() && !(await confirmDialog("Your changes to this project haven't been saved.", { title: "Discard changes?", confirmText: "Discard" }))) {
-    picker.value = selectedId;
-    return;
-  }
-  selectedId = picker.value;
-  history.replaceState(null, "", `?project=${selectedId}`);
-  shownId = null;
-  renderProject();
-});
-
-cards.addEventListener("input", updateDirty);
-cards.addEventListener("change", (e) => {
+form.addEventListener("input", () => { updateDirty(); if (ratesOpen) renderRatesSummary(); });
+form.addEventListener("change", (e) => {
   if (e.target.matches(".setup-add-person") && e.target.value) {
-    const state = readForm();
-    extraPeople.push(e.target.value);
     const id = e.target.value;
-    renderRates({ ...project(), billRates: state.billRates });
+    const state = readForm();
+    extraPeople.push(id);
+    renderRateRows(project(), state.billRates, state.expenseRates);
     billRatesEl.querySelector(`.setup-rate-row[data-key="${id}"] input`)?.focus();
   }
   updateDirty();
@@ -205,18 +286,40 @@ $("setupType").addEventListener("click", (e) => {
   updateDirty();
 });
 
-revertBtn.addEventListener("click", () => fill(project()));
+revertBtn.addEventListener("click", () => {
+  if (creating) {
+    creating = false;
+    history.replaceState(null, "", selectedId ? `?project=${selectedId}` : location.pathname);
+    shownId = null;
+    render();
+    return;
+  }
+  fill(project());
+});
+
 saveBtn.addEventListener("click", async () => {
   const data = readForm();
   if (!data.name) {
     fields.name.focus();
     return showToast("Give the project a name.");
   }
+  if (!type) return showToast("Choose Billed to a client or Internal.");
   saveBtn.disabled = true;
   try {
+    if (creating) {
+      const ref = await Projects.add({ ...data, numberTasks: !data.internal, expenseBudget: 0, subconsultants: [] });
+      creating = false;
+      selectedId = ref.id;
+      shownId = null;
+      history.replaceState(null, "", `?project=${ref.id}`);
+      showToast("Project created. Add its tasks and budgets on the Projects tab.");
+      render();
+      return;
+    }
     await Projects.update(shownId, data);
     saved = JSON.stringify(data);
     updateDirty();
+    renderHead();
     showToast("Project saved.");
   } catch (err) {
     showToast("Error: " + err.message);
@@ -224,100 +327,15 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
+$("setupRemove").addEventListener("click", async () => {
+  const removed = await removeProject(shownId, { projects, tasks, assignments, dueDates, timeEntries, invoices, expenses });
+  if (!removed) return;
+  selectedId = null;
+  shownId = null;
+  history.replaceState(null, "", location.pathname);
+  render();
+});
+
 window.addEventListener("beforeunload", (e) => {
   if (updateDirty()) e.preventDefault();
-});
-
-// ---------- Defaults: expense categories ----------
-// The categories staff pick from when recording an expense (see expenses.js):
-// name, the group invoices show it as, an optional default rate per unit
-// (e.g. $0.70 / mile — entered as a quantity; no unit means an amount), and
-// whether to prompt for a receipt. Each change saves the whole list; a new
-// row saves once it has a name. Past expenses keep the category they were
-// recorded with.
-const categoryRows = $("categoryRows");
-let unsavedCategory = false; // a just-added row with no name yet
-
-function renderCategories() {
-  applyExpenseSettings(settings);
-  if (categoryRows.contains(document.activeElement)) return;
-  const rowHtml = (c) => `<div class="cat-grid cat-row">
-      <input type="text" class="cat-name" value="${esc(c.name)}" placeholder="Category name" aria-label="Name" />
-      <input type="text" class="cat-group" value="${esc(c.group || "")}" placeholder="${esc(c.name || "Same as name")}" aria-label="Invoice group" />
-      <div class="money-input ${c.unit ? "" : "disabled"}"><span>$</span><input type="number" class="cat-rate" min="0" step="0.01"
-        value="${c.unit && c.rate != null ? c.rate : ""}" ${c.unit ? "" : "disabled"} aria-label="Default rate" /></div>
-      <div class="cat-per"><span>/</span><input type="text" class="cat-unit" value="${esc(c.unit || "")}" placeholder="none" aria-label="Unit" /></div>
-      <label class="cat-receipt"><input type="checkbox" class="cat-receipt-box" ${c.receipt ? "checked" : ""} aria-label="Ask for a receipt" /></label>
-      <button type="button" class="icon-btn cat-remove" title="Remove category" aria-label="Remove category">&times;</button>
-    </div>`;
-  categoryRows.innerHTML = expenseCategories().map(rowHtml).join("")
-    + (unsavedCategory ? rowHtml({ name: "", group: "", unit: "", rate: null, receipt: true }) : "");
-}
-
-function readCategories() {
-  return [...categoryRows.querySelectorAll(".cat-row")].map((row) => {
-    const unit = row.querySelector(".cat-unit").value.trim().toLowerCase();
-    const rate = Number(row.querySelector(".cat-rate").value);
-    return {
-      name: row.querySelector(".cat-name").value.trim(),
-      group: row.querySelector(".cat-group").value.trim(),
-      unit,
-      rate: unit && rate > 0 ? rate : null,
-      receipt: row.querySelector(".cat-receipt-box").checked,
-    };
-  });
-}
-
-async function saveCategories(list, message = "Saved.") {
-  const named = list.filter((c) => c.name);
-  const names = named.map((c) => c.name.toLowerCase());
-  if (names.some((n, i) => names.indexOf(n) !== i)) return showToast("Two categories have the same name.");
-  if (!named.length) return showToast("Keep at least one category.");
-  unsavedCategory = list.length > named.length;
-  try {
-    await Settings.set({ expenseCategories: named });
-    showToast(message);
-  } catch (err) {
-    showToast("Error: " + err.message);
-  }
-}
-
-// Typing a unit turns the rate box on (clearing it turns it off).
-categoryRows.addEventListener("input", (e) => {
-  if (!e.target.classList.contains("cat-unit")) return;
-  const row = e.target.closest(".cat-row");
-  const on = !!e.target.value.trim();
-  row.querySelector(".cat-rate").disabled = !on;
-  row.querySelector(".money-input").classList.toggle("disabled", !on);
-});
-
-categoryRows.addEventListener("change", (e) => {
-  const list = readCategories();
-  if (list.some((c) => c.unit && !c.rate) && e.target.classList.contains("cat-rate")) return showToast("Enter a default rate above $0.");
-  saveCategories(list);
-});
-
-categoryRows.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("input")) e.target.blur(); });
-
-// Saving re-renders once focus leaves the list.
-categoryRows.addEventListener("focusout", () => setTimeout(() => {
-  if (categoryRows.contains(document.activeElement)) return;
-  renderCategories();
-  renderProject();
-}, 0));
-
-categoryRows.addEventListener("click", (e) => {
-  const btn = e.target.closest(".cat-remove");
-  if (!btn) return;
-  const row = btn.closest(".cat-row");
-  const name = row.querySelector(".cat-name").value.trim();
-  row.remove();
-  if (!name) { unsavedCategory = false; renderCategories(); return; }
-  saveCategories(readCategories(), `Removed "${name}". Past expenses keep it.`);
-});
-
-$("addCategory").addEventListener("click", () => {
-  unsavedCategory = true;
-  renderCategories();
-  categoryRows.querySelector(".cat-row:last-child .cat-name").focus();
 });

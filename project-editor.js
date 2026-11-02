@@ -1,96 +1,80 @@
-// The project popup (admins, on the Projects tab). Adding a project: name,
-// client, PM, billing, invoice-to details, tasks with budgets and dates.
-// Editing one: just its tasks, budgets and expenses (the rest is in Project
-// setup). Also removes projects. Markup lives in projects.html (#projectModal).
+// Edit Tasks & Budgets (admins, on the Projects tab): a project's tasks with
+// budgets and dates, its expenses budget and subconsultants. Markup lives in
+// projects.html (#projectModal). A project's details are in Setup, which also
+// adds and removes projects (removeProject below).
 import { Projects, Tasks, Assignments, TimeEntries, DueDates, Expenses } from "./db.js";
-import { formatCurrency, showToast, closeOnBackdropClick, esc, alertDialog, confirmDialog, PROJECT_COLOR_CHOICES, projectColor, projectShortName } from "./util.js";
+import { formatCurrency, showToast, closeOnBackdropClick, esc, alertDialog, confirmDialog } from "./util.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
 
-// How a project bills: each person's bill rate, or not at all (internal).
-const PROJECT_TYPES = {
-  rates: "Billed at each person's bill rate.",
-  internal: "Not billed or paid. Just tracks hours.",
-};
+// Keep the Google Sheet's Task Budgets tab current. Best-effort: if it
+// fails, the next invoice sync rewrites budgets anyway.
+export function syncBudgetsToSheet({ tasks, projects }) {
+  if (!sheetSyncEnabled()) return;
+  postToSheet({ budgets: buildBudgets({ tasks, projects }) })
+    .catch((err) => console.warn("Sheet budget sync failed:", err));
+}
+
+// Removes a project and everything that belongs to it (tasks, assignments,
+// subtasks and events, logged hours, expenses). Refuses if anything was ever
+// invoiced, since that history is part of the invoice paper trail.
+export async function removeProject(projectId, { projects, tasks, assignments, dueDates, timeEntries, invoices, expenses }) {
+  const project = projects.find((p) => p.id === projectId);
+  if (!project) return false;
+  const projectTasks = tasks.filter((t) => t.projectId === projectId);
+  const projectAssignments = assignments.filter((a) => a.projectId === projectId);
+  const projectDueDates = dueDates.filter((d) => d.projectId === projectId);
+  const projectEntries = timeEntries.filter((e) => e.projectId === projectId);
+  const projectExpenses = expenses.filter((e) => e.projectId === projectId);
+
+  if (projectEntries.some((e) => e.invoiced) || projectExpenses.some((e) => e.invoiced) ||
+    invoices.some((i) => i.projectId === projectId)) {
+    await alertDialog("Removing it would break the invoice history.", `"${project.name}" has been invoiced`);
+    return false;
+  }
+
+  const counts = [
+    [projectTasks.length, "task"], [projectAssignments.length, "assignment"],
+    [projectDueDates.length, "subtask/event"], [projectEntries.length, "logged time entry"],
+    [projectExpenses.length, "expense"],
+  ].filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}${n === 1 ? "" : "s"}`);
+  const detail = counts.length ? `This also permanently deletes its ${counts.join(", ")}.\n\n` : "";
+  if (!(await confirmDialog(`${detail}This can't be undone.`, { title: `Remove "${project.name}"?`, confirmText: "Remove Project", danger: true }))) return false;
+
+  try {
+    for (const e of projectEntries) await TimeEntries.remove(e.id);
+    for (const e of projectExpenses) await Expenses.remove(e.id);
+    for (const d of projectDueDates) await DueDates.remove(d.id);
+    for (const a of projectAssignments) await Assignments.remove(a.id);
+    for (const t of projectTasks) await Tasks.remove(t.id);
+    await Projects.remove(projectId);
+    showToast(`"${project.name}" removed.`);
+    syncBudgetsToSheet({ tasks: tasks.filter((t) => t.projectId !== projectId), projects: projects.filter((p) => p.id !== projectId) });
+    return true;
+  } catch (err) {
+    showToast("Error: " + err.message);
+    return false;
+  }
+}
 
 export function createProjectEditor({ getData, onSaved }) {
   const $ = (id) => document.getElementById(id);
   const projectModal = $("projectModal");
-  const projectModalTitle = $("projectModalTitle");
-  const modalProjectName = $("modalProjectName");
-  const modalProjectClient = $("modalProjectClient");
-  const modalBillToName = $("modalBillToName");
-  const modalBillToCompany = $("modalBillToCompany");
-  const modalBillToAddress1 = $("modalBillToAddress1");
-  const modalBillToAddress2 = $("modalBillToAddress2");
-  const modalBillToEmail = $("modalBillToEmail");
-  const modalProjectNumber = $("modalProjectNumber");
-  const modalProjectShortName = $("modalProjectShortName");
-  const modalProjectColor = $("modalProjectColor");
-  let modalColor = null; // picked swatch; null keeps the automatic color
-
-  // Color swatches; the project's current color (picked or automatic) starts selected.
-  function renderSwatches(current) {
-    modalProjectColor.innerHTML = PROJECT_COLOR_CHOICES.map((c) => `<button type="button" class="swatch ${c === current ? "on" : ""}"
-      style="--c:${c};" data-color="${c}" role="radio" aria-checked="${c === current}" aria-label="Color ${c}"></button>`).join("");
-  }
-  modalProjectColor.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-color]");
-    if (!b) return;
-    modalColor = b.dataset.color;
-    renderSwatches(modalColor);
-  });
-  const modalProjectType = $("modalProjectType");
-  const modalProjectPm = $("modalProjectPm");
-  const modalTypeHint = $("modalTypeHint");
-  const modalBillingFields = $("modalBillingFields");
   const modalTaskRows = $("modalTaskRows");
   const modalTaskHead = $("modalTaskHead");
   const modalTaskTotal = $("modalTaskTotal");
-  const removeBtn = $("modalRemoveProject");
   const expenseFields = $("modalExpenseFields");
   const expenseBudget = $("modalExpenseBudget");
   const subRows = $("modalSubRows");
   const subTotal = $("modalSubTotal");
 
-  let editingId = null;
-  let modalType = "rates";
-  // Numbered tasks ("Task 1: …"): on by default for client projects, off for
-  // internal ones (e.g. RFPs), until it's set by hand.
-  let numberTasksSet = false;
+  let editing = null; // the project
   let pendingTaskDeletions = new Set();
+  const internal = () => !!editing?.internal;
 
-  // Keep the Google Sheet's Task Budgets tab current. Best-effort: if it
-  // fails, the next invoice sync rewrites budgets anyway.
-  function syncBudgetsToSheet() {
-    if (!sheetSyncEnabled()) return;
-    const { tasks, projects } = getData();
-    postToSheet({ budgets: buildBudgets({ tasks, projects }) })
-      .catch((err) => console.warn("Sheet budget sync failed:", err));
-  }
-
-  // New projects start with no billing type: it has to be picked before
-  // saving, so nobody makes an internal project billable by accident.
-  function setModalType(type) {
-    modalType = type;
-    modalProjectType.classList.remove("needs-choice");
-    modalProjectType.querySelectorAll("button").forEach((b) => {
-      const on = b.dataset.value === type;
-      b.classList.toggle("on", on);
-      b.setAttribute("aria-checked", on);
-    });
-    modalTypeHint.textContent = type ? PROJECT_TYPES[type] : "Choose one: billed to a client, or internal.";
-    modalTypeHint.classList.toggle("needs-choice-hint", !type);
-    const internal = type === "internal";
-    modalBillingFields.style.display = type === "rates" ? "block" : "none";
-    expenseFields.style.display = type === "rates" ? "block" : "none";
-    modalTaskRows.classList.toggle("internal", internal);
-    modalTaskHead.classList.toggle("internal", internal);
-    if (!numberTasksSet) setNumbered(!internal);
-    updateTaskTotal();
-  }
-
-  // The "Task N:" prefix is a label in front of each name, numbered in row
-  // order, and is added to the name when saved.
+  // Numbered tasks ("Task 1: …"): on by default for client projects, off for
+  // internal ones (e.g. RFPs), until it's set by hand. The "Task N:" prefix
+  // is a label in front of each name, numbered in row order, and is added to
+  // the name when saved.
   const numberTasksBox = $("modalNumberTasks");
   const stripTaskNumber = (name) => name.replace(/^Task\s*\d+\s*[:.\-–]?\s*/i, "");
   function setNumbered(on) {
@@ -101,14 +85,11 @@ export function createProjectEditor({ getData, onSaved }) {
   function renumberTasks() {
     modalTaskRows.querySelectorAll(".task-num").forEach((el, i) => { el.textContent = `Task ${i + 1}:`; });
   }
-  numberTasksBox.addEventListener("change", () => {
-    numberTasksSet = true;
-    setNumbered(numberTasksBox.checked);
-  });
+  numberTasksBox.addEventListener("change", () => setNumbered(numberTasksBox.checked));
 
   function updateTaskTotal() {
     const rows = [...modalTaskRows.querySelectorAll(".modal-task-row")];
-    if (modalType === "internal") {
+    if (internal()) {
       modalTaskTotal.textContent = rows.length ? `${rows.length} ${rows.length === 1 ? "task" : "tasks"}` : "";
       return;
     }
@@ -140,96 +121,28 @@ export function createProjectEditor({ getData, onSaved }) {
   }
 
   function open(project) {
-    const { people, tasks } = getData();
-    editingId = project ? project.id : null;
+    const { tasks } = getData();
+    editing = project;
     pendingTaskDeletions = new Set();
-    projectModalTitle.textContent = project ? "Tasks & budgets" : "New project";
-    projectModal.querySelector(".sheet-modal").classList.toggle("slim", !!project);
-    modalProjectName.readOnly = !!project;
-    if (project) $("modalSetupLink").href = `setup.html?project=${project.id}`;
-    modalProjectName.value = project ? project.name : "";
-    modalProjectClient.value = project ? project.client || "" : "";
-    modalBillToName.value = project ? project.billToName || "" : "";
-    modalBillToCompany.value = project ? project.billToCompany || "" : "";
-    modalBillToAddress1.value = project ? project.billToAddress1 || "" : "";
-    modalBillToAddress2.value = project ? project.billToAddress2 || "" : "";
-    modalBillToEmail.value = project ? project.billToEmail || "" : "";
-    modalProjectNumber.value = project ? project.projectNumber || "" : "";
-    modalProjectShortName.value = project ? project.shortName || "" : "";
-    modalProjectShortName.placeholder = project ? projectShortName({ name: project.name }) : "Short name";
-    modalColor = project ? project.color || null : null;
-    renderSwatches(project ? projectColor(project.id) : null);
-    const pmChoices = people.filter((p) => !p.inactive || (project && p.id === project.pmPersonId))
-      .sort((x, y) => x.name.localeCompare(y.name));
-    modalProjectPm.innerHTML = '<option value="">None</option>' + pmChoices
-      .map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
-    modalProjectPm.value = project ? project.pmPersonId || "" : "";
-
-    const projectTasks = project
-      ? tasks.filter((t) => t.projectId === project.id).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-      : [];
-    modalTaskRows.innerHTML = projectTasks.length > 0
+    $("projectModalName").textContent = project.name;
+    const projectTasks = tasks.filter((t) => t.projectId === project.id)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    modalTaskRows.innerHTML = projectTasks.length
       ? projectTasks.map((t) => taskRowHtml(t.id, t.name, t.budget, t.startDate, t.endDate)).join("")
       : taskRowHtml();
-    expenseBudget.value = project && project.expenseBudget ? project.expenseBudget : "";
-    subRows.innerHTML = (project?.subconsultants || []).map(subRowHtml).join("");
+    modalTaskRows.classList.toggle("internal", internal());
+    modalTaskHead.classList.toggle("internal", internal());
+    expenseFields.style.display = internal() ? "none" : "";
+    expenseBudget.value = project.expenseBudget || "";
+    subRows.innerHTML = (project.subconsultants || []).map(subRowHtml).join("");
     updateSubTotal();
-    numberTasksSet = !!project && project.numberTasks !== undefined;
-    setNumbered(project && project.numberTasks !== undefined ? project.numberTasks : !(project && project.internal));
-    setModalType(project ? (project.internal ? "internal" : "rates") : null);
-    removeBtn.style.display = project ? "" : "none";
-
+    setNumbered(project.numberTasks !== undefined ? project.numberTasks : !internal());
+    updateTaskTotal();
     projectModal.style.display = "flex";
-    if (!project) modalProjectName.focus();
   }
 
   function close() {
     projectModal.style.display = "none";
-  }
-
-  // Removes a project and everything that belongs to it (tasks, assignments,
-  // subtasks and events, logged hours, expenses). Refuses if anything was ever
-  // invoiced, since that history is part of the invoice paper trail.
-  async function remove(projectId) {
-    const { projects, tasks, assignments, dueDates, timeEntries, invoices, expenses = [] } = getData();
-    const project = projects.find((p) => p.id === projectId);
-    if (!project) return false;
-    const projectTasks = tasks.filter((t) => t.projectId === projectId);
-    const projectAssignments = assignments.filter((a) => a.projectId === projectId);
-    const projectDueDates = dueDates.filter((d) => d.projectId === projectId);
-    const projectEntries = timeEntries.filter((e) => e.projectId === projectId);
-    const projectExpenses = expenses.filter((e) => e.projectId === projectId);
-
-    if (projectEntries.some((e) => e.invoiced) || projectExpenses.some((e) => e.invoiced) ||
-      invoices.some((i) => i.projectId === projectId)) {
-      await alertDialog("Removing it would break the invoice history.", `"${project.name}" has been invoiced`);
-      return false;
-    }
-
-    const counts = [
-      [projectTasks.length, "task"], [projectAssignments.length, "assignment"],
-      [projectDueDates.length, "subtask/event"], [projectEntries.length, "logged time entry"],
-      [projectExpenses.length, "expense"],
-    ].filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}${n === 1 ? "" : "s"}`);
-    const detail = counts.length ? `\n\nThis also permanently deletes its ${counts.join(", ")}.` : "";
-    if (!(await confirmDialog(`${detail.trim()}
-
-This can't be undone.`.trim(), { title: `Remove "${project.name}"?`, confirmText: "Remove project", danger: true }))) return false;
-
-    try {
-      for (const e of projectEntries) await TimeEntries.remove(e.id);
-      for (const e of projectExpenses) await Expenses.remove(e.id);
-      for (const d of projectDueDates) await DueDates.remove(d.id);
-      for (const a of projectAssignments) await Assignments.remove(a.id);
-      for (const t of projectTasks) await Tasks.remove(t.id);
-      await Projects.remove(projectId);
-      showToast(`"${project.name}" removed.`);
-      syncBudgetsToSheet();
-      return true;
-    } catch (err) {
-      showToast("Error: " + err.message);
-      return false;
-    }
   }
 
   $("modalAddSubRow").addEventListener("click", () => {
@@ -251,10 +164,6 @@ This can't be undone.`.trim(), { title: `Remove "${project.name}"?`, confirmText
     updateSubTotal();
   });
 
-  modalProjectType.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-value]");
-    if (btn) setModalType(btn.dataset.value);
-  });
   $("modalAddTaskRow").addEventListener("click", () => {
     modalTaskRows.insertAdjacentHTML("beforeend", taskRowHtml());
     renumberTasks();
@@ -287,67 +196,29 @@ This can't be undone.`.trim(), { title: `Remove "${project.name}"?`, confirmText
   $("modalCancelProject").addEventListener("click", close);
   $("modalCloseProject").addEventListener("click", close);
   closeOnBackdropClick(projectModal, close);
-  removeBtn.addEventListener("click", async () => {
-    if (editingId && await remove(editingId)) {
-      close();
-      onSaved(null);
-    }
-  });
 
   $("modalSaveProject").addEventListener("click", async () => {
-    const { tasks, assignments, dueDates } = getData();
-    const name = modalProjectName.value.trim();
-    const internal = modalType === "internal";
-    if (!name) {
-      modalProjectName.focus();
-      return showToast("Give the project a name.");
-    }
-    if (!modalType) {
-      modalProjectType.classList.remove("needs-choice");
-      void modalProjectType.offsetWidth; // restart the nudge animation
-      modalProjectType.classList.add("needs-choice");
-      modalProjectType.scrollIntoView({ behavior: "smooth", block: "center" });
-      return showToast("Choose Staff bill rates or Internal.");
-    }
-    const projectData = {
-      name,
-      client: modalProjectClient.value.trim(),
-      billToName: modalBillToName.value.trim(),
-      billToCompany: modalBillToCompany.value.trim(),
-      billToAddress1: modalBillToAddress1.value.trim(),
-      billToAddress2: modalBillToAddress2.value.trim(),
-      billToEmail: modalBillToEmail.value.trim(),
-      projectNumber: modalProjectNumber.value.trim(),
-      shortName: modalProjectShortName.value.trim() || null,
-      color: modalColor,
-      internal,
-      numberTasks: numberTasksBox.checked,
-      billAtPayRate: false,
-      pmPersonId: modalProjectPm.value || null,
-      expenseBudget: internal ? 0 : Number(expenseBudget.value) || 0,
-      subconsultants: internal ? [] : [...subRows.querySelectorAll(".sub-row")]
-        .map((row) => ({
-          id: row.dataset.subId || `sub_${Math.random().toString(36).slice(2, 10)}`,
-          name: row.querySelector(".subName").value.trim(),
-          budget: Number(row.querySelector(".subBudget").value) || 0,
-        }))
-        .filter((sub) => sub.name),
-    };
+    const { assignments, dueDates } = getData();
+    const projectId = editing.id;
     try {
-      let projectId = editingId;
-      if (projectId) {
-        await Projects.update(projectId, projectData);
-      } else {
-        const ref = await Projects.add(projectData);
-        projectId = ref.id;
-      }
+      await Projects.update(projectId, {
+        numberTasks: numberTasksBox.checked,
+        expenseBudget: internal() ? 0 : Number(expenseBudget.value) || 0,
+        subconsultants: internal() ? [] : [...subRows.querySelectorAll(".sub-row")]
+          .map((row) => ({
+            id: row.dataset.subId || `sub_${Math.random().toString(36).slice(2, 10)}`,
+            name: row.querySelector(".subName").value.trim(),
+            budget: Number(row.querySelector(".subBudget").value) || 0,
+          }))
+          .filter((sub) => sub.name),
+      });
 
       const numbered = numberTasksBox.checked;
       for (const [i, row] of [...modalTaskRows.querySelectorAll(".modal-task-row")].entries()) {
         const taskId = row.dataset.taskId;
         const bareName = stripTaskNumber(row.querySelector(".modalTaskName").value.trim());
         const taskName = bareName && numbered ? `Task ${i + 1}: ${bareName}` : bareName;
-        const taskBudget = internal ? 0 : Number(row.querySelector(".modalTaskBudget").value) || 0;
+        const taskBudget = internal() ? 0 : Number(row.querySelector(".modalTaskBudget").value) || 0;
         const startDate = row.querySelector(".modalTaskStart").value || null;
         const endDate = row.querySelector(".modalTaskEnd").value || null;
         if (!taskName) continue;
@@ -365,9 +236,9 @@ This can't be undone.`.trim(), { title: `Remove "${project.name}"?`, confirmText
       }
 
       close();
-      showToast(editingId ? "Project updated." : "Project added.");
+      showToast("Tasks & budgets saved.");
       onSaved(projectId);
-      syncBudgetsToSheet();
+      syncBudgetsToSheet(getData());
     } catch (err) {
       showToast("Error: " + err.message);
     }

@@ -5,7 +5,7 @@ import { Expenses, Settings } from "./db.js";
 import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO, confirmDialog } from "./util.js";
 import { notifyEntries } from "./notifications.js";
 
-// Expense categories are set by admins (Project setup > Defaults, saved as
+// Expense categories are set by admins (Staff > Default Expense Rates, saved as
 // settings/app.expenseCategories). Each is { name, group, unit, rate, receipt }:
 //   group   — what the client sees on invoices (e.g. Mileage and Meals both
 //             show as "Travel"). Blank: the category's own name.
@@ -35,10 +35,12 @@ export const expenseCategories = () => categories;
 export const categoryInfo = (name) => categories.find((c) => c.name === name) || null;
 const unitOf = (name) => categoryInfo(name)?.unit || "";
 
-// The invoice group a category shows as ("Travel"). Categories saved before
-// groups existed use the default list's group, else their own name.
+// The invoice group a category shows as ("Travel"), or its own name if it
+// isn't in one. Categories saved before groups existed use the default
+// list's group.
 export function categoryGroup(name) {
-  const group = categoryInfo(name)?.group || DEFAULT_CATEGORIES.find((c) => c.name === name)?.group;
+  const info = categoryInfo(name);
+  const group = info && "group" in info ? info.group : DEFAULT_CATEGORIES.find((c) => c.name === name)?.group;
   return group || name || "Other";
 }
 
@@ -81,9 +83,9 @@ export const countsToward = (e) => !e.declined;
 const MARKUP = `
 <div id="expenseModal" class="modal-overlay" style="display:none;">
   <div class="modal sheet-modal sheet-small item-sheet" role="dialog" aria-labelledby="expenseHeading">
-    <div class="item-head">
-      <h2 id="expenseHeading">New expense</h2>
-      <button type="button" id="expenseClose" class="icon-btn" aria-label="Close">&times;</button>
+    <div class="sheet-head">
+      <h2 id="expenseHeading">New Expense</h2>
+      <button type="button" id="expenseClose" class="icon-btn sheet-close" aria-label="Close">&times;</button>
     </div>
     <div class="sheet-body">
       <div id="expenseSubField">
@@ -238,7 +240,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     editing = record;
     kind = record ? record.kind : preset.kind || "project";
     const projectId = record ? record.projectId : preset.projectId;
-    heading.textContent = `${record ? "Edit" : "New"} ${kind === "sub" ? "subconsultant invoice" : "expense"}`;
+    heading.textContent = `${record ? "Edit" : "New"} ${kind === "sub" ? "Subconsultant Invoice" : "Expense"}`;
 
     const choices = projectChoices();
     projectSelect.innerHTML = choices.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
@@ -271,7 +273,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     updateCost();
     updateReceipt();
     deleteBtn.style.display = record ? "" : "none";
-    saveBtn.textContent = record ? "Save changes" : kind === "sub" ? "Add invoice" : "Add expense";
+    saveBtn.textContent = record ? "Save Changes" : kind === "sub" ? "Add Invoice" : "Add Expense";
     modal.style.display = "flex";
     fitDescription();
     description.focus();

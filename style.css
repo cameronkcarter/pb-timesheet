@@ -74,7 +74,6 @@ nav [hidden] { display: none !important; }
 /* A line under a page's title (Approvals). */
 .page-intro { margin: -8px 0 16px; color: var(--text-muted); font-size: 14px; }
 /* Between everyone's tabs and the approvals/admin ones. */
-nav .nav-divider { align-self: center; width: 1px; height: 18px; margin: 0 6px; background: rgba(255, 255, 255, 0.35); }
 nav a.active {
   background: var(--accent);
   color: #fff;
@@ -1015,41 +1014,23 @@ button.link-btn:hover {
   max-width: 460px;
 }
 
+/* Every popup: a title (and a line under it) with × on the right, the body,
+   then Remove/Delete on the left of the footer and Cancel · Save on the right. */
 .sheet-head {
-  position: relative;
-  padding: 22px 56px 14px 26px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 16px 14px 26px;
   border-bottom: 1px solid var(--border);
 }
 
-.sheet-kicker {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 4px;
-}
-
-input[type="text"].title-input {
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 2px 0 4px;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text);
-  background: transparent;
-}
-
-input[type="text"].title-input:focus {
-  outline: none;
-  border-bottom-color: var(--navy-light);
-}
+.sheet-head h2 { margin: 0; font-size: 18px; }
+.sheet-sub { margin-top: 2px; font-size: 13px; color: var(--text-muted); }
 
 button.icon-btn.sheet-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
+  flex: 0 0 auto;
+  margin: -4px 0 0;
   font-size: 24px;
   padding: 4px 10px;
 }
@@ -1488,27 +1469,6 @@ tr.inactive-row td {
 }
 
 /* ---------- Subtask / event editor (app-style sheet) ---------- */
-.item-sheet .item-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 20px 6px 26px;
-}
-
-.item-sheet .item-head h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.item-sheet .item-head .icon-btn {
-  font-size: 24px;
-  padding: 4px 10px;
-}
-
-.item-sheet .sheet-body {
-  padding-top: 8px;
-}
-
 .item-sheet .item-label {
   display: block;
   margin: 18px 0 6px;
@@ -2281,10 +2241,8 @@ table.inv-people {
 
 .inv-people tr.inv-people-total td { font-weight: 700; border-top: 1px solid #cfc4d6; }
 .inv-people tr.inv-overhead td { border-bottom: none; color: var(--text-muted); font-weight: 600; }
-.inv-people .inv-overhead-note { font-weight: 400; font-size: 12px; }
 /* Totals under the Ready to invoice and Sent invoices tables. */
 .inv-table tr.inv-total-row td { font-weight: 700; border-top: 2px solid #cfc4d6; background: #faf8fb; cursor: default; }
-.inv-intro { margin: -2px 0 10px; font-size: 13px; color: var(--text-muted); }
 /* Preview PDF: the invoice in a popup. */
 .pdf-preview {
   position: fixed;
@@ -2315,21 +2273,47 @@ table.inv-people {
   .pdf-preview-box { border-radius: 0; }
   .pdf-preview-head span { display: none; }
 }
-/* "Review" on each project ready to invoice, so it's clear the row opens. */
+/* "Review" on each project ready to invoice: solid, the page's main action.
+   Once open it turns to an outlined "Close". */
 .inv-review {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  justify-content: center;
+  min-width: 64px;
+  padding: 5px 12px;
   border: 1px solid var(--navy);
   border-radius: 6px;
-  color: var(--navy);
+  background: var(--navy);
+  color: #fff;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
-.inv-table tr.inv-row:hover .inv-review,
-.inv-review.open { background: var(--navy); color: #fff; }
+.inv-table tr.inv-row:hover .inv-review { background: var(--navy-light); border-color: var(--navy-light); }
+.inv-review.open,
+.inv-table tr.inv-row:hover .inv-review.open { background: #fff; color: var(--navy); border-color: #d3c3de; }
+
+/* A project's labor: even columns, Billed to Client and Staff Pay shaded
+   apart under their own headings. */
+table.inv-labor { table-layout: fixed; }
+.inv-labor col.c-hours { width: 70px; }
+.inv-labor col.c-rate { width: 92px; }
+.inv-labor col.c-amt { width: 104px; }
+.inv-labor col.c-notes { width: 112px; }
+.inv-labor td, .inv-labor th { height: 34px; padding-top: 0; padding-bottom: 0; vertical-align: middle; }
+.inv-labor tr.inv-col-groups th { height: 26px; padding-top: 8px; font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; text-align: center; }
+.inv-labor tr.inv-col-groups th.g-bill { color: var(--navy); }
+.inv-labor tr.inv-col-groups th.g-pay { color: #2e6b39; }
+.inv-labor .g-bill { background: rgba(110, 50, 140, 0.05) !important; }
+.inv-labor .g-pay { background: rgba(46, 125, 50, 0.06) !important; }
+.inv-labor th.g-bill:nth-child(3), .inv-labor td.g-bill:nth-child(3),
+.inv-labor tr.inv-col-groups th.g-bill,
+.inv-labor tr.inv-col-groups th.g-pay,
+.inv-labor th.g-pay:nth-child(5), .inv-labor td.g-pay:nth-child(5) { border-left: 1px solid #e3d9ea; }
+.inv-labor td.g-pay:nth-child(6), .inv-labor th.g-pay:nth-child(6),
+.inv-labor tr.inv-col-groups th.g-pay { border-right: 1px solid #e3d9ea; }
+.inv-labor button.link-btn { margin: 0; padding: 0; }
+.inv-labor tr.inv-notes td { height: auto; padding: 8px 12px; }
 
 /* ---------- Admin: pending approval ---------- */
 .appr-head {
@@ -2781,10 +2765,6 @@ button.small.btn-approve-project:hover {
 
 /* ---------- Approvals tab ---------- */
 
-.appr-card .appr-head {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
 .appr-table tr.appr-closed td { opacity: 0.6; }
 
 /* ---------- Projects: closing internal tasks ---------- */
@@ -3039,8 +3019,6 @@ select.analytics-select {
 .chart-tip b { margin-left: auto; padding-left: 12px; color: var(--text); }
 .chart-tip .tip-total { border-top: 1px solid var(--border); padding-top: 3px; margin-top: 2px; }
 
-/* Room for Edit · Decline | No charge | Approve. */
-.appr-card .appr-table col.c-actions { width: 244px; }
 
 /* Analytics header wraps on narrow screens; month labels thin out. */
 .appr-head:has(#analyticsRange) { flex-wrap: wrap; }
@@ -3155,7 +3133,6 @@ button.appr-unapprove {
 
 button.appr-unapprove:hover { color: var(--red); background: #fff; }
 
-.appr-card .appr-table col.c-actions { width: 290px; }
 
 /* ---------- Nav on phones: links wrap under the logo ---------- */
 @media (max-width: 700px) {
@@ -3181,15 +3158,11 @@ button.appr-unapprove:hover { color: var(--red); background: #fff; }
   .notif-bell { width: 34px; height: 34px; margin: 0; }
   .notif-panel { top: 40px; }
 }
-.appr-card .appr-table col.c-task { width: 20%; }
-.appr-card .appr-table col.c-date { width: 112px; }
 
-/* Phones: each category's name gets its own line above rate · unit · receipt. */
+/* Phones: group and category on one line, then rate · unit · receipt. */
 @media (max-width: 600px) {
-  .cat-grid { grid-template-columns: 96px minmax(0, 1fr) 44px 28px; gap: 6px; }
-  .cat-row .cat-name { grid-column: 1 / 3; }
-  .cat-row .cat-group { grid-column: 3 / -1; }
-  .cat-head span:nth-child(-n+2) { display: none; }
+  .cat-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 96px; gap: 6px; }
+  .cat-head { display: none; }
 }
 
 /* ---------- Dialogs (alertDialog / confirmDialog in util.js) ---------- */
@@ -3993,50 +3966,248 @@ textarea.mb-input:focus { outline: none; border-color: var(--navy-light); box-sh
   .mb-more { margin-left: 38px; }
 }
 
+/* ================= Design standards =================
+   Buttons: solid purple for the main action in a card or popup (Save, Add,
+   Review, Approve). White with a purple outline for everything else (Cancel,
+   Edit, Download). Text links for small adds inside a list (+ Add Task).
+   Red text for Remove/Delete, only in a popup's footer; × removes a row from
+   a list you're editing. Headings are Title Case. Anything editable is a
+   white box with a border. */
+button.secondary,
+button.btn-tint-purple,
+.button-link {
+  background: #fff;
+  color: var(--navy);
+  border: 1px solid #d3c3de;
+}
+button.secondary:hover,
+button.btn-tint-purple:hover,
+.button-link:hover { background: #f6f1f9; border-color: var(--navy-light); }
+a.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-radius: 6px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.btn-primary.small { padding: 5px 10px; font-size: 12px; }
+a.btn-primary:hover { background: var(--navy-light); }
+a.btn-primary[hidden] { display: none; }
+h3 { font-size: 15px; margin: 0 0 8px; }
+.card-head { margin-bottom: 14px; }
+.field-wide { grid-column: 1 / -1; }
+.field-grid.field { margin-top: 14px; }
+.sheet-section.first { margin-top: 0; padding-top: 0; border-top: none; }
 
-/* Project popup when editing: tasks and budgets only. */
-.sheet-modal.slim .info-only { display: none !important; }
-.sheet-modal:not(.slim) .slim-only { display: none; }
-.sheet-modal.slim .title-input { pointer-events: none; }
-.sheet-note { margin: 0 0 4px; font-size: 13px; color: var(--text-muted); }
-.sheet-note a { color: var(--accent); font-weight: 600; }
+/* ---------- Nav: Approvals and the admin tabs in a tinted group ---------- */
+nav .nav-manage {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 12px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+nav .nav-manage-label {
+  padding: 0 6px 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+nav .nav-manage a { padding: 5px 11px; }
+@media (max-width: 1100px) {
+  nav a { padding: 8px 10px; }
+  nav .nav-manage-label { display: none; }
+}
+@media (max-width: 700px) {
+  nav .nav-manage { margin-left: 0; flex-wrap: wrap; }
+}
 
-/* ---------- Project setup ---------- */
-.setup-pick { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.setup-pick-label { font-weight: 600; }
-.setup-pick select { flex: 1 1 260px; max-width: 520px; margin: 0; }
-.setup-tasks-link { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
-.setup-tasks-link:hover { text-decoration: underline; }
-.setup-name-wrap { margin-bottom: 16px; }
-.setup-name-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
-/* An obvious text box (not a heading), so it's clear it can be changed. */
-input.setup-name { width: 100%; margin: 0; font-size: 18px; font-weight: 600; padding: 10px 12px; border: 1px solid #cfc4d6; border-radius: 8px; background: #fff; }
-input.setup-name:focus { border-color: var(--accent); }
-.setup-hint { margin: 4px 0 12px; font-size: 13px; color: var(--text-muted); }
-.setup-rates { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-.setup-rates h3 { margin: 0 0 8px; font-size: 14px; }
-.setup-rate-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 150px; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+/* ---------- Project picker (Projects, Setup) ---------- */
+.project-picker { padding: 16px 0 14px; }
+.picker-top { display: flex; align-items: center; gap: 12px; padding: 0 20px; }
+.picker-top > button, .picker-top > a { margin: 0; flex: 0 0 auto; }
+.project-search {
+  position: relative;
+  flex: 1;
+  max-width: 460px;
+  margin: 0;
+  color: var(--text-muted);
+}
+.project-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); }
+.project-search input {
+  width: 100%;
+  margin: 0;
+  padding: 9px 10px 9px 34px;
+  border: 1px solid #d3c3de;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text);
+}
+.project-search input:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(138, 70, 168, 0.15); }
+.picker-results {
+  margin: 8px 20px 0;
+  max-width: 460px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(40, 20, 50, 0.08);
+}
+.picker-results[hidden] { display: none; }
+button.picker-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+button.picker-result:hover, button.picker-result.first { background: #f4eef7; }
+button.picker-result i { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.picker-result-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-result-meta { flex: 0 0 auto; font-size: 12px; color: var(--text-muted); }
+.picker-none { padding: 8px 10px; font-size: 13px; color: var(--text-muted); }
+.project-picker .chip-label { margin: 14px 20px 8px; }
+
+/* ---------- Setup ---------- */
+#setupHead .head-info-link[hidden] { display: none; }
+.rates-summary { font-size: 14px; color: var(--text); line-height: 1.7; }
+.rates-default { color: var(--text-muted); }
+.rates-custom { margin-right: 8px; padding: 2px 8px; border-radius: 999px; background: #f3eaf7; color: var(--navy); font-size: 12px; font-weight: 700; }
+.rates-sep { margin: 0 8px; color: #c9bdd0; }
+.rates-rest { display: block; font-size: 13px; color: var(--text-muted); }
+.setup-rates { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.setup-rates[hidden] { display: none; }
+.setup-rate-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 150px; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); }
 .setup-rate-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.setup-rate-usual { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.setup-rate-default { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 .setup-rate-row .money-input input { margin: 0; }
-.setup-add-person { margin: 10px 0 0; width: auto; font-size: 13px; }
-.setup-none { font-size: 13px; color: var(--text-muted); padding: 6px 0; }
-.setup-save { position: sticky; bottom: 0; z-index: 5; display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin: -6px 0 20px; padding: 10px 0; background: var(--bg); }
-.setup-save button { margin: 0; }
-.setup-save #setupDirty { margin-right: auto; font-size: 13px; font-weight: 600; color: #9a5a16; }
-#rates { scroll-margin-top: 12px; }
+select.setup-add-person { width: auto; margin: 10px 0 0; font-size: 13px; }
+.setup-none { padding: 7px 0; font-size: 13px; color: var(--text-muted); }
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 12px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 -4px 14px rgba(40, 20, 50, 0.06);
+}
+.save-bar button { margin: 0; }
+.save-bar button[hidden] { display: none; }
+.save-bar .item-delete { margin-right: auto; }
+.save-bar-note { font-size: 13px; font-weight: 600; color: #9a5a16; }
 @media (max-width: 700px) {
   .setup-rates { grid-template-columns: 1fr; }
   .setup-rate-row { grid-template-columns: minmax(0, 1fr) 130px; }
-  .setup-rate-usual { grid-column: 1; grid-row: 2; }
+  .setup-rate-default { grid-column: 1; grid-row: 2; }
   .setup-rate-row .money-input { grid-row: 1 / 3; grid-column: 2; }
+  .picker-top { flex-wrap: wrap; }
 }
 
 /* ---------- Staff ---------- */
-.staff-table .th-note { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--text-muted); }
-.staff-proj { display: inline-flex; align-items: center; gap: 5px; margin: 2px 4px 2px 0; padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--text); text-decoration: none; white-space: nowrap; }
-.staff-proj:hover { border-color: var(--accent); }
-.staff-proj strong { font-weight: 600; }
-.staff-proj.own { border-color: var(--accent); background: #f7f0fa; }
-.staff-none { font-size: 13px; color: var(--text-muted); }
-.setup-sub { margin: 0; font-size: 15px; }
+.staff-table th, .staff-table td { padding: 11px 12px; vertical-align: middle; }
+.staff-table tbody tr:nth-child(even) td { background: #faf8fb; }
+.staff-table td.staff-name { font-weight: 600; }
+.staff-table td.staff-email { color: var(--text-muted); font-size: 13px; }
+.staff-table td.staff-email.missing { font-style: italic; }
+.staff-table .c-check { width: 70px; text-align: center; }
+.staff-table .c-check input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+.staff-table .c-actions { width: 110px; text-align: right; }
+.staff-table th.num, .staff-table td.num { text-align: right; white-space: nowrap; }
+
+/* Default expense rates: a group's categories sit together under its name. */
+.cat-block { padding: 4px 0; border-bottom: 1px solid var(--border); }
+.cat-block.grouped { background: #fbf9fc; }
+.cat-block .cat-row { padding: 3px 6px; border-top: none; }
+.cat-head { padding: 0 6px 6px; }
+.cat-block .cat-add-to { margin: 2px 0 4px; padding-left: 6px; }
+.cat-group-name { font-weight: 600; }
+
+/* ---------- Approvals: one panel each for waiting, approved and internal ---------- */
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.page-head h1 { margin: 0; }
+.page-head .segmented[hidden] { display: none; }
+.card.appr-panel { padding: 0; overflow: hidden; }
+h2.appr-panel-head { margin: 0; }
+button.appr-panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 16px 20px;
+  border-radius: 0;
+  background: #fff;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: left;
+}
+button.appr-panel-toggle:hover { background: #faf7fc; }
+.appr-panel-meta { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.appr-panel-toggle .chev { margin-left: auto; color: var(--text-muted); }
+.appr-panel.open .appr-panel-toggle .chev { transform: rotate(180deg); }
+.appr-panel.open .appr-panel-head { border-bottom: 1px solid var(--border); }
+.appr-panel-body:empty { display: none; }
+.appr-panel-body .empty { padding: 18px 20px; }
+.appr-panel-body .pay-scroll { padding: 0 12px 8px; }
+
+table.appr-table { min-width: 960px; }
+table.appr-table.appr-no-money { min-width: 700px; }
+.appr-table col.c-date { width: 108px; }
+.appr-table col.c-who { width: 160px; }
+.appr-table col.c-hours { width: 64px; }
+.appr-table col.c-rate { width: 84px; }
+.appr-table col.c-billed { width: 96px; }
+.appr-table col.c-actions.pending { width: 236px; }
+.appr-table col.c-actions.approved { width: 170px; }
+.appr-table col.c-actions.internal { width: 80px; }
+.appr-table td.appr-rate-col { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.appr-table td.appr-who { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.appr-table .appr-sub { font-size: 11px; font-weight: 600; color: #9a5a16; }
+
+/* Rows alternate; an open row's entries sit under a line per task. */
+.appr-table tr.appr-row.stripe td { background: #faf8fb; }
+.appr-table tr.appr-row:hover td { background: #f6f1f9; }
+.appr-table tr.appr-row.open td { background: #f1e8f6; border-bottom-color: transparent; }
+.appr-table tr.appr-sub-head td {
+  padding: 8px 8px 4px 22px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+  background: #fff;
+  border-bottom: 1px solid #eee8f2;
+}
+.appr-table tr.appr-entry td { padding-top: 6px; padding-bottom: 6px; background: #fff; }
+.appr-table tr.appr-entry.stripe td { background: #faf8fb; }
+.appr-table tr.appr-entry td.appr-date { padding-left: 22px; }
+.appr-table tr.appr-entry .appr-move { font-size: 12px; color: var(--text-muted); }
+.appr-table tr.appr-entry .appr-move:hover { color: var(--navy); }
+.appr-table tr.appr-group td { background: #fff; font-weight: 700; }
+main.wide { max-width: 1280px; }
+.appr-table th.num, .appr-table td.num { text-align: right; white-space: nowrap; }
+.appr-table th.num + th:not(.num), .appr-table td.num + td:not(.num) { padding-left: 18px; }

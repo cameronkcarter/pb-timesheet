@@ -1,6 +1,6 @@
 // The Analytics tab (admins): analytics, and the data tools (Google Sheet
-// sync, Excel backup). People are on the Staff tab, expense categories in
-// Project setup.
+// sync, Excel backup). People and default expense rates are on the Staff
+// tab.
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses, Settings } from "./db.js";
 import { formatCurrency, showToast, esc } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";

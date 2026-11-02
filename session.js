@@ -137,7 +137,7 @@ export function requireSession() {
 }
 
 // Call once a person record has loaded, on pages restricted to admins
-// (Invoices, Project setup, Staff, Analytics). Redirects away and returns
+// (Invoices, Setup, Staff, Analytics). Redirects away and returns
 // false if they aren't one.
 export function enforceAdmin(person) {
   if (!person || !person.isAdmin) {
@@ -149,7 +149,7 @@ export function enforceAdmin(person) {
 }
 
 // Call whenever people or projects load, on every page with the nav. Links
-// after the divider start hidden in the HTML: Approvals shows for admins and
+// in the Manage group start hidden in the HTML: Approvals (and the group) shows for admins and
 // project managers (data-nav="mgr"), the rest for admins (data-nav="admin").
 export function applyAdminNavVisibility(person, projects = []) {
   if (!person) return;

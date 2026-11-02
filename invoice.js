@@ -259,9 +259,10 @@ function statusHtml(row) {
     (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — Sync is on Admin">Not in sheet</span>' : "");
 }
 
-// Each person's hours, bill rate, amount billed, pay rate and pay, then a
-// Total row and the firm's overhead (billed minus pay) under Billed, with
-// each person's notes on request.
+// Each person's hours, then what the client is billed (rate, amount) and
+// what the person is paid (rate, amount) under their own shaded headings,
+// a Total row, and what's left for overhead (billed minus pay). Each
+// person's notes on request.
 function peopleHtml(rowKey, entries, fallbackRows) {
   const rows = (entries.length ? groupByPerson(entries) : (fallbackRows || []))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -273,8 +274,12 @@ function peopleHtml(rowKey, entries, fallbackRows) {
   const totalBilled = rows.reduce((s, r) => s + r.total, 0);
   const totalHours = rows.reduce((s, r) => s + r.hours, 0);
   const money = (v) => (v == null ? "—" : formatCurrency(v));
-  return `<table class="inv-people">
-    <thead><tr><th>Person</th><th class="num">Hours</th><th class="num">Bill rate</th><th class="num">Billed</th><th class="num">Pay rate</th><th class="num">Pay</th><th></th></tr></thead>
+  return `<table class="inv-people inv-labor">
+    <colgroup><col /><col class="c-hours" /><col class="c-rate" /><col class="c-amt" /><col class="c-rate" /><col class="c-amt" /><col class="c-notes" /></colgroup>
+    <thead>
+      <tr class="inv-col-groups"><th></th><th></th><th colspan="2" class="g-bill">Billed to Client</th><th colspan="2" class="g-pay">Staff Pay</th><th></th></tr>
+      <tr><th>Person</th><th class="num">Hours</th><th class="num g-bill">Rate</th><th class="num g-bill">Amount</th><th class="num g-pay">Rate</th><th class="num g-pay">Amount</th><th></th></tr>
+    </thead>
     <tbody>${rows.map((r) => {
       const notes = entries.filter((e) => e.personId === r.personId && e.note)
         .sort((a, b) => (a.date < b.date ? -1 : 1));
@@ -283,22 +288,22 @@ function peopleHtml(rowKey, entries, fallbackRows) {
       return `<tr>
         <td>${esc(r.name)}</td>
         <td class="num">${fmtHrs(r.hours)}</td>
-        <td class="num">${formatCurrency(r.rate)}</td>
-        <td class="num">${formatCurrency(r.total)}</td>
-        <td class="num">${pay == null || !r.hours ? "—" : formatCurrency(pay / r.hours)}</td>
-        <td class="num">${money(pay)}</td>
+        <td class="num g-bill">${formatCurrency(r.rate)}</td>
+        <td class="num g-bill">${formatCurrency(r.total)}</td>
+        <td class="num g-pay">${pay == null || !r.hours ? "—" : formatCurrency(pay / r.hours)}</td>
+        <td class="num g-pay">${money(pay)}</td>
         <td class="num">${notes.length ? `<button type="button" class="link-btn" data-action="notes" data-person="${r.personId}">Notes (${notes.length}) <span class="chev ${open ? "up" : ""}">&#9662;</span></button>` : ""}</td>
       </tr>
       ${open && notes.length ? `<tr class="inv-notes"><td colspan="7">${notes.map((e) =>
         `<div><span>${shortDate(e.date)} · ${fmtHrs(Number(e.hours))} hrs</span>${esc(e.note)}</div>`).join("")}</td></tr>` : ""}`;
     }).join("")}
     <tr class="inv-people-total">
-      <td>Total</td><td class="num">${fmtHrs(totalHours)}</td><td></td>
-      <td class="num">${formatCurrency(totalBilled)}</td><td></td>
-      <td class="num">${money(totalPay)}</td><td></td>
+      <td>Total</td><td class="num">${fmtHrs(totalHours)}</td><td class="g-bill"></td>
+      <td class="num g-bill">${formatCurrency(totalBilled)}</td><td class="g-pay"></td>
+      <td class="num g-pay">${money(totalPay)}</td><td></td>
     </tr>
     ${totalPay != null ? `<tr class="inv-overhead">
-      <td colspan="3">Overhead <span class="inv-overhead-note">(billed − pay)</span></td>
+      <td colspan="3" title="Amount billed minus staff pay">Left for Overhead</td>
       <td class="num">${formatCurrency(totalBilled - totalPay)}</td><td colspan="3"></td>
     </tr>` : ""}</tbody>
   </table>`;
@@ -380,7 +385,7 @@ function render() {
 
   const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
   // Ready to invoice: a clear button to open each project.
-  const reviewCell = (open) => `<td class="num"><span class="inv-review ${open ? "open" : ""}">${open ? "Close" : "Review"} <span class="chev ${open ? "up" : ""}">&#9662;</span></span></td>`;
+  const reviewCell = (open) => `<td class="num"><span class="inv-review ${open ? "open" : ""}">${open ? "Close" : "Review"}</span></td>`;
   const totalRow = (cells) => `<tr class="inv-total-row">${cells}</tr>`;
   const projectCell = (row) => {
     const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
