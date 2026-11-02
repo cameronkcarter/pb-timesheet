@@ -4015,18 +4015,9 @@ nav .nav-manage {
   background: rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
-nav .nav-manage-label {
-  padding: 0 6px 0 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
-}
 nav .nav-manage a { padding: 5px 11px; }
 @media (max-width: 1100px) {
   nav a { padding: 8px 10px; }
-  nav .nav-manage-label { display: none; }
 }
 @media (max-width: 700px) {
   nav .nav-manage { margin-left: 0; flex-wrap: wrap; }
@@ -4211,3 +4202,4 @@ table.appr-table.appr-no-money { min-width: 700px; }
 main.wide { max-width: 1280px; }
 .appr-table th.num, .appr-table td.num { text-align: right; white-space: nowrap; }
 .appr-table th.num + th:not(.num), .appr-table td.num + td:not(.num) { padding-left: 18px; }
+.inv-expenses th.c-cat { width: 130px; }

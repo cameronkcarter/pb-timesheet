@@ -153,11 +153,13 @@ function nextRows() {
 const sumAmount = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
 
 // Lines for an invoice's Expenses table: each project expense, then each
-// subconsultant invoice. [{ group, description, quantity, rate, amount }]
+// subconsultant invoice. [{ group, category, detail, description, quantity,
+// rate, amount }] — category and detail are the two halves of description.
 function expenseRowsFor(project, exps) {
   const byDate = (a, b) => (a.date < b.date ? -1 : 1);
   const projectLines = exps.filter((e) => e.kind !== "sub").sort(byDate).map((e) => ({
     kind: "project", group: categoryGroup(e.category), date: e.date, label: expenseLabel(e, project), qtyText: expenseQtyText(e),
+    category: e.category || "", detail: e.description || "",
     description: expenseLabel(e, project),
     quantity: e.quantity == null ? null : Number(e.quantity),
     rate: e.rate == null ? null : Number(e.rate),
@@ -165,6 +167,7 @@ function expenseRowsFor(project, exps) {
   }));
   const subLines = exps.filter((e) => e.kind === "sub").sort(byDate).map((e) => ({
     kind: "sub", group: "Subconsultants", date: e.date, label: expenseLabel(e, project), qtyText: "",
+    category: "Subconsultant", detail: expenseLabel(e, project),
     description: `Subconsultant: ${expenseLabel(e, project)}`, quantity: null, rate: null,
     amount: Number(e.amount || 0),
   }));
@@ -187,23 +190,35 @@ function expenseGroupsOf(rows) {
   return [...groups].map(([group, amount]) => ({ group, amount }));
 }
 
-// Expenses on an invoice: project expenses, then subconsultant invoices
-// (tagged "Sub") — same columns as the expense list on the Projects tab.
+// An expense line's category ("Materials", or "Subconsultant") and the rest
+// of its description. Lines saved before the two were kept apart are split
+// from their description ("Materials · Boards").
+const isSubLine = (r) => (r.kind || (String(r.description || "").startsWith("Subconsultant:") ? "sub" : "project")) === "sub";
+function expenseParts(r) {
+  if (r.category != null) return { category: r.category, detail: r.detail || "" };
+  const text = String(r.label || r.description || "").replace(/^Subconsultant: /, "");
+  if (isSubLine(r)) return { category: "Subconsultant", detail: text };
+  const [category, ...rest] = text.split(" · ");
+  return { category, detail: rest.join(" · ") };
+}
+
+// Expenses on an invoice: project expenses, then subconsultant invoices —
+// same columns as the expense list on the Projects tab.
 function expenseTableHtml(rows) {
   if (!rows.length) return "";
-  const isSub = (r) => (r.kind || (r.description.startsWith("Subconsultant:") ? "sub" : "project")) === "sub";
-  const ordered = [...rows.filter((r) => !isSub(r)), ...rows.filter(isSub)];
+  const ordered = [...rows.filter((r) => !isSubLine(r)), ...rows.filter(isSubLine)];
   const total = rows.reduce((t, r) => t + Number(r.amount || 0), 0);
   return `<table class="inv-people inv-expenses">
-    <thead><tr><th class="c-date">Date</th><th>Expense</th><th class="num">Quantity</th><th class="num">Amount</th></tr></thead>
+    <thead><tr><th class="c-date">Date</th><th class="c-cat">Category</th><th>Description</th><th class="num">Quantity</th><th class="num">Amount</th></tr></thead>
     <tbody>
       ${ordered.map((r) => `<tr>
         <td>${r.date ? shortDate(r.date) : ""}</td>
-        <td>${isSub(r) ? '<span class="row-kind">Sub</span>' : ""}${esc(r.label || r.description.replace(/^Subconsultant: /, ""))}</td>
+        <td>${esc(expenseParts(r).category)}</td>
+        <td>${esc(expenseParts(r).detail) || '<span class="appr-muted">—</span>'}</td>
         <td class="num">${r.qtyText || (r.quantity != null && r.rate != null ? `${fmtHrs(r.quantity)} × ${formatCurrency(r.rate)}` : "—")}</td>
         <td class="num">${formatCurrency(r.amount)}</td>
       </tr>`).join("")}
-      <tr class="inv-exp-total"><td colspan="3">Expenses total</td><td class="num">${formatCurrency(total)}</td></tr>
+      <tr class="inv-exp-total"><td colspan="4">Expenses Total</td><td class="num">${formatCurrency(total)}</td></tr>
     </tbody>
   </table>`;
 }
@@ -701,26 +716,28 @@ async function addWorkSummaryPage(doc, data, { marginX, rightX, tableStyles, hea
   const money = (v) => (v == null ? "" : formatCurrency(v));
   const expBody = exps.map((r) => [
     r.date ? formatShortMDY(new Date(String(r.date).slice(0, 10) + "T00:00:00")) : "",
-    pdfText(r.description),
+    pdfText(expenseParts(r).category),
+    pdfText(expenseParts(r).detail),
     r.quantity == null ? "" : String(Math.round(r.quantity * 100) / 100),
     money(r.rate),
     formatCurrency(r.amount),
   ]);
   const totalRow = expBody.length;
-  expBody.push(["", "Expense Total", "", "", formatCurrency(exps.reduce((t, r) => t + Number(r.amount || 0), 0))]);
+  expBody.push(["", "Expense Total", "", "", "", formatCurrency(exps.reduce((t, r) => t + Number(r.amount || 0), 0))]);
   doc.autoTable({
     startY: body.length ? doc.lastAutoTable.finalY + 8 : 38,
     theme: "grid",
-    head: [["Date", "Expenses", "Quantity", "Rate", "Amount"]],
+    head: [["Date", "Category", "Description", "Quantity", "Rate", "Amount"]],
     body: expBody,
     styles: { ...tableStyles, valign: "top" },
     headStyles,
     columnStyles: {
       0: { cellWidth: 20 },
-      1: { cellWidth: "auto" },
-      2: { cellWidth: 20, halign: "right" },
+      1: { cellWidth: 30 },
+      2: { cellWidth: "auto" },
       3: { cellWidth: 20, halign: "right" },
-      4: { cellWidth: 24, halign: "right" },
+      4: { cellWidth: 20, halign: "right" },
+      5: { cellWidth: 24, halign: "right" },
     },
     didParseCell: (hd) => {
       if (hd.section === "body" && hd.row.index === totalRow) {
