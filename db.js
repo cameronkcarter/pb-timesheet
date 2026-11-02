@@ -138,7 +138,7 @@ export const Settings = {
 };
 
 // Project documents look like:
-// { name, client, projectNumber, billToName, billToCompany, billToAddress1,
+// { name, client, projectNumber, billToName, billToTitle, billToCompany, billToAddress1,
 //   billToAddress2, pmPersonId (project manager: approves its hours),
 //   internal (not billed or paid, e.g. Proposals & Pursuits),
 //   color, shortName (optional; see projectColor / projectShortName in util.js) }

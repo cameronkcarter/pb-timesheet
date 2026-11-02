@@ -815,7 +815,7 @@ async function buildPdf(data) {
   doc.setFont(undefined, "normal");
   doc.setFontSize(9);
   const billLines = [
-    data.project.billToName, data.project.billToCompany,
+    data.project.billToName, data.project.billToTitle, data.project.billToCompany,
     data.project.billToAddress1, data.project.billToAddress2, data.project.billToEmail,
   ].filter(Boolean).map(pdfText);
   billLines.forEach((line, i) => doc.text(line, marginX, y + i * 5));

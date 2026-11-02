@@ -99,7 +99,7 @@ function excelSheets() {
       Project: p.name, Client: p.client || "", "Project #": p.projectNumber || "", PM: personName(p.pmPersonId),
       Billing: p.internal ? "Internal" : "Staff bill rates", "Expenses budget": Number(p.expenseBudget || 0),
       Subconsultants: (p.subconsultants || []).map((s) => s.name + " (" + formatCurrency(s.budget) + ")").join("; "),
-      "Bill to": [p.billToName, p.billToCompany, p.billToAddress1, p.billToAddress2, p.billToEmail].filter(Boolean).join(", "),
+      "Bill to": [p.billToName, p.billToTitle, p.billToCompany, p.billToAddress1, p.billToAddress2, p.billToEmail].filter(Boolean).join(", "),
     })),
     Tasks: tasks.map((t) => ({
       Project: projectName(t.projectId), Task: t.name, Budget: Number(t.budget || 0),

@@ -58,7 +58,7 @@ const $ = (id) => document.getElementById(id);
 const form = $("setupForm");
 const fields = {
   name: $("setupName"), client: $("setupClient"), projectNumber: $("setupNumber"), shortName: $("setupShortName"),
-  pmPersonId: $("setupPm"), billToName: $("setupBillToName"), billToCompany: $("setupBillToCompany"),
+  pmPersonId: $("setupPm"), billToName: $("setupBillToName"), billToTitle: $("setupBillToTitle"), billToCompany: $("setupBillToCompany"),
   billToAddress1: $("setupBillToAddress1"), billToAddress2: $("setupBillToAddress2"), billToEmail: $("setupBillToEmail"),
 };
 const billRatesEl = $("setupBillRates");
