@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Project setup — Place Builders</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+<link rel="icon" type="image/png" href="brand/favicon.png" />
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<nav>
+  <a href="dashboard.html" id="navBrandLink" class="brand"><img src="brand/wordmark-white.png" alt="Place Builders" /></a>
+  <a href="dashboard.html">Dashboard</a>
+  <a href="timesheet.html">Timesheet</a>
+  <a href="projects.html">Projects</a>
+  <span class="nav-divider" data-nav="mgr" hidden></span>
+  <a href="approvals.html" data-nav="mgr" hidden>Approvals</a>
+  <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
+  <a href="setup.html" class="active" data-nav="admin" hidden>Project setup</a>
+  <a href="staff.html" data-nav="admin" hidden>Staff</a>
+  <a href="admin.html" data-nav="admin" hidden>Analytics</a>
+  <span id="navUserName" class="nav-user-name" style="margin-left:auto;"></span>
+  <a href="#" id="logoutLink">Log Out</a>
+</nav>
+
+<main>
+  <h1>Project setup</h1>
+
+  <div class="card setup-pick">
+    <label for="setupProject" class="setup-pick-label">Project</label>
+    <select id="setupProject"></select>
+    <a href="projects.html" id="setupTasksLink" class="setup-tasks-link">Tasks &amp; budgets ›</a>
+  </div>
+
+  <div id="setupProjectCards">
+    <div class="card">
+      <div class="setup-name-wrap">
+        <label for="setupName" class="setup-name-label">Full project name</label>
+        <input type="text" id="setupName" class="setup-name" placeholder="Project name" />
+      </div>
+      <div class="field-grid">
+        <div class="field">
+          <label for="setupClient">Client</label>
+          <input type="text" id="setupClient" placeholder="Roy City" />
+        </div>
+        <div class="field">
+          <label for="setupNumber">Project # <span class="field-optional">on invoices</span></label>
+          <input type="text" id="setupNumber" placeholder="Client's reference or PO #" />
+        </div>
+        <div class="field">
+          <label for="setupShortName">Short name <span class="field-optional">for the project list</span></label>
+          <input type="text" id="setupShortName" maxlength="24" />
+        </div>
+        <div class="field">
+          <label for="setupPm">Project manager</label>
+          <select id="setupPm"></select>
+          <div class="field-hint">Approves hours on this project</div>
+        </div>
+        <div class="field">
+          <label>Color</label>
+          <div class="color-swatches" id="setupColor" role="radiogroup" aria-label="Project color"></div>
+        </div>
+        <div class="field">
+          <label>Billing</label>
+          <div class="segmented" id="setupType" role="radiogroup">
+            <button type="button" data-value="rates" role="radio">Staff bill rates</button>
+            <button type="button" data-value="internal" role="radio">Internal</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="setupBilling">
+      <h2>Invoice to</h2>
+      <div class="field-grid">
+        <div class="field">
+          <label for="setupBillToName">Contact</label>
+          <input type="text" id="setupBillToName" placeholder="Jane Smith" />
+        </div>
+        <div class="field">
+          <label for="setupBillToCompany">Company</label>
+          <input type="text" id="setupBillToCompany" placeholder="Roy City" />
+        </div>
+        <div class="field">
+          <label for="setupBillToAddress1">Street</label>
+          <input type="text" id="setupBillToAddress1" placeholder="5051 S 1900 W" />
+        </div>
+        <div class="field">
+          <label for="setupBillToAddress2">City, State ZIP</label>
+          <input type="text" id="setupBillToAddress2" placeholder="Roy, Utah 84067" />
+        </div>
+        <div class="field">
+          <label for="setupBillToEmail">Email</label>
+          <input type="email" id="setupBillToEmail" placeholder="jane@roycity.gov" autocomplete="off" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="rates">
+      <h2>Rates on this project</h2>
+      <p class="setup-hint">Leave a box blank to use the usual rate.</p>
+      <div class="setup-rates">
+        <div>
+          <h3>Bill rates</h3>
+          <div id="setupBillRates"></div>
+        </div>
+        <div>
+          <h3>Expense rates</h3>
+          <div id="setupExpenseRates"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="setup-save">
+      <span id="setupDirty"></span>
+      <button type="button" id="setupRevert" class="secondary">Undo changes</button>
+      <button type="button" id="setupSave">Save project</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Defaults for all projects</h2>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+      <h3 class="setup-sub">Expense categories</h3>
+      <button id="addCategory" class="secondary small">+ Add category</button>
+    </div>
+    <p class="setup-hint">Staff pick the category. Invoices show only its group (e.g. Mileage and Meals both show as Travel).</p>
+    <div class="cat-grid cat-head"><span>Name</span><span>Invoice group</span><span>Default rate</span><span>Unit</span><span>Receipt</span><span></span></div>
+    <div id="categoryRows"></div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module" src="setup.js"></script>
+</body>
+</html>

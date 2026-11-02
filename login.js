@@ -3,7 +3,7 @@ import { setSessionPersonId, staffEntryFor, clearSession } from "./session.js";
 import { esc } from "./util.js";
 
 // Login: sign in with Google. Your email must be on the staff list (set in
-// Admin > People). Test Mode is switched on from the nav once you're in.
+// the Staff tab). Test Mode is switched on from the nav once you're in.
 
 const loading = document.getElementById("loginLoading");
 const main = document.getElementById("loginMain");

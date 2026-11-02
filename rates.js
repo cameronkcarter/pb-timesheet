@@ -1,4 +1,4 @@
-// Two rates apply to every hour logged, both set per person in Admin:
+// Two rates apply to every hour logged, both set per person on the Staff tab:
 //   Pay rate  (person.rate)     — what the person earns. Locked onto each
 //               time entry when it's logged (entry.rate), falling back to the
 //               person's current rate for old entries logged before that.
@@ -6,7 +6,9 @@
 //               person's hours, and what project budgets are spent at. Locked
 //               onto each entry when it's invoiced (entry.billRate), so rate
 //               changes later never rewrite past invoices. Falls back to the
-//               pay rate if a person has no bill rate set.
+//               pay rate if a person has no bill rate set. A project can
+//               bill someone at a different rate (project.billRates, set in
+//               Project setup: { personId: rate }).
 //
 // Projects either bill at each person's bill rate, or are internal
 // (project.internal: not billed or paid, e.g. Proposals & Pursuits; only
@@ -15,7 +17,7 @@
 //
 // Assignments are hours per person per task (assignment.hours).
 
-// Firm's standard bill rate, pre-filled when adding a person in Admin.
+// Firm's standard bill rate, pre-filled when adding a person on the Staff tab.
 export const DEFAULT_BILL_RATE = 150;
 
 function findProject(projectId, projects) {
@@ -39,6 +41,13 @@ export function personBillRate(person) {
   return person.billRate != null && person.billRate !== "" ? Number(person.billRate) : Number(person.rate || 0);
 }
 
+// A person's bill rate on a project: the project's own rate for them if set,
+// else their usual one.
+export function projectBillRate(project, person) {
+  const own = person && project?.billRates?.[person.id];
+  return own != null && own !== "" ? Number(own) : personBillRate(person);
+}
+
 export function payRateOf(entry, { projects, people }) {
   if (isInternal(findProject(entry.projectId, projects))) return 0;
   return entry.rate != null ? Number(entry.rate) : personPayRate(findPerson(entry.personId, people));
@@ -55,13 +64,13 @@ export function billRateOf(entry, { projects, people }) {
   // Invoiced hours keep the rate they were billed at. Hours invoiced before
   // bill rates existed were billed at the person's pay rate.
   if (entry.invoiced) return entry.billRate != null ? Number(entry.billRate) : payRateOf(entry, { projects, people });
-  return personBillRate(findPerson(entry.personId, people));
+  return projectBillRate(project, findPerson(entry.personId, people));
 }
 
 // What an hour of this person's time costs the project's budget.
 export function assignmentRate(project, person) {
   if (isInternal(project)) return 0;
-  return personBillRate(person);
+  return projectBillRate(project, person);
 }
 
 // (ctx is unused now but kept so callers don't need to change.)

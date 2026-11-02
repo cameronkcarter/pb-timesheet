@@ -1,6 +1,7 @@
-// The project popup (admins, on the Projects tab): name, client, PM, billing,
-// invoice-to details and tasks with budgets and dates. Also removes projects.
-// Markup lives in projects.html (#projectModal).
+// The project popup (admins, on the Projects tab). Adding a project: name,
+// client, PM, billing, invoice-to details, tasks with budgets and dates.
+// Editing one: just its tasks, budgets and expenses (the rest is in Project
+// setup). Also removes projects. Markup lives in projects.html (#projectModal).
 import { Projects, Tasks, Assignments, TimeEntries, DueDates, Expenses } from "./db.js";
 import { formatCurrency, showToast, closeOnBackdropClick, esc, alertDialog, confirmDialog, PROJECT_COLOR_CHOICES, projectColor, projectShortName } from "./util.js";
 import { sheetSyncEnabled, buildBudgets, postToSheet } from "./sheets.js";
@@ -142,7 +143,10 @@ export function createProjectEditor({ getData, onSaved }) {
     const { people, tasks } = getData();
     editingId = project ? project.id : null;
     pendingTaskDeletions = new Set();
-    projectModalTitle.textContent = project ? "Edit project" : "New project";
+    projectModalTitle.textContent = project ? "Tasks & budgets" : "New project";
+    projectModal.querySelector(".sheet-modal").classList.toggle("slim", !!project);
+    modalProjectName.readOnly = !!project;
+    if (project) $("modalSetupLink").href = `setup.html?project=${project.id}`;
     modalProjectName.value = project ? project.name : "";
     modalProjectClient.value = project ? project.client || "" : "";
     modalBillToName.value = project ? project.billToName || "" : "";
@@ -176,7 +180,7 @@ export function createProjectEditor({ getData, onSaved }) {
     removeBtn.style.display = project ? "" : "none";
 
     projectModal.style.display = "flex";
-    modalProjectName.focus();
+    if (!project) modalProjectName.focus();
   }
 
   function close() {

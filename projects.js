@@ -46,6 +46,7 @@ const budgetTbody = document.querySelector("#budgetTable tbody");
 const budgetEmpty = document.getElementById("budgetEmpty");
 const barLegend = document.getElementById("barLegend");
 const editProjectBtn = document.getElementById("editProjectBtn");
+const editInfoLink = document.getElementById("editInfoLink");
 const editTimelineBtn = document.getElementById("editTimelineBtn");
 
 const ganttChart = document.getElementById("ganttChart");
@@ -135,12 +136,12 @@ if (sessionPersonId) {
     people = data;
     if (!navChecked) {
       navChecked = true;
-      applyAdminNavVisibility(currentPerson());
+      applyAdminNavVisibility(currentPerson(), projects);
       renderNavUserName(currentPerson());
     }
     renderAll();
   });
-  Projects.listen((data) => { projects = data; renderAll(); });
+  Projects.listen((data) => { projects = data; applyAdminNavVisibility(currentPerson(), projects); renderAll(); });
   Tasks.listen((data) => { tasks = data; renderAll(); });
   Assignments.listen((data) => { assignments = data; renderAll(); });
   TimeEntries.listen((data) => { timeEntries = data; renderBudget(); });
@@ -297,7 +298,7 @@ function renderBudget() {
 
   const pm = people.find((x) => x.id === project.pmPersonId);
   // The selected project: name, then client / internal and its PM, with
-  // Edit project (admins) beside them.
+  // a link to its Project setup (admins) beside them.
   projectHead.style.setProperty("--c", projectColor(project.id));
   renderProjectStats(project);
   projectHeadName.textContent = project.name;
@@ -308,6 +309,8 @@ function renderBudget() {
   ].filter(Boolean).join(" · ");
   budgetHeading.textContent = internal ? "Tasks" : "Tasks & Budget";
   editProjectBtn.style.display = admin ? "" : "none";
+  editInfoLink.style.display = admin ? "" : "none";
+  editInfoLink.href = `setup.html?project=${project.id}`;
   barLegend.style.display = internal ? "none" : "";
 
   thead.innerHTML = internal
@@ -743,7 +746,7 @@ budgetTbody.addEventListener("click", async (e) => {
   renderBudget();
 });
 
-// ---------- Admin tools: add/edit project ----------
+// ---------- Admin tools: add a project, edit tasks & budgets ----------
 const projectEditor = createProjectEditor({
   getData: () => ({ people, projects, tasks, assignments, dueDates, timeEntries, invoices, expenses }),
   onSaved: (projectId) => {

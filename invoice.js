@@ -332,7 +332,7 @@ function detailHtml(row) {
       ${unbilledNoteHtml(row.unbilled, "Also closes out")}
       ${expenseTableHtml(expenseRowsFor(row.project, row.exps))}
       <div class="inv-actions">
-        ${waiting ? `<a class="entry-status warn inv-warn" href="dashboard.html#approvals"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See approvals</u></a>` : ""}
+        ${waiting ? `<a class="entry-status warn inv-warn" href="approvals.html"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See approvals</u></a>` : ""}
         <button type="button" class="secondary" data-action="preview" ${canGenerate ? "" : "disabled"}>Preview PDF</button>
         <button type="button" data-action="generate" ${canGenerate ? "" : "disabled"}>Generate invoice</button>
       </div>`;

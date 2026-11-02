@@ -8,7 +8,6 @@ import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js"
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
 import { createExpenseEditor, expenseLabel, expenseStatus } from "./expenses.js";
-import { createApprovals, canApprove } from "./approvals.js";
 import { createMessageBoard } from "./board.js";
 
 const selectedPersonId = requireSession();
@@ -39,12 +38,12 @@ if (selectedPersonId) {
     if (!navChecked) {
       navChecked = true;
       const me = people.find((p) => p.id === selectedPersonId);
-      applyAdminNavVisibility(me);
+      applyAdminNavVisibility(me, projects);
       renderNavUserName(me);
     }
     render();
   });
-  Projects.listen((d) => { projects = d; render(); });
+  Projects.listen((d) => { projects = d; applyAdminNavVisibility(people.find((p) => p.id === selectedPersonId), projects); render(); });
   Tasks.listen((d) => { tasks = d; render(); });
   Assignments.listen((d) => { assignments = d; render(); });
   TimeEntries.listen((d) => { timeEntries = d; render(); });
@@ -52,45 +51,6 @@ if (selectedPersonId) {
   Invoices.listen((d) => { invoices = d; render(); });
   Expenses.listen((d) => { expenses = d; render(); });
 }
-
-// ---------- Approvals ----------
-// For project managers and admins: one line saying what's waiting, opening
-// to the approvals list (see approvals.js). Starts closed so the Dashboard
-// stays short (a link to #approvals opens it).
-const approvalsCard = document.getElementById("approvals");
-const approvalToggle = document.getElementById("approvalToggle");
-const approvalPanel = document.getElementById("approvalPanel");
-const approvalSummary = document.getElementById("approvalSummary");
-let approvalsOpen = location.hash === "#approvals";
-try { localStorage.removeItem("pb_approvals_open"); } catch (_) { /* no storage */ } // no longer remembered
-
-const approvals = createApprovals({
-  getData: () => ({ people, projects, tasks, assignments, timeEntries, expenses }),
-  sessionPersonId: selectedPersonId,
-  onChange: (s) => {
-    approvalSummary.innerHTML = s.count
-      ? `<span class="appr-dot"></span>${[
-        s.hours ? `${fmtHrs(s.hours)} hrs` : "",
-        s.expenses ? `${formatCurrency(s.expenses)} expenses` : "",
-      ].filter(Boolean).join(" · ")} waiting from ${s.people} ${s.people === 1 ? "person" : "people"}`
-      : "Nothing waiting";
-  },
-});
-
-function renderApprovals() {
-  const me = people.find((p) => p.id === selectedPersonId);
-  approvalsCard.hidden = !canApprove(me, projects);
-  if (approvalsCard.hidden) return;
-  approvalToggle.setAttribute("aria-expanded", String(approvalsOpen));
-  approvalsCard.classList.toggle("open", approvalsOpen);
-  approvalPanel.hidden = !approvalsOpen;
-  approvals.render();
-}
-
-approvalToggle.addEventListener("click", () => {
-  approvalsOpen = !approvalsOpen;
-  renderApprovals();
-});
 
 // ---------- Message Board ----------
 // Posts to everyone or one person, under the hours and pay boxes (see board.js).
@@ -102,7 +62,6 @@ const board = selectedPersonId ? createMessageBoard({
 
 function render() {
   board?.render();
-  renderApprovals();
   const personId = selectedPersonId;
   const person = people.find((p) => p.id === personId);
   if (!person) return;

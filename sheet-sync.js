@@ -36,7 +36,7 @@ export function createSheetSync({ getData, onChange = () => {} }) {
       if (manual) showToast(`Sheet synced: ${result.invoicesAdded} new invoices, ${result.linesAdded} new lines.`);
     } catch (err) {
       error = err.message;
-      showToast("Couldn't update the Google Sheet (nothing else was affected). Try Sync in Admin.");
+      showToast("Couldn't update the Google Sheet (nothing else was affected). Try Sync on the Analytics tab.");
     } finally {
       syncing = false;
       onChange();

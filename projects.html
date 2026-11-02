@@ -17,8 +17,12 @@
   <a href="dashboard.html">Dashboard</a>
   <a href="timesheet.html">Timesheet</a>
   <a href="projects.html" class="active">Projects</a>
-  <a href="admin.html" id="navAdminLink" style="display:none;">Admin</a>
-  <a href="invoice.html" id="navInvoiceLink" style="display:none;">Invoices</a>
+  <span class="nav-divider" data-nav="mgr" hidden></span>
+  <a href="approvals.html" data-nav="mgr" hidden>Approvals</a>
+  <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
+  <a href="setup.html" data-nav="admin" hidden>Project setup</a>
+  <a href="staff.html" data-nav="admin" hidden>Staff</a>
+  <a href="admin.html" data-nav="admin" hidden>Analytics</a>
   <span id="navUserName" class="nav-user-name" style="margin-left:auto;"></span>
   <a href="#" id="logoutLink">Log Out</a>
 </nav>
@@ -42,7 +46,7 @@
           <h2 id="projectHeadName"></h2>
           <div class="project-head-meta" id="projectHeadMeta"></div>
         </div>
-        <button id="editProjectBtn" class="small btn-tint-purple" style="display:none;">Edit project</button>
+        <a id="editInfoLink" class="head-info-link" href="setup.html" style="display:none;">Edit project info ›</a>
       </div>
       <div class="project-stats" id="projectStats"></div>
     </div>
@@ -53,6 +57,7 @@
     <div class="card">
       <div class="budget-header">
         <h2 style="margin:0;" id="budgetHeading">Tasks &amp; Budget</h2>
+        <button id="editProjectBtn" class="small btn-tint-purple" style="display:none;">Edit tasks &amp; budgets</button>
       </div>
       <div class="bar-legend" id="barLegend">
         <span><i class="invoiced"></i>Invoiced</span>
@@ -99,7 +104,7 @@
     </div>
 
     <div class="sheet-body">
-      <div class="field-grid">
+      <div class="field-grid info-only">
         <div class="field">
           <label for="modalProjectClient">Client</label>
           <input type="text" id="modalProjectClient" placeholder="Roy City" />
@@ -110,7 +115,7 @@
         </div>
       </div>
 
-      <div class="field-grid">
+      <div class="field-grid info-only">
         <div class="field">
           <label for="modalProjectShortName">Short name <span class="field-optional">for the project list</span></label>
           <input type="text" id="modalProjectShortName" maxlength="24" placeholder="Roy 1900 W" />
@@ -121,7 +126,7 @@
         </div>
       </div>
 
-      <div class="field-grid">
+      <div class="field-grid info-only">
         <div class="field">
           <label for="modalProjectPm">Project manager</label>
           <select id="modalProjectPm"></select>
@@ -129,7 +134,7 @@
         </div>
       </div>
 
-      <div class="field">
+      <div class="field info-only">
         <label>Billing</label>
         <div class="segmented" id="modalProjectType" role="radiogroup">
           <button type="button" data-value="rates" role="radio">Staff bill rates</button>
@@ -138,7 +143,7 @@
         <div class="field-hint" id="modalTypeHint"></div>
       </div>
 
-      <section class="sheet-section" id="modalBillingFields">
+      <section class="sheet-section info-only" id="modalBillingFields">
         <div class="section-title">Invoice to</div>
         <div class="field-grid">
           <div class="field">
@@ -163,6 +168,8 @@
           </div>
         </div>
       </section>
+
+      <p class="slim-only sheet-note">Name, client, PM, invoice-to and rates are in <a id="modalSetupLink" href="setup.html">Project setup ›</a></p>
 
       <section class="sheet-section">
         <div class="section-title">Tasks <span class="section-meta" id="modalTaskTotal"></span></div>

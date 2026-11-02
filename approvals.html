@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Approvals — Place Builders</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+<link rel="icon" type="image/png" href="brand/favicon.png" />
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<nav>
+  <a href="dashboard.html" id="navBrandLink" class="brand"><img src="brand/wordmark-white.png" alt="Place Builders" /></a>
+  <a href="dashboard.html">Dashboard</a>
+  <a href="timesheet.html">Timesheet</a>
+  <a href="projects.html">Projects</a>
+  <span class="nav-divider" data-nav="mgr" hidden></span>
+  <a href="approvals.html" class="active" data-nav="mgr" hidden>Approvals</a>
+  <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
+  <a href="setup.html" data-nav="admin" hidden>Project setup</a>
+  <a href="staff.html" data-nav="admin" hidden>Staff</a>
+  <a href="admin.html" data-nav="admin" hidden>Analytics</a>
+  <span id="navUserName" class="nav-user-name" style="margin-left:auto;"></span>
+  <a href="#" id="logoutLink">Log Out</a>
+</nav>
+
+<main>
+  <h1>Approvals</h1>
+  <p class="page-intro" id="approvalSummary"></p>
+
+  <div class="card appr-card">
+    <div class="appr-head">
+      <div class="segmented segmented-small" id="approvalView" role="radiogroup" aria-label="Show">
+        <button type="button" data-value="pending" role="radio" class="on">Pending</button>
+        <button type="button" data-value="approved" role="radio">Approved</button>
+        <button type="button" data-value="internal" role="radio">Internal</button>
+      </div>
+      <div class="segmented segmented-small" id="approvalScope" role="radiogroup" aria-label="Projects">
+        <button type="button" data-value="mine" role="radio" class="on">Mine</button>
+        <button type="button" data-value="all" role="radio">All projects</button>
+      </div>
+    </div>
+    <div id="pendingBody"></div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module" src="approvals-page.js"></script>
+</body>
+</html>

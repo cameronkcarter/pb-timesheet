@@ -137,24 +137,27 @@ export function requireSession() {
 }
 
 // Call once a person record has loaded, on pages restricted to admins
-// (Admin, Invoicing). Redirects away and returns false if they aren't one.
+// (Invoices, Project setup, Staff, Analytics). Redirects away and returns
+// false if they aren't one.
 export function enforceAdmin(person) {
   if (!person || !person.isAdmin) {
     window.location.href = "dashboard.html";
     return false;
   }
+  applyAdminNavVisibility(person);
   return true;
 }
 
-// Call once a person record has loaded, on pages with nav links to the
-// admin-only pages (Dashboard, Timesheet). Those links start hidden in the
-// HTML; this reveals them only if the logged-in person is an admin.
-export function applyAdminNavVisibility(person) {
-  if (!person || !person.isAdmin) return;
-  const adminLink = document.getElementById("navAdminLink");
-  const invoiceLink = document.getElementById("navInvoiceLink");
-  if (adminLink) adminLink.style.display = "";
-  if (invoiceLink) invoiceLink.style.display = "";
+// Call whenever people or projects load, on every page with the nav. Links
+// after the divider start hidden in the HTML: Approvals shows for admins and
+// project managers (data-nav="mgr"), the rest for admins (data-nav="admin").
+export function applyAdminNavVisibility(person, projects = []) {
+  if (!person) return;
+  const admin = !!person.isAdmin;
+  const mgr = admin || projects.some((p) => p.pmPersonId === person.id);
+  document.querySelectorAll("nav [data-nav]").forEach((el) => {
+    el.hidden = !(el.dataset.nav === "admin" ? admin : mgr);
+  });
 }
 
 // Call once a person record has loaded, on any page with a nav bar, to show

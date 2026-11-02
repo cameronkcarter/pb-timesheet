@@ -17,8 +17,12 @@
   <a href="dashboard.html" class="active">Dashboard</a>
   <a href="timesheet.html">Timesheet</a>
   <a href="projects.html">Projects</a>
-  <a href="admin.html" id="navAdminLink" style="display:none;">Admin</a>
-  <a href="invoice.html" id="navInvoiceLink" style="display:none;">Invoices</a>
+  <span class="nav-divider" data-nav="mgr" hidden></span>
+  <a href="approvals.html" data-nav="mgr" hidden>Approvals</a>
+  <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
+  <a href="setup.html" data-nav="admin" hidden>Project setup</a>
+  <a href="staff.html" data-nav="admin" hidden>Staff</a>
+  <a href="admin.html" data-nav="admin" hidden>Analytics</a>
   <span id="navUserName" class="nav-user-name" style="margin-left:auto;"></span>
   <a href="#" id="logoutLink">Log Out</a>
 </nav>
@@ -57,28 +61,6 @@
   <div id="messageBoard" class="card mb-card" hidden></div>
 
   <div id="declinedStrip" class="declined-strip" hidden></div>
-
-  <div class="card appr-card" id="approvals" hidden>
-    <button type="button" class="appr-summary" id="approvalToggle" aria-expanded="false" aria-controls="approvalPanel">
-      <span class="appr-summary-title">Approvals</span>
-      <span class="appr-summary-text" id="approvalSummary"></span>
-      <span class="chev" aria-hidden="true">&#9662;</span>
-    </button>
-    <div id="approvalPanel" hidden>
-      <div class="appr-head">
-        <div class="segmented segmented-small" id="approvalView" role="radiogroup" aria-label="Show">
-          <button type="button" data-value="pending" role="radio" class="on">Pending</button>
-          <button type="button" data-value="approved" role="radio">Approved</button>
-          <button type="button" data-value="internal" role="radio">Internal</button>
-        </div>
-        <div class="segmented segmented-small" id="approvalScope" role="radiogroup" aria-label="Projects">
-          <button type="button" data-value="mine" role="radio" class="on">Mine</button>
-          <button type="button" data-value="all" role="radio">All projects</button>
-        </div>
-      </div>
-      <div id="pendingBody"></div>
-    </div>
-  </div>
 
   <div class="section-head">
     <h2 style="margin:0;">Projects</h2>

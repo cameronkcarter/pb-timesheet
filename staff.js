@@ -1,0 +1,205 @@
+// The Staff tab (admins): everyone's pay rate, usual bill rate, email and
+// access, with the projects they're on and what each one bills them at
+// (set per project in Project setup).
+import { People, Projects, Assignments, TimeEntries, Staff, normEmail } from "./db.js";
+import { formatCurrency, showToast, closeOnBackdropClick, esc, confirmDialog, projectColor, projectShortName, sortProjects } from "./util.js";
+import { requireSession, wireLogout, enforceAdmin, renderNavUserName, isTestMode } from "./session.js";
+import { DEFAULT_BILL_RATE, personPayRate, personBillRate, projectBillRate, isInternal } from "./rates.js";
+
+const sessionPersonId = requireSession();
+
+let people = [];
+let projects = [];
+let assignments = [];
+let timeEntries = [];
+let adminCheckDone = false;
+let staff = [];
+let staffLoaded = false;
+
+let modalEditingPersonId = null;
+
+wireLogout("logoutLink");
+
+if (sessionPersonId) {
+  People.listen((d) => {
+    people = d;
+    if (!adminCheckDone) {
+      adminCheckDone = true;
+      const me = people.find((p) => p.id === sessionPersonId);
+      if (!enforceAdmin(me)) return;
+      renderNavUserName(me);
+    }
+    renderPeople();
+    syncStaff();
+  });
+  Staff.listen((d) => { staff = d; staffLoaded = true; syncStaff(); });
+  Projects.listen((d) => { projects = d; renderPeople(); });
+  Assignments.listen((d) => { assignments = d; renderPeople(); });
+  TimeEntries.listen((d) => { timeEntries = d; });
+}
+
+// The billed projects someone is on (assigned to a task, or its PM), each
+// with their bill rate there. A rate set just for that project is marked.
+function projectRatesHtml(person) {
+  const on = new Set(assignments.filter((a) => a.personId === person.id).map((a) => a.projectId));
+  const list = sortProjects(projects.filter((p) => !isInternal(p) && !p.archived && (on.has(p.id) || p.pmPersonId === person.id)));
+  if (!list.length) return '<span class="staff-none">None</span>';
+  return list.map((p) => {
+    const own = p.billRates?.[person.id] != null && p.billRates[person.id] !== "";
+    return `<a class="staff-proj ${own ? "own" : ""}" href="setup.html?project=${p.id}#rates" title="${esc(p.name)}${own ? " — set for this project" : ""}">
+      <span class="pay-dot" style="--c:${projectColor(p.id)};"></span>${esc(projectShortName(p))}
+      <strong>${formatCurrency(projectBillRate(p, person))}</strong></a>`;
+  }).join("");
+}
+
+const peopleTbody = document.querySelector("#peopleTable tbody");
+const peopleEmpty = document.getElementById("peopleEmpty");
+
+const personModal = document.getElementById("personModal");
+const personModalTitle = document.getElementById("personModalTitle");
+const modalPersonName = document.getElementById("modalPersonName");
+const modalPersonRate = document.getElementById("modalPersonRate");
+const modalPersonBillRate = document.getElementById("modalPersonBillRate");
+const modalPersonAdmin = document.getElementById("modalPersonAdmin");
+const modalPersonEmail = document.getElementById("modalPersonEmail");
+
+function renderPeople() {
+  if (people.length === 0) {
+    peopleTbody.innerHTML = "";
+    peopleEmpty.style.display = "block";
+    return;
+  }
+  peopleEmpty.style.display = "none";
+  // Active people by pay rate (highest first), then deactivated people.
+  const byPay = [...people].sort((a, b) =>
+    (!!a.inactive - !!b.inactive) || personPayRate(b) - personPayRate(a) || a.name.localeCompare(b.name));
+  peopleTbody.innerHTML = byPay.map((p, i) => `
+    <tr class="${i % 2 === 1 ? "stripe-row" : ""} ${p.inactive ? "inactive-row" : ""}">
+      <td>${esc(p.name)}${p.isAdmin ? ' <span class="pill orange">Admin</span>' : ""}${p.inactive ? ' <span class="pill">Inactive</span>' : ""}
+        <div class="person-email ${p.email ? "" : "missing"}">${p.email ? esc(p.email) : "No email"}</div></td>
+      <td>${formatCurrency(personPayRate(p))}/hr</td>
+      <td>${formatCurrency(personBillRate(p))}/hr${p.billRate == null ? ' <span class="empty" style="padding:0;">(not set — using pay rate)</span>' : ""}</td>
+      <td class="staff-projects">${projectRatesHtml(p)}</td>
+      <td><div class="row-actions" style="justify-content:flex-end;">
+        <button class="small secondary" data-action="edit-person" data-id="${p.id}">Edit</button>
+        ${p.inactive
+          ? `<button class="small secondary" data-action="reactivate-person" data-id="${p.id}">Reactivate</button>`
+          : `<button class="danger small" data-action="remove-person" data-id="${p.id}">Remove</button>`}
+      </div></td>
+    </tr>`).join("");
+}
+
+peopleTbody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const { action, id } = btn.dataset;
+
+  if (action === "edit-person") {
+    const p = people.find((pr) => pr.id === id);
+    openPersonModal(p);
+  }
+  if (action === "remove-person") await removePerson(id);
+  if (action === "reactivate-person") {
+    try { await People.update(id, { inactive: false }); showToast("Reactivated."); } catch (err) { showToast("Error: " + err.message); }
+  }
+});
+
+// Keep the Google sign-in list (Staff) matching People: one entry per active
+// person with an email, carrying their admin flag. Runs whenever either
+// changes, so adding an email, toggling admin or deactivating someone
+// updates who can sign in.
+let syncing = false;
+async function syncStaff() {
+  if (!staffLoaded || syncing || isTestMode()) return;
+  const me = people.find((p) => p.id === sessionPersonId);
+  if (!me || !me.isAdmin) return;
+  const want = new Map(people
+    .filter((p) => !p.inactive && normEmail(p.email))
+    .map((p) => [normEmail(p.email), { personId: p.id, isAdmin: !!p.isAdmin }]));
+  const ops = [];
+  want.forEach((data, email) => {
+    const cur = staff.find((s) => s.id === email);
+    if (!cur || cur.personId !== data.personId || !!cur.isAdmin !== data.isAdmin) ops.push(Staff.set(email, data));
+  });
+  staff.filter((s) => !want.has(s.id)).forEach((s) => ops.push(Staff.remove(s.id)));
+  people.filter((p) => p.password).forEach((p) => ops.push(People.update(p.id, { password: null })));
+  if (!ops.length) return;
+  syncing = true;
+  try { await Promise.all(ops); } catch (err) { showToast("Error updating sign-in list: " + err.message); }
+  syncing = false;
+}
+
+// People with logged hours or task assignments can't be deleted without
+// breaking history (timesheets, invoices), so they're deactivated instead:
+// hidden from login and from pickers, but kept on past records.
+async function removePerson(id) {
+  const person = personById(id);
+  if (!person) return;
+  if (id === sessionPersonId) return showToast("You can't remove yourself.");
+  const hasHistory = timeEntries.some((e) => e.personId === id) || assignments.some((a) => a.personId === id);
+  try {
+    if (hasHistory) {
+      if (!(await confirmDialog(`${person.name} has logged hours or task assignments, so they can't be deleted without losing history. Deactivated, they can't log in or be assigned work, but their past hours stay on record. You can reactivate them later.`, { title: `Deactivate ${person.name}?`, confirmText: "Deactivate" }))) return;
+      await People.update(id, { inactive: true });
+      showToast(`${person.name} deactivated.`);
+    } else {
+      if (!(await confirmDialog("This can't be undone.", { title: `Remove ${person.name}?`, confirmText: "Remove", danger: true }))) return;
+      await People.remove(id);
+      showToast(`${person.name} removed.`);
+    }
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
+function openPersonModal(person) {
+  modalEditingPersonId = person ? person.id : null;
+  personModalTitle.textContent = person ? "Edit person" : "New person";
+  modalPersonName.value = person ? person.name : "";
+  modalPersonRate.value = person ? person.rate : "";
+  // New people start at the firm's standard bill rate.
+  modalPersonBillRate.value = person ? (person.billRate ?? "") : DEFAULT_BILL_RATE;
+  modalPersonAdmin.checked = person ? !!person.isAdmin : false;
+  modalPersonEmail.value = person ? (person.email || "") : "";
+  personModal.style.display = "flex";
+  modalPersonName.focus();
+}
+
+function closePersonModal() {
+  personModal.style.display = "none";
+}
+
+document.getElementById("openAddPerson").addEventListener("click", () => openPersonModal(null));
+document.getElementById("modalCancelPerson").addEventListener("click", closePersonModal);
+document.getElementById("modalClosePerson").addEventListener("click", closePersonModal);
+closeOnBackdropClick(personModal, closePersonModal);
+
+document.getElementById("modalSavePerson").addEventListener("click", async () => {
+  const name = modalPersonName.value.trim();
+  const rate = Number(modalPersonRate.value);
+  const billRate = modalPersonBillRate.value === "" ? null : Number(modalPersonBillRate.value);
+  const isAdmin = modalPersonAdmin.checked;
+  const email = normEmail(modalPersonEmail.value) || null;
+  if (!name || !rate) return showToast("Enter a name and pay rate.");
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return showToast("Enter a valid email.");
+  if (email && people.some((p) => p.id !== modalEditingPersonId && normEmail(p.email) === email)) {
+    return showToast("Someone else already has that email.");
+  }
+  if (billRate != null && !(billRate >= 0)) return showToast("Enter a valid bill rate.");
+  try {
+    if (modalEditingPersonId) {
+      await People.update(modalEditingPersonId, { name, email, rate, billRate, isAdmin, password: null });
+      showToast("Person updated.");
+    } else {
+      await People.add({ name, email, rate, billRate, isAdmin });
+      showToast("Person added.");
+    }
+    closePersonModal();
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+});
+
+function personById(id) {
+  return people.find((p) => p.id === id);
+}

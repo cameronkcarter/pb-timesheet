@@ -80,12 +80,12 @@ if (selectedPersonId) {
     if (!navChecked) {
       navChecked = true;
       const me = people.find((p) => p.id === selectedPersonId);
-      applyAdminNavVisibility(me);
+      applyAdminNavVisibility(me, projects);
       renderNavUserName(me);
     }
     renderLogForm();
   });
-  Projects.listen((data) => { projects = data; renderAll(); });
+  Projects.listen((data) => { projects = data; applyAdminNavVisibility(people.find((p) => p.id === selectedPersonId), projects); renderAll(); });
   Tasks.listen((data) => { tasks = data; renderAll(); });
   Assignments.listen((data) => { assignments = data; renderLogForm(); });
   TimeEntries.listen((data) => { timeEntries = data; renderAll(); });

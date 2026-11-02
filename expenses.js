@@ -191,7 +191,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     const project = getData().projects.find((p) => p.id === projectId);
     const subs = project?.subconsultants || [];
     subField.innerHTML = subs.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("")
-      || '<option value="">Add subconsultants in Edit project</option>';
+      || '<option value="">Add subconsultants in Edit tasks &amp; budgets</option>';
     if (selected) subField.value = selected;
   }
 
