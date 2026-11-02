@@ -118,7 +118,7 @@ function excelSheets() {
     Expenses: [...expenses].sort(byDate).map((e) => {
       const project = projects.find((p) => p.id === e.projectId);
       return {
-        Date: e.date, Project: projectName(e.projectId), Type: e.kind === "sub" ? "Subconsultant bill" : "Expense",
+        Date: e.date, Project: projectName(e.projectId), Type: e.kind === "sub" ? "Sub expense" : "Expense",
         Category: e.category || "", Subconsultant: (project?.subconsultants || []).find((s) => s.id === e.subId)?.name || "",
         Description: e.description || "", "Paid by": e.kind === "sub" ? "" : personName(e.personId) || "Company",
         Quantity: e.quantity == null ? "" : Number(e.quantity), Rate: e.rate == null ? "" : Number(e.rate),

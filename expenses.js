@@ -240,7 +240,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     editing = record;
     kind = record ? record.kind : preset.kind || "project";
     const projectId = record ? record.projectId : preset.projectId;
-    heading.textContent = record ? `Edit ${kind === "sub" ? "Subconsultant Bill" : "Expense"}` : `Add ${kind === "sub" ? "Subconsultant Bill" : "Expense"}`;
+    heading.textContent = record ? `Edit ${kind === "sub" ? "Sub Expense" : "Expense"}` : `Add ${kind === "sub" ? "Sub Expense" : "Expense"}`;
 
     const choices = projectChoices();
     projectSelect.innerHTML = choices.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
@@ -273,7 +273,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     updateCost();
     updateReceipt();
     deleteBtn.style.display = record ? "" : "none";
-    saveBtn.textContent = record ? "Save Changes" : kind === "sub" ? "Add Bill" : "Add Expense";
+    saveBtn.textContent = record ? "Save Changes" : kind === "sub" ? "Add Sub Expense" : "Add Expense";
     modal.style.display = "flex";
     fitDescription();
     description.focus();
@@ -356,7 +356,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
       else await Expenses.add({ ...data, createdByPersonId: sessionPersonId });
       if (editing) notifyEntries([{ ...editing, ...data, isExpense: true }], { by: sessionPersonId, data: getData(), verb: "edited" });
       close();
-      showToast(editing ? "Expense updated." : kind === "sub" ? "Bill added."
+      showToast(editing ? "Expense updated." : kind === "sub" ? "Sub expense added."
         : info(data.category)?.receipt ? "Expense added. Remember to email the receipt." : "Expense added.");
     } catch (err) {
       showToast("Error: " + err.message);

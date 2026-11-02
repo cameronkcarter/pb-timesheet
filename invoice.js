@@ -344,7 +344,7 @@ function fieldsHtml(row) {
   </div>`;
 }
 
-// Subconsultants on the project with no bill added since its last
+// Subconsultants on the project with no sub expense added since its last
 // invoice — a reminder before billing the client. Nothing goes on the
 // client's invoice for them.
 function missingSubsHtml(row) {
@@ -352,8 +352,8 @@ function missingSubsHtml(row) {
   const missing = (row.project.subconsultants || []).filter((sub) => sub.name && !recorded.has(sub.id));
   if (!missing.length) return "";
   return `<div class="inv-subs-missing">${missing.map((sub) => `<div>
-      <span>No bill from <strong>${esc(sub.name)}</strong> added this period.</span>
-      <button type="button" class="link-btn" data-action="record-sub" data-sub="${esc(sub.id)}">+ Add Bill</button>
+      <span>No expense from <strong>${esc(sub.name)}</strong> added this period.</span>
+      <button type="button" class="link-btn" data-action="record-sub" data-sub="${esc(sub.id)}">+ Add Sub Expense</button>
     </div>`).join("")}</div>`;
 }
 
@@ -371,7 +371,8 @@ function detailHtml(row) {
       ${missingSubsHtml(row)}
       <div class="inv-actions">
         ${waiting ? `<a class="entry-status warn inv-warn" href="approvals.html"><span class="entry-status-icon" aria-hidden="true">&#9888;</span>${waiting} awaiting approval won't be included &middot; <u>See approvals</u></a>` : ""}
-        <button type="button" data-action="create" ${canCreate ? "" : "disabled"}>Create Invoice</button>
+        <button type="button" class="secondary" data-action="preview" ${canCreate ? "" : "disabled"}>Preview PDF</button>
+        <button type="button" data-action="generate" ${canCreate ? "" : "disabled"}>Generate Invoice</button>
       </div>`;
   }
   const inv = row.inv;
@@ -476,8 +477,8 @@ function render() {
   </table></div>` : `<div class="empty">${paidCount ? "Nothing outstanding." : "No invoices yet."}</div>`;
 }
 
-// ---------- Subconsultant bills ----------
-// Bills (invoices) received from subconsultants: added here (or on the Projects
+// ---------- Subconsultant expenses ----------
+// Sub expenses (bills received from subconsultants): added here (or on the Projects
 // tab), then billed to the client on that project's next invoice.
 function renderSubInvoices() {
   const subs = expenses.filter((e) => e.kind === "sub").sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -487,7 +488,7 @@ function renderSubInvoices() {
   subTotal.textContent = [notInvoiced ? `${formatCurrency(notInvoiced)} not invoiced` : "", owed ? `${formatCurrency(owed)} owed to subs` : ""]
     .filter(Boolean).join(" · ");
   if (!subs.length) {
-    subBody.innerHTML = '<div class="empty">No subconsultant bills yet.</div>';
+    subBody.innerHTML = '<div class="empty">No sub expenses yet.</div>';
     return;
   }
   subBody.innerHTML = `<div class="pay-scroll"><table class="pay-table inv-table">
@@ -531,7 +532,7 @@ const subEditor = createExpenseEditor({
 
 document.getElementById("recordSubInvoice").addEventListener("click", () => {
   if (!billableProjects().some((p) => (p.subconsultants || []).length)) {
-    return showToast("Add subconsultants to a project first (Projects → Edit project).");
+    return showToast("Add subconsultants to a project first (Projects → Edit Tasks & Budgets).");
   }
   subEditor.open(null, { kind: "sub" });
 });
@@ -591,7 +592,7 @@ invoiceBody.addEventListener("click", async (e) => {
     return;
   }
   if (!row) return;
-  if (action === "create") return createInvoice(row);
+  if (action === "preview" || action === "generate") return generate(row, action === "preview");
   if (action === "record-sub") return subEditor.open(null, { kind: "sub", projectId: row.project.id, subId: btn.dataset.sub });
   if (action === "pdf") return viewPdf(row.inv);
   if (action === "mark-sent") return markSent(row.inv, true);
@@ -788,6 +789,12 @@ async function buildPdf(data) {
   doc.setFontSize(26);
   doc.setTextColor(...PURPLE);
   doc.text("INVOICE", marginX, 24);
+
+  if (data.isPreview) {
+    doc.setFontSize(10);
+    doc.setTextColor(200, 40, 40);
+    doc.text("PREVIEW - not yet invoiced", marginX, 31);
+  }
 
   try {
     const logoData = await loadLogo();
@@ -997,22 +1004,20 @@ async function buildPdf(data) {
   }
 
   const periodKey = `${data.invoiceDate.getFullYear()}.${String(data.invoiceDate.getMonth() + 1).padStart(2, "0")}`;
-  return { doc, filename: `Place Builders Invoice_${data.project.name}_${periodKey}.pdf` };
+  return { doc, filename: `${data.isPreview ? "PREVIEW_" : ""}Place Builders Invoice_${data.project.name}_${periodKey}.pdf` };
 }
 
-// Shows an invoice PDF in a popup on the page. A new invoice isn't saved
-// until "Save & Download" (onSave); closing the popup leaves everything as
-// it was. A saved one can be downloaded again.
-function showPdfPreview(doc, filename, { title, note, onSave }) {
+// Shows an invoice PDF in a popup on the page (Preview PDF, View PDF), with
+// Download and Close.
+function showPdfPreview(doc, filename, { title, note }) {
   const url = URL.createObjectURL(doc.output("blob"));
   const overlay = document.createElement("div");
   overlay.className = "pdf-preview";
   overlay.innerHTML = `<div class="pdf-preview-box" role="dialog" aria-label="${esc(title)}">
       <div class="pdf-preview-head">
         <strong>${esc(title)}</strong><span>${esc(note)}</span>
-        ${onSave
-          ? '<button type="button" class="secondary small" data-pdf="close">Cancel</button><button type="button" class="small" data-pdf="save">Save &amp; Download</button>'
-          : '<button type="button" class="secondary small" data-pdf="download">Download</button><button type="button" class="secondary small" data-pdf="close">Close</button>'}
+        <button type="button" class="secondary small" data-pdf="download">Download</button>
+        <button type="button" class="small" data-pdf="close">Close</button>
       </div>
       <iframe src="${url}" title="${esc(title)}"></iframe>
     </div>`;
@@ -1022,33 +1027,24 @@ function showPdfPreview(doc, filename, { title, note, onSave }) {
     document.removeEventListener("keydown", onKey);
   };
   const onKey = (e) => { if (e.key === "Escape") close(); };
-  overlay.addEventListener("click", async (e) => {
+  overlay.addEventListener("click", (e) => {
     const action = e.target.closest("[data-pdf]")?.dataset.pdf;
     if (action === "download") doc.save(filename);
     if (action === "close" || e.target === overlay) close();
-    if (action === "save") {
-      const btns = overlay.querySelectorAll("button");
-      btns.forEach((x) => { x.disabled = true; });
-      if (await onSave()) {
-        doc.save(filename);
-        close();
-      } else {
-        btns.forEach((x) => { x.disabled = false; });
-      }
-    }
   });
   document.addEventListener("keydown", onKey);
   document.body.appendChild(overlay);
 }
 
-// Create Invoice: builds the PDF and shows it. Saving it locks the hours and
-// expenses onto the invoice, which lands under Invoices as Not sent.
-async function createInvoice(row) {
+// Preview PDF: the invoice in a popup, marked PREVIEW; nothing is saved.
+// Generate Invoice: saves it (under Invoices as Not sent), locks its hours and
+// expenses, and downloads the PDF.
+async function generate(row, isPreview) {
   const { project, entries, exps } = row;
   if (!project || (entries.length === 0 && exps.length === 0)) return;
   const periodLabel = row.label.trim() || periodLabelFor(row.from, row.to);
   const invoiceNumber = row.number.trim() || nextInvoiceNumber();
-  if (invoices.some((i) => i.invoiceNumber === invoiceNumber) &&
+  if (!isPreview && invoices.some((i) => i.invoiceNumber === invoiceNumber) &&
     !(await confirmDialog(`Invoice # ${invoiceNumber} has already been used.`, { title: "Use this number again?", confirmText: "Use it anyway" }))) return;
 
   const buttons = [...invoiceBody.querySelectorAll(".inv-actions button")];
@@ -1057,12 +1053,9 @@ async function createInvoice(row) {
     const computed = computeInvoiceData(project, entries, exps);
     const invoiceDate = new Date();
     const dueDate = lastDayOfMonth(invoiceDate);
-    const { doc, filename } = await buildPdf({ project, invoiceNumber, invoiceDate, dueDate, periodLabel, ...computed });
-    showPdfPreview(doc, filename, {
-      title: `Invoice ${invoiceNumber}`,
-      note: "Not saved yet",
-      onSave: () => saveInvoice(row, { invoiceNumber, invoiceDate, dueDate, periodLabel, computed }),
-    });
+    const { doc, filename } = await buildPdf({ project, invoiceNumber, invoiceDate, dueDate, periodLabel, isPreview, ...computed });
+    if (isPreview) showPdfPreview(doc, filename, { title: "Preview", note: "Not invoiced yet — nothing is saved" });
+    else if (await saveInvoice(row, { invoiceNumber, invoiceDate, dueDate, periodLabel, computed })) doc.save(filename);
   } catch (err) {
     showToast("Error: " + err.message);
   } finally {
@@ -1106,7 +1099,7 @@ async function saveInvoice(row, { invoiceNumber, invoiceDate, dueDate, periodLab
     notifyEntries([...closing, ...exps.map((e) => ({ ...e, isExpense: true }))], { by: sessionPersonId, data: { people, projects }, verb: "invoiced" });
     delete drafts[project.id];
     openRow = `inv:${ref.id}`;
-    showToast("Invoice saved. Mark it sent once it's emailed.");
+    showToast("Invoice generated. Mark it sent once it's emailed.");
     sheet.sync();
     render();
     return true;
