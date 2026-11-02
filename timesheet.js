@@ -30,6 +30,7 @@ let calMode = "weeks";       // last week and this one, or "month"
 let showOtherTasks = false;  // tasks on the project you're not assigned to
 let addingTask = false;      // the "+ New task" box on internal projects
 let openListKey = null;      // "<projectId>|<taskId>" open in the list
+let listMonth = null;        // month the list shows, if moved with its arrows; else the calendar's
 let editingId = null;         // entry open for editing in the list (one at a time)
 let formEditId = null;        // day entry loaded into the Log hours form by its Edit button
 try { if (localStorage.getItem("pb_timesheet_cal") === "month") calMode = "month"; } catch (_) { /* no storage */ }
@@ -60,6 +61,7 @@ const existingHint = document.getElementById("existingHint");
 const submitEntry = document.getElementById("submitEntry");
 
 const listTitle = document.getElementById("listTitle");
+const listNextBtn = document.getElementById("listNext");
 const listView = document.getElementById("listView");
 
 const sumHrs = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
@@ -192,7 +194,10 @@ function renderCalendar() {
 function selectDay(iso, { moveCalendar = true } = {}) {
   if (formEditId && iso !== selectedDay) resetForm();
   selectedDay = iso;
-  if (moveCalendar) calAnchor = iso;
+  if (moveCalendar) {
+    calAnchor = iso;
+    listMonth = null;
+  }
   renderAll();
 }
 
@@ -200,6 +205,7 @@ function setCalMode(mode) {
   // Into two weeks: the selected day's, if it's in the month shown.
   if (mode === "weeks" && selectedDay.startsWith(monthKey(new Date(calAnchor + "T00:00:00")))) calAnchor = selectedDay;
   calMode = mode;
+  listMonth = null;
   try { localStorage.setItem("pb_timesheet_cal", mode); } catch (_) { /* no storage */ }
   renderCalendar();
   renderList();
@@ -208,6 +214,7 @@ function setCalMode(mode) {
 function shiftCalendar(n) {
   const anchor = new Date(calAnchor + "T00:00:00");
   calAnchor = toISODate(calMode === "weeks" ? addDays(anchor, 7 * n) : addMonths(anchor, n));
+  listMonth = null;
   renderCalendar();
   renderList();
 }
@@ -737,12 +744,17 @@ submitEntry.addEventListener("click", async () => {
 });
 
 // ---------- The month's hours ----------
-// The month the calendar shows, grouped by project, then task (with all-time
-// totals, so e.g. hours on one proposal add up across months). Click a task
-// to see its entries; Edit changes an entry's hours and note.
+// The month the calendar shows (or one picked with the list's arrows),
+// grouped by project, then task (with all-time totals, so e.g. hours on one
+// proposal add up across months). Click a task to see its entries; Edit
+// changes an entry's hours and note.
+const listAnchor = () => listMonth || firstOfMonth(new Date(calAnchor + "T00:00:00"));
+
 function renderList(force = false) {
   if (!selectedPersonId || holdRedraw(listView, force)) return;
-  const anchor = new Date(calAnchor + "T00:00:00");
+  const anchor = listAnchor();
+  // No going past this month.
+  listNextBtn.disabled = monthKey(anchor) >= monthKey(new Date(todayISO() + "T00:00:00"));
   const mine = myEntries();
   const month = mine.filter((e) => e.date.startsWith(monthKey(anchor)));
   listTitle.textContent = `— ${formatMonthLabel(anchor)}${month.length ? ` · ${fmtHrs(sumHrs(month))} hrs` : ""}`;
@@ -794,6 +806,14 @@ function renderList(force = false) {
   </table></div>`;
   fitNotes(listView);
 }
+
+function shiftList(n) {
+  listMonth = addMonths(listAnchor(), n);
+  editingId = null;
+  renderList(true);
+}
+document.getElementById("listPrev").addEventListener("click", () => shiftList(-1));
+listNextBtn.addEventListener("click", () => shiftList(1));
 
 listView.addEventListener("click", (e) => {
   const row = e.target.closest("tr.appr-row");

@@ -682,6 +682,10 @@ h1.login-title {
 .cal-body { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; margin-top: 12px; }
 .cal-arrows { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding-top: 18px; }
 .cal-arrows button.small { margin: 0; width: 34px; height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; }
+/* Your entries: previous / next month. */
+.list-arrows { display: flex; gap: 6px; }
+.list-arrows button.small { margin: 0; width: 32px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.list-arrows button:disabled { opacity: 0.4; cursor: default; }
 
 .cal-swatch {
   display: inline-block;
