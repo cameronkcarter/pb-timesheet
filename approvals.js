@@ -17,7 +17,7 @@
 import { TimeEntries, Expenses } from "./db.js";
 import { esc, fmtHrs, showToast, projectColor, sortProjects, formatCurrency, dateRange, entryDate } from "./util.js";
 import { expenseLabel, createExpenseEditor } from "./expenses.js";
-import { assignedHours, isInternal, isBillable } from "./rates.js";
+import { assignedHours, isInternal, isBillable, billRateOf } from "./rates.js";
 import { notifyEntries, unnotify } from "./notifications.js";
 
 const sumHours = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
@@ -85,6 +85,15 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
 
   const expenseSum = (items) => items.filter((e) => e.isExpense).reduce((t, e) => t + Number(e.amount || 0), 0);
 
+  // What the client is billed: hours at the person's bill rate ("No charge"
+  // hours at $0), expenses at their amount. Not shown for internal hours.
+  const rateOf = (e) => billRateOf(e, getData());
+  const billedOf = (e) => (e.isExpense ? Number(e.amount || 0) : Number(e.hours || 0) * rateOf(e));
+  const billedSum = (items) => items.reduce((t, e) => t + billedOf(e), 0);
+  const showBilled = () => !byTask();
+  const billedCell = (amount, extra = "") => (showBilled()
+    ? `<td class="num appr-billed">${formatCurrency(amount)}${extra}</td>` : "");
+
   // When this person has logged more on the task than assigned (including
   // tasks they weren't assigned to at all), why, for the hover note; else "".
   // Declined hours don't count.
@@ -137,7 +146,8 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
         <td class="appr-date">${entryDate(e.date)}</td>
         <td class="appr-task appr-muted">Expense</td>
         <td class="num appr-muted">—</td>
-        <td class="appr-entry-note"><strong>${formatCurrency(e.amount)}</strong> · ${esc(expenseLabel(e, projects.find((p) => p.id === e.projectId)))}</td>
+        ${billedCell(Number(e.amount || 0))}
+        <td class="appr-entry-note">${esc(expenseLabel(e, projects.find((p) => p.id === e.projectId)))}</td>
         <td class="num appr-actions" colspan="2">${actionsHtml(e)}</td></tr>`;
     }
     const mode = editing && editing.id === e.id ? editing.mode : null;
@@ -150,6 +160,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
       return `<tr class="appr-entry editing">${lead}
         <td class="appr-task appr-muted">${esc(who)}</td>
         <td class="num">${fmtHrs(Number(e.hours))}</td>
+        ${billedCell(billedOf(e))}
         <td><input type="text" class="appr-reason" placeholder="Reason (optional)" /></td>
         <td class="num appr-actions" colspan="2">
           <button type="button" class="link-btn" data-action="cancel-entry">Cancel</button>
@@ -173,9 +184,10 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
       ? `<td class="num"><input type="number" class="appr-inline appr-inline-hours" min="0" step="0.25" value="${Number(e.hours)}" aria-label="Hours" /></td>`
       : `<td class="num appr-editable ${over ? "appr-over" : ""}" data-edit="hours" title="${over ? esc(over) : "Change hours"}">${fmtHrs(Number(e.hours))}</td>`;
     const noteCell = field === "note"
-      ? `<td><input type="text" class="appr-inline" value="${esc(e.note || "")}" placeholder="Note" aria-label="Note" /></td>`
+      ? `<td><textarea class="appr-inline appr-inline-note" rows="1" placeholder="Note" aria-label="Note">${esc(e.note || "")}</textarea></td>`
       : `<td class="appr-entry-note appr-editable ${e.note ? "" : "appr-muted"}" data-edit="note" title="Change note">${e.note ? esc(e.note) : "No note"}</td>`;
-    return `<tr class="appr-entry ${field ? "editing" : ""}" data-id="${e.id}">${lead}${taskCell}${hoursCell}${noteCell}
+    const billed = billedCell(billedOf(e), isBillable(e) ? "" : '<div class="appr-rate">No charge</div>');
+    return `<tr class="appr-entry ${field ? "editing" : ""}" data-id="${e.id}">${lead}${taskCell}${hoursCell}${billed}${noteCell}
       <td class="num appr-actions" colspan="2">${actionsHtml(e)}</td></tr>`;
   }
 
@@ -199,7 +211,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
 
   function render() {
     // Don't redraw under someone typing in an entry being edited.
-    if (editing && body.contains(document.activeElement) && document.activeElement.matches("input, select")) return;
+    if (editing && body.contains(document.activeElement) && document.activeElement.matches("input, select, textarea")) return;
     scope.style.display = isAdmin() ? "" : "none";
     // "Internal" only for admins and managers of an internal project.
     const internalBtn = viewToggle.querySelector('[data-value="internal"]');
@@ -220,11 +232,11 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
     }
 
     body.innerHTML = `<div class="pay-scroll"><table class="pay-table appr-table">
-      <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" /><col /><col class="c-actions" /><col class="c-chev" /></colgroup>
-      <thead><tr><th>Date</th><th>${byTask() ? "Task" : "Person"}</th><th class="num">Hours</th><th>Notes</th><th></th><th></th></tr></thead>
+      <colgroup><col class="c-date" /><col class="c-task" /><col class="c-hours" />${showBilled() ? '<col class="c-billed" />' : ""}<col /><col class="c-actions" /><col class="c-chev" /></colgroup>
+      <thead><tr><th>Date</th><th>${byTask() ? "Task" : "Person"}</th><th class="num">Hours</th>${showBilled() ? '<th class="num">Billed</th>' : ""}<th>Notes</th><th></th><th></th></tr></thead>
       ${gs.map((g) => `<tbody>
         <tr class="appr-group">
-          <td colspan="4"><span class="pay-dot" style="--c:${g.project ? projectColor(g.project.id) : "#c9c2cf"};"></span><strong>${g.project ? esc(g.project.name) : "—"}</strong> <span class="appr-muted">${fmtHrs(g.hours)} hrs</span></td>
+          <td colspan="${showBilled() ? 5 : 4}"><span class="pay-dot" style="--c:${g.project ? projectColor(g.project.id) : "#c9c2cf"};"></span><strong>${g.project ? esc(g.project.name) : "—"}</strong></td>
           <td class="num" colspan="2">${view === "pending"
             ? `<button type="button" class="small btn-approve-project" data-action="approve-project" data-id="${g.projectId}">Approve all (${g.entries.length})</button>` : ""}</td>
         </tr>
@@ -233,6 +245,8 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
           const over = !byTask() && r.entries.some((e) => !e.isExpense && isOver(e.personId, e.taskId));
           const unbilled = sumHours(r.entries.filter((e) => !e.isExpense && !isBillable(e)));
           const people = byTask() ? new Set(r.entries.map((e) => e.personId)).size : 0;
+          // A person's bill rate on this project, under their billed amount.
+          const rates = [...new Set(r.entries.filter((e) => !e.isExpense && isBillable(e)).map(rateOf))];
           const detail = [
             `${r.entries.length} ${r.entries.length === 1 ? "entry" : "entries"}`,
             people > 1 ? `${people} people` : "",
@@ -243,14 +257,21 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
             <td class="appr-date">${dateRange(r.entries)}</td>
             <td class="appr-task">${esc(r.name)}${r.closed ? ' <span class="pill">Closed</span>' : ""}</td>
             <td class="num appr-subtotal ${over ? "appr-over" : ""}" ${over ? 'title="More than their assigned hours on a task (or none were assigned)"' : ""}>${fmtHrs(r.hours)}</td>
+            ${billedCell(billedSum(r.entries), rates.length === 1 ? `<div class="appr-rate">${formatCurrency(rates[0])}/hr</div>` : "")}
             <td class="appr-note appr-muted">${detail}</td>
             <td class="num">${view === "pending" ? `<button type="button" class="small due-btn due-complete" data-action="approve-person" data-key="${esc(r.key)}">${r.entries.length > 1 ? `Approve (${r.entries.length})` : "Approve"}</button>` : ""}</td>
             <td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>
           </tr>
           ${open ? r.entries.map(entryRowHtml).join("") : ""}
           ${open && r.entries.some((e) => !e.isExpense)
-            ? `<tr class="appr-hint"><td colspan="6">Click ${byTask() ? "hours or a note" : "a task, hours or note"} to edit.</td></tr>` : ""}`;
+            ? `<tr class="appr-hint"><td colspan="${showBilled() ? 7 : 6}">Click ${byTask() ? "hours or a note" : "a task, hours or note"} to edit.</td></tr>` : ""}`;
         }).join("")}
+        <tr class="appr-total">
+          <td colspan="2">Total</td>
+          <td class="num">${fmtHrs(g.hours)}</td>
+          ${billedCell(billedSum(g.entries))}
+          <td colspan="3"></td>
+        </tr>
       </tbody>`).join("")}
     </table></div>`;
   }
@@ -278,9 +299,17 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
     el.focus();
     if (el.tagName === "SELECT") {
       try { el.showPicker(); } catch (_) { /* not supported: it's focused */ }
+    } else if (el.tagName === "TEXTAREA") {
+      fitNote(el);
+      el.setSelectionRange(el.value.length, el.value.length);
     } else {
       el.select();
     }
+  }
+
+  function fitNote(el) {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
   }
 
   // Saves the field being edited if it changed, with Undo.
@@ -430,7 +459,11 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
   body.addEventListener("keydown", (e) => {
     if (e.target.matches(".appr-inline")) {
       if (e.key === "Escape") { editing = null; render(); }
-      if (e.key === "Enter") commitInline(e.target);
+      // Enter saves (the note wraps onto more lines by itself).
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitInline(e.target);
+      }
       return;
     }
     if (!e.target.matches(".appr-entry input")) return;
@@ -440,6 +473,7 @@ export function createApprovals({ getData, sessionPersonId, onChange = () => {} 
 
   // Picking a task, or leaving hours / note, saves.
   body.addEventListener("change", (e) => { if (e.target.matches("select.appr-inline")) commitInline(e.target); });
+  body.addEventListener("input", (e) => { if (e.target.matches("textarea.appr-inline")) fitNote(e.target); });
   body.addEventListener("focusout", (e) => { if (e.target.matches(".appr-inline")) commitInline(e.target); });
 
   viewToggle.addEventListener("click", (e) => {

@@ -35,7 +35,6 @@ let adminCheckDone = false;
 const invoiceBody = document.getElementById("invoiceBody");
 const nextBody = document.getElementById("nextBody");
 const pastBody = document.getElementById("pastBody");
-const nextTotal = document.getElementById("nextTotal");
 const subBody = document.getElementById("subBody");
 const subTotal = document.getElementById("subTotal");
 const pastTotal = document.getElementById("pastTotal");
@@ -79,7 +78,7 @@ function nextInvoiceNumber() {
 }
 
 // ---------- Invoices tables ----------
-// "Unbilled hours": a row per billable project for approved hours not invoiced
+// "Ready to invoice": a row per billable project for approved hours not invoiced
 // yet (its next invoice). "Sent invoices": ones already generated, newest first,
 // paid ones hidden unless asked for. Clicking a row shows each person's
 // hours (with their notes). The next invoice's # and billing period can be
@@ -234,7 +233,7 @@ function statusHtml(row) {
   if (row.kind === "next") {
     return row.entries.length || row.exps.length
       ? '<span class="pay-status paid">Ready</span>'
-      : '<span class="pay-status pending">Needs approval</span>';
+      : '<span class="pay-status pending">Waiting on approval</span>';
   }
   const inv = row.inv;
   if (inv.void) return '<span class="pay-status void">Void</span>';
@@ -244,8 +243,9 @@ function statusHtml(row) {
     (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — Sync is on Admin">Not in sheet</span>' : "");
 }
 
-// Each person's hours, bill rate, amount billed and pay, then the firm's
-// overhead (billed minus pay), with each person's notes on request.
+// Each person's hours, bill rate, amount billed, pay rate and pay, then a
+// Total row and the firm's overhead (billed minus pay) under Billed, with
+// each person's notes on request.
 function peopleHtml(rowKey, entries, fallbackRows) {
   const rows = (entries.length ? groupByPerson(entries) : (fallbackRows || []))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -255,26 +255,35 @@ function peopleHtml(rowKey, entries, fallbackRows) {
     ? paidAmount(entries.filter((e) => e.personId === personId), ctx) : null;
   const totalPay = entries.length ? paidAmount(entries, ctx) : null;
   const totalBilled = rows.reduce((s, r) => s + r.total, 0);
+  const totalHours = rows.reduce((s, r) => s + r.hours, 0);
+  const money = (v) => (v == null ? "—" : formatCurrency(v));
   return `<table class="inv-people">
-    <thead><tr><th>Person</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Billed</th><th class="num">Pay</th><th></th></tr></thead>
+    <thead><tr><th>Person</th><th class="num">Hours</th><th class="num">Bill rate</th><th class="num">Billed</th><th class="num">Pay rate</th><th class="num">Pay</th><th></th></tr></thead>
     <tbody>${rows.map((r) => {
       const notes = entries.filter((e) => e.personId === r.personId && e.note)
         .sort((a, b) => (a.date < b.date ? -1 : 1));
       const open = openNotes === r.personId;
+      const pay = payOf(r.personId);
       return `<tr>
         <td>${esc(r.name)}</td>
         <td class="num">${fmtHrs(r.hours)}</td>
         <td class="num">${formatCurrency(r.rate)}</td>
         <td class="num">${formatCurrency(r.total)}</td>
-        <td class="num">${payOf(r.personId) == null ? "—" : formatCurrency(payOf(r.personId))}</td>
+        <td class="num">${pay == null || !r.hours ? "—" : formatCurrency(pay / r.hours)}</td>
+        <td class="num">${money(pay)}</td>
         <td class="num">${notes.length ? `<button type="button" class="link-btn" data-action="notes" data-person="${r.personId}">Notes (${notes.length}) <span class="chev ${open ? "up" : ""}">&#9662;</span></button>` : ""}</td>
       </tr>
-      ${open && notes.length ? `<tr class="inv-notes"><td colspan="6">${notes.map((e) =>
+      ${open && notes.length ? `<tr class="inv-notes"><td colspan="7">${notes.map((e) =>
         `<div><span>${shortDate(e.date)} · ${fmtHrs(Number(e.hours))} hrs</span>${esc(e.note)}</div>`).join("")}</td></tr>` : ""}`;
     }).join("")}
+    <tr class="inv-people-total">
+      <td>Total</td><td class="num">${fmtHrs(totalHours)}</td><td></td>
+      <td class="num">${formatCurrency(totalBilled)}</td><td></td>
+      <td class="num">${money(totalPay)}</td><td></td>
+    </tr>
     ${totalPay != null ? `<tr class="inv-overhead">
-      <td>Overhead</td><td></td><td></td><td></td>
-      <td class="num">${formatCurrency(totalBilled - totalPay)}</td><td></td>
+      <td colspan="3">Overhead <span class="inv-overhead-note">(billed − pay)</span></td>
+      <td class="num">${formatCurrency(totalBilled - totalPay)}</td><td colspan="3"></td>
     </tr>` : ""}</tbody>
   </table>`;
 }
@@ -346,9 +355,7 @@ function render() {
   const voidCount = past.filter((r) => r.inv.void).length;
   const shownPast = past.filter((r) => showPaid || !done(r));
 
-  const ready = next.reduce((s, r) => s + r.amount, 0);
   const outstanding = past.filter((r) => !done(r)).reduce((s, r) => s + r.amount, 0);
-  nextTotal.textContent = next.length ? `${formatCurrency(ready)} ready` : "";
   pastTotal.textContent = outstanding ? `${formatCurrency(outstanding)} outstanding` : "";
   togglePaidBtn.style.display = paidCount ? "" : "none";
   togglePaidBtn.textContent = showPaid
@@ -356,6 +363,9 @@ function render() {
     : `Show paid${voidCount ? " & void" : ""} (${paidCount})`;
 
   const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
+  // Ready to invoice: a clear button to open each project.
+  const reviewCell = (open) => `<td class="num"><span class="inv-review ${open ? "open" : ""}">${open ? "Close" : "Review"} <span class="chev ${open ? "up" : ""}">&#9662;</span></span></td>`;
+  const totalRow = (cells) => `<tr class="inv-total-row">${cells}</tr>`;
   const projectCell = (row) => {
     const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
     return `<td class="proj"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(name)}</td>`;
@@ -372,10 +382,13 @@ function render() {
         <td class="num">${fmtHrs(sumHours(waiting ? row.pending : row.entries))}</td>
         <td class="num ${waiting ? "blank" : ""}">${waiting ? "—" : `<strong>${formatCurrency(row.amount)}</strong>`}</td>
         <td>${statusHtml(row)}</td>
-        ${chevCell(open)}
+        ${reviewCell(open)}
       </tr>
       ${open ? `<tr class="inv-detail"><td colspan="5">${detailHtml(row)}</td></tr>` : ""}`;
-    }).join("")}</tbody>
+    }).join("")}
+    ${totalRow(`<td>Total ready</td>
+      <td class="num">${fmtHrs(next.reduce((s, r) => s + sumHours(r.entries), 0))}</td>
+      <td class="num">${formatCurrency(next.reduce((s, r) => s + r.amount, 0))}</td><td colspan="2"></td>`)}</tbody>
   </table></div>` : '<div class="empty">Nothing to invoice.</div>';
 
   pastBody.innerHTML = shownPast.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
@@ -392,7 +405,13 @@ function render() {
         ${chevCell(open)}
       </tr>
       ${open ? `<tr class="inv-detail"><td colspan="7">${detailHtml(row)}</td></tr>` : ""}`;
-    }).join("")}</tbody>
+    }).join("")}
+    ${(() => {
+      const counted = shownPast.filter((r) => !r.inv.void);
+      return totalRow(`<td colspan="3">Total${counted.length < shownPast.length ? " (not counting void)" : ""}</td>
+        <td class="num">${fmtHrs(counted.reduce((s, r) => s + r.hours, 0))}</td>
+        <td class="num">${formatCurrency(counted.reduce((s, r) => s + r.amount, 0))}</td><td colspan="2"></td>`);
+    })()}</tbody>
   </table></div>` : `<div class="empty">${paidCount ? "Nothing outstanding." : "No invoices yet."}</div>`;
 }
 
@@ -907,7 +926,37 @@ async function buildPdf(data) {
 
   const periodKey = `${data.invoiceDate.getFullYear()}.${String(data.invoiceDate.getMonth() + 1).padStart(2, "0")}`;
   const prefix = data.isPreview ? "PREVIEW_" : "";
-  doc.save(`${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`);
+  const filename = `${prefix}Place Builders Invoice_${data.project.name}_${periodKey}.pdf`;
+  if (data.isPreview) showPdfPreview(doc, filename);
+  else doc.save(filename);
+}
+
+// Shows a PDF in a popup on the page (Preview PDF), with Download and Close.
+function showPdfPreview(doc, filename) {
+  const url = URL.createObjectURL(doc.output("blob"));
+  const overlay = document.createElement("div");
+  overlay.className = "pdf-preview";
+  overlay.innerHTML = `<div class="pdf-preview-box" role="dialog" aria-label="Invoice preview">
+      <div class="pdf-preview-head">
+        <strong>Preview</strong><span>Not invoiced yet — nothing is saved</span>
+        <button type="button" class="secondary small" data-pdf="download">Download</button>
+        <button type="button" class="small" data-pdf="close">Close</button>
+      </div>
+      <iframe src="${url}" title="Invoice preview"></iframe>
+    </div>`;
+  const close = () => {
+    overlay.remove();
+    URL.revokeObjectURL(url);
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  overlay.addEventListener("click", (e) => {
+    const action = e.target.closest("[data-pdf]")?.dataset.pdf;
+    if (action === "download") doc.save(filename);
+    if (action === "close" || e.target === overlay) close();
+  });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(overlay);
 }
 
 async function generate(row, isPreview, btn) {
@@ -963,8 +1012,6 @@ async function generate(row, isPreview, btn) {
       openRow = `inv:${ref.id}`;
       showToast("Invoice generated.");
       sheet.sync();
-    } else {
-      showToast("Preview downloaded — nothing was marked invoiced.");
     }
   } catch (err) {
     showToast("Error: " + err.message);

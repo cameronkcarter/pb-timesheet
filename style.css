@@ -2273,9 +2273,57 @@ table.inv-people {
   }
 }
 
-.inv-people tr.inv-overhead td {
-  border-bottom: none;
+.inv-people tr.inv-people-total td { font-weight: 700; border-top: 1px solid #cfc4d6; }
+.inv-people tr.inv-overhead td { border-bottom: none; color: var(--text-muted); font-weight: 600; }
+.inv-people .inv-overhead-note { font-weight: 400; font-size: 12px; }
+/* Totals under the Ready to invoice and Sent invoices tables. */
+.inv-table tr.inv-total-row td { font-weight: 700; border-top: 2px solid #cfc4d6; background: #faf8fb; cursor: default; }
+.inv-intro { margin: -2px 0 10px; font-size: 13px; color: var(--text-muted); }
+/* Preview PDF: the invoice in a popup. */
+.pdf-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(30, 15, 40, 0.55);
 }
+.pdf-preview-box {
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 100%);
+  height: 100%;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+.pdf-preview-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.pdf-preview-head span { margin-right: auto; color: var(--text-muted); font-size: 13px; }
+.pdf-preview-head button { margin: 0; }
+.pdf-preview iframe { flex: 1; width: 100%; border: 0; }
+@media (max-width: 600px) {
+  .pdf-preview { padding: 0; }
+  .pdf-preview-box { border-radius: 0; }
+  .pdf-preview-head span { display: none; }
+}
+/* "Review" on each project ready to invoice, so it's clear the row opens. */
+.inv-review {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--navy);
+  border-radius: 6px;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.inv-table tr.inv-row:hover .inv-review,
+.inv-review.open { background: var(--navy); color: #fff; }
 
 /* ---------- Admin: pending approval ---------- */
 .appr-head {
@@ -3089,6 +3137,13 @@ select.analytics-select {
   font-size: 13px;
 }
 .appr-table .appr-inline-hours { width: 64px; text-align: right; }
+.appr-table textarea.appr-inline-note { display: block; resize: none; overflow: hidden; line-height: 1.4; font-family: inherit; }
+/* Billed: the client's amount, with the person's bill rate under it. */
+.appr-table col.c-billed { width: 96px; }
+.appr-table td.appr-billed { font-variant-numeric: tabular-nums; }
+.appr-table .appr-rate { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+/* A project's total, under its people. */
+.appr-table tr.appr-total td { font-weight: 700; border-top: 1px solid var(--border); background: #faf8fb; }
 .appr-table tr.appr-hint td { padding: 4px 8px 10px; font-size: 12px; color: var(--text-muted); font-style: italic; border-top: none; }
 
 .appr-split {
@@ -3175,20 +3230,6 @@ button.appr-unapprove:hover { color: var(--red); background: #fff; }
   .cat-row .cat-name { grid-column: 1 / -1; }
   .cat-head span:first-child { display: none; }
 }
-
-/* ---------- Project popup: Merge into another project ---------- */
-.sheet-foot[hidden] { display: none; }
-#projectFoot button.link-btn.item-delete { margin-right: 0; }
-#projectFoot button.link-btn.merge-link {
-  margin: 0 auto 0 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--navy);
-}
-.merge-foot { align-items: center; flex-wrap: wrap; }
-.merge-foot .merge-label { margin: 0 auto 0 0; font-weight: 600; font-size: 14px; }
-.merge-foot select { margin: 0; width: auto; max-width: 260px; }
-.merge-foot button { margin: 0; }
 
 /* ---------- Dialogs (alertDialog / confirmDialog in util.js) ---------- */
 .dialog-overlay {
