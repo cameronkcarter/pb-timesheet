@@ -3697,13 +3697,13 @@ button.declined-fix {
 .tp-exp .tp-sub-actions { white-space: nowrap; gap: 12px; }
 .tp-exp-row {
   display: grid;
-  /* Description | Type | Date | Paid by | Amount | Status | actions */
-  grid-template-columns: minmax(180px, 1fr) 80px 48px 104px 96px 118px 108px;
+  /* Description | Type | Date | Paid by | Amount | Status | Edit */
+  grid-template-columns: minmax(180px, 1fr) 80px 48px 104px 96px 118px 32px;
   gap: 12px;
   align-items: center;
   font-size: 13px;
 }
-.tp-exp-sub .tp-exp-row { grid-template-columns: minmax(180px, 1fr) 48px 96px 118px 108px; }
+.tp-exp-sub .tp-exp-row { grid-template-columns: minmax(180px, 1fr) 48px 96px 118px 32px; }
 .tp-exp-type { color: var(--text-muted); }
 .tp-exp-qty { font-size: 11px; font-weight: 400; color: var(--text-muted); white-space: nowrap; }
 .tp-exp .tp-sub-name > span { line-height: 1.45; }
