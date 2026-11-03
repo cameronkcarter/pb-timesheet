@@ -6,6 +6,7 @@ import { formatCurrency, showToast, esc } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { createAnalytics } from "./analytics.js";
 import { createSheetSync } from "./sheet-sync.js";
+import { expenseClientPaid } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 
@@ -86,7 +87,7 @@ function excelSheets() {
 
   const hourStatus = (e) => e.paid ? "Client paid" : e.invoiced ? "Invoiced" : e.approved ? "Approved"
     : e.declined ? "Declined" : "Pending approval";
-  const expenseStatus = (e) => e.reimbursed ? "Reimbursed" : e.invoiced ? "Invoiced" : e.approved ? "Approved"
+  const expenseStatus = (e) => expenseClientPaid(e, invoices) ? "Client paid" : e.invoiced ? "Invoiced" : e.approved ? "Approved"
     : e.declined ? "Declined" : "Pending approval";
   const byDate = (a, b) => (String(a.date || a.dueDate) < String(b.date || b.dueDate) ? -1 : 1);
 

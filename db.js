@@ -186,7 +186,8 @@ export const TimeEntries = {
 // Expense documents: project expenses (kind "project": category, description,
 // quantity x rate, paid by personId for reimbursement) and subconsultant
 // invoices (kind "sub": subId, description, amount). Approved like hours, then
-// invoiced; project expenses someone paid for are later marked reimbursed.
+// invoiced, and paid back with the person's pay once the client pays (see
+// expenseClientPaid; `reimbursed` is from before that).
 // { projectId, kind, personId, subId, category, description, date, quantity,
 //   rate, unit (e.g. "mile"; blank for amounts), amount, approved,
 //   approvedDate, declined, declineReason, invoiced,

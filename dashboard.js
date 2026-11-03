@@ -7,7 +7,7 @@ import {
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
-import { createExpenseEditor, expenseLabel, expenseStatus } from "./expenses.js";
+import { createExpenseEditor, expenseLabel, expenseStatus, expenseClientPaid } from "./expenses.js";
 import { createMessageBoard } from "./board.js";
 
 const selectedPersonId = requireSession();
@@ -111,7 +111,7 @@ function render() {
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid);
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedUnpaid);
-  const owedBack = myExpenses().filter((e) => !e.declined && !e.reimbursed).reduce((t, e) => t + Number(e.amount || 0), 0);
+  const owedBack = myExpenses().filter((e) => !e.declined && !expenseClientPaid(e, invoices)).reduce((t, e) => t + Number(e.amount || 0), 0);
   document.getElementById("statExpenses").textContent = formatCurrency(owedBack);
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid + owedBack);
   renderPay(myEntries);
@@ -364,7 +364,7 @@ function cardFooterHtml(project) {
       ${summary}
     </div>
     ${listOpen ? `<div class="pc-subs pc-expenses">${shown.map((e) => {
-      const [status, cls] = expenseStatus(e);
+      const [status, cls] = expenseStatus(e, invoices);
       return `<div class="pc-exp-row ${e.invoiced ? "done" : ""}">
         <div class="pc-sub-name" title="${esc(expenseLabel(e, project))}"><span>${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span></div>
         <span class="pc-exp-when">${shortDay(e.date)} &middot; ${formatCurrency(e.amount)}</span>

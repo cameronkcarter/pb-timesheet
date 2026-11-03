@@ -143,7 +143,7 @@ if (sessionPersonId) {
   Assignments.listen((data) => { assignments = data; renderAll(); });
   TimeEntries.listen((data) => { timeEntries = data; renderBudget(); });
   DueDates.listen((data) => { dueDates = data; renderBudget(); renderGantt(); renderSchedule(); });
-  Invoices.listen((data) => { invoices = data; });
+  Invoices.listen((data) => { invoices = data; renderBudget(); });
   Expenses.listen((data) => { expenses = data; renderBudget(); });
 }
 
@@ -433,11 +433,10 @@ function expenseListHtml(g) {
   return `<div class="tp-exp ${kind}">
     <div class="tp-exp-row tp-head"><div>Description</div>${g.sub ? "" : "<div>Type</div>"}<div>Date</div>${g.sub ? "" : "<div>Paid by</div>"}<div>Amount</div><div>Status</div><div></div></div>
     <div class="tp-subs">${items.map((e) => {
-      const [status, cls] = expenseStatus(e);
+      const [status, cls] = expenseStatus(e, invoices);
       const payer = people.find((p) => p.id === e.personId);
-      const canReimburse = isAdmin() && e.personId && e.approved && !e.reimbursed;
       const qty = g.sub ? "" : expenseQtyText(e);
-      return `<div class="tp-exp-row tp-sub ${e.invoiced ? "done" : ""}">
+      return `<div class="tp-exp-row tp-sub">
         <div class="tp-sub-name"><span>${esc(e.description || "—")}</span>${e.declined && e.declineReason ? `<div class="declined-note">${esc(e.declineReason)}</div>` : ""}</div>
         ${g.sub ? "" : `<div class="tp-exp-type">${esc(e.category || "—")}</div>`}
         <div class="tp-due">${shortDate(e.date)}</div>
@@ -445,7 +444,6 @@ function expenseListHtml(g) {
         <div class="tp-num"><strong>${formatCurrency(e.amount)}</strong>${qty ? `<div class="tp-exp-qty">${qty}</div>` : ""}</div>
         <div><span class="pay-status ${cls}">${status}</span></div>
         <div class="tp-sub-actions">
-          ${canReimburse ? `<button class="link-btn" data-action="reimburse-expense" data-id="${e.id}">Mark reimbursed</button>` : ""}
           ${canEditExpense(e) && !e.invoiced ? `<button class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}
         </div>
       </div>`;
@@ -468,16 +466,6 @@ async function handleExpenseAction(btn) {
   if (action === "edit-expense") {
     const e = expenses.find((x) => x.id === id);
     if (e) expenseEditor.open(e);
-  }
-  if (action === "reimburse-expense") {
-    const e = expenses.find((x) => x.id === id);
-    const who = e && people.find((p) => p.id === e.personId)?.name;
-    if (!e || !(await confirmDialog("", { title: `Mark ${formatCurrency(e.amount)} as reimbursed to ${who || "them"}?`, confirmText: "Mark reimbursed" }))) return;
-    try {
-      await Expenses.update(id, { reimbursed: true, reimbursedDate: new Date().toISOString() });
-      showToast("Marked reimbursed.");
-      notifyEntries([{ ...e, isExpense: true }], { by: sessionPersonId, data: { people, projects }, verb: "reimbursed" });
-    } catch (err) { showToast("Error: " + err.message); }
   }
 }
 
@@ -717,7 +705,7 @@ budgetTbody.addEventListener("click", async (e) => {
   if (btn) {
     if (["open-add", "cancel-add", "remove-assignment", "add-assignment"].includes(btn.dataset.action)) {
       await handleAssignAction(btn);
-    } else if (["add-expense", "edit-expense", "reimburse-expense"].includes(btn.dataset.action)) {
+    } else if (["add-expense", "edit-expense"].includes(btn.dataset.action)) {
       await handleExpenseAction(btn);
     } else if (["close-task", "reopen-task"].includes(btn.dataset.action)) {
       const closed = btn.dataset.action === "close-task";

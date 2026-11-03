@@ -69,8 +69,14 @@ export function expenseLabel(e, project) {
   return [e.category, e.description].filter(Boolean).join(" · ");
 }
 
-export function expenseStatus(e) {
-  if (e.reimbursed) return ["Reimbursed", "paid"];
+// An expense is paid like hours: once the client pays the invoice it's on
+// (marked paid on Invoices), it shows "Client paid". `reimbursed` is from
+// before that, when expenses were marked reimbursed one by one.
+export const expenseClientPaid = (e, invoices = []) =>
+  !!e.reimbursed || (!!e.invoiceId && !!invoices.find((i) => i.id === e.invoiceId)?.paid);
+
+export function expenseStatus(e, invoices = []) {
+  if (expenseClientPaid(e, invoices)) return ["Client paid", "paid"];
   if (e.invoiced) return ["Invoiced", "invoiced"];
   if (e.approved) return ["Approved", "paid"];
   if (e.declined) return ["Declined", "unsynced"];
