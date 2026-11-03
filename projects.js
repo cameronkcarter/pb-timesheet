@@ -235,15 +235,21 @@ function renderProjectStats(project) {
 // invoiced (dark), logged but not invoiced, and assigned but not logged yet.
 const ctx = () => ({ projects, people });
 
+// Whole dollars ("$43,500"): budgets are planning numbers, so the table
+// skips cents. Invoices and the PDF keep them.
+const dollars = (n) => Math.round(n || 0).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+// Invoiced and Logged show "—" for nothing, so real amounts stand out.
+const spentAmount = (n) => (Math.abs(n) < 0.5 ? '<span class="zero">—</span>' : dollars(n));
+
 // A row's money cells: Budget, Spent split into Invoiced and Logged, the
 // bar, Remaining. "Logged" is what's logged but not invoiced yet, so
 // Invoiced + Logged is everything spent (the bar's two darker parts).
 function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = "") {
   const remaining = budget - spent;
-  return `<td class="c-sep">${formatCurrency(budget)}</td>
-    <td class="c-sep g-spent">${formatCurrency(invoiced)}</td><td class="g-spent">${formatCurrency(spent - invoiced)}</td>
+  return `<td class="c-sep num">${dollars(budget)}</td>
+    <td class="c-sep g-spent num">${spentAmount(invoiced)}</td><td class="g-spent num">${spentAmount(spent - invoiced)}</td>
     <td class="c-sep progressCell">${budgetBarHtml(spent, committed, budget, false, invoiced)}</td>
-    <td class="c-sep ${remaining < 0 ? "hours-over-strong" : ""}">${formatCurrency(remaining)}</td>${extra}`;
+    <td class="c-sep num ${remaining < 0 ? "hours-over-strong" : ""}">${dollars(remaining)}</td>${extra}`;
 }
 
 function invoicedOnTask(taskId) {
@@ -312,9 +318,9 @@ function renderBudget() {
   thead.innerHTML = internal
     ? `<tr><th class="internal-task-col">Task</th><th colspan="${cols - 1}">Hours logged</th></tr>`
     : `<tr class="budget-groups"><th></th><th></th><th colspan="2" class="c-sep g-spent">Spent</th><th></th><th></th></tr>
-      <tr><th>Task</th><th class="c-money c-sep">Budget</th>
-        <th class="c-money c-sep g-spent">${key("invoiced", "Invoiced")}</th><th class="c-money g-spent">${key("spent", "Logged")}</th>
-        <th class="c-bar c-sep">Progress</th><th class="c-money c-sep">Remaining</th></tr>`;
+      <tr><th>Task</th><th class="c-money c-sep num">Budget</th>
+        <th class="c-money c-sep g-spent num">${key("invoiced", "Invoiced")}</th><th class="c-money g-spent num">${key("spent", "Logged")}</th>
+        <th class="c-bar c-sep">Progress</th><th class="c-money c-sep num">Remaining</th></tr>`;
 
   // No tasks yet: say so, but still show the expense rows below.
   budgetEmpty.style.display = projectTasks.length ? "none" : "block";
@@ -340,7 +346,7 @@ function renderBudget() {
     const overdue = open.some((d) => d.dueDate < todayISO());
     const dueChip = open.length ? `<button type="button" class="due-chip ${overdue ? "overdue" : ""}" data-jump-task="${t.id}" title="Show this task's subtasks">${open.length} due</button>` : "";
     const closedPill = t.closed ? '<span class="pill">Closed</span>' : "";
-    const mainRow = `<tr class="task-row ${i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""} ${t.closed ? "task-closed" : ""}" data-task-row="${t.id}"><td><div class="task-cell" title="${esc(t.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${esc(t.name)}</span>${closedPill}${dueChip}</div></td>${cells}</tr>`;
+    const mainRow = `<tr class="task-row ${internal && i % 2 === 1 ? "stripe" : ""} ${expanded ? "expanded" : ""} ${t.closed ? "task-closed" : ""}" data-task-row="${t.id}"><td><div class="task-cell" title="${esc(t.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${esc(t.name)}</span>${closedPill}${dueChip}</div></td>${cells}</tr>`;
     if (!expanded) return mainRow;
     return mainRow + `<tr class="task-detail" data-task-id="${t.id}"><td colspan="${cols}" class="accordion-cell">${internal ? internalTaskHtml(t) : taskHoursHtml(t)}</td></tr>`;
   }).join("");

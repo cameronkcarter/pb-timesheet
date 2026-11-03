@@ -4228,3 +4228,7 @@ table.appr-table.appr-no-money { min-width: 700px; }
 .th-key i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
 .th-key i.invoiced { background: #9a5a16; }
 .th-key i.spent { background: var(--accent); }
+#budgetTable th.num, #budgetTable td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#budgetTable th.num .th-key { justify-content: flex-end; }
+#budgetTable td.num .zero { color: #c9bfd0; }
+#budgetTable td.progressCell { padding-left: 14px; padding-right: 14px; }
