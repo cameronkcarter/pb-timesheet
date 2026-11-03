@@ -51,7 +51,17 @@
     <div class="card">
       <div class="budget-header">
         <h2 style="margin:0;" id="budgetHeading">Tasks &amp; Budgets</h2>
-        <button id="editProjectBtn" class="small secondary" style="display:none;">Edit Tasks &amp; Budgets</button>
+        <div class="row-actions">
+          <!-- Mockup switch (staging only, until a layout is picked). -->
+          <div class="budget-layout" id="budgetLayoutWrap">
+            <span>Mockup</span>
+            <div class="segmented segmented-small" id="budgetLayout" role="radiogroup" aria-label="Budget layout">
+              <button type="button" data-value="columns" role="radio">Columns</button>
+              <button type="button" data-value="under" role="radio">Under Bar</button>
+            </div>
+          </div>
+          <button id="editProjectBtn" class="small secondary" style="display:none;">Edit Tasks &amp; Budgets</button>
+        </div>
       </div>
       <div class="bar-legend" id="barLegend">
         <span><i class="invoiced"></i>Invoiced</span>
@@ -59,7 +69,8 @@
         <span><i class="assigned"></i>Assigned</span>
       </div>
       <table id="budgetTable" style="margin-top:18px;">
-        <thead><tr><th>Task</th><th>Budget</th><th>Spent</th><th style="width:160px;">Progress</th><th>Remaining</th></tr></thead>
+        <colgroup id="budgetColgroup"></colgroup>
+        <thead></thead>
         <tbody></tbody>
       </table>
       <div id="budgetEmpty" class="empty" style="display:none;">No tasks set up for this project yet.</div>
