@@ -235,37 +235,15 @@ function renderProjectStats(project) {
 // invoiced (dark), logged but not invoiced, and assigned but not logged yet.
 const ctx = () => ({ projects, people });
 
-// Two layouts to compare (mockup, staging only): "columns" splits Spent
-// into Invoiced and Logged columns; "under" shows those numbers under the
-// bar instead. Remembered per browser.
-let budgetLayout = "columns";
-try { budgetLayout = localStorage.getItem("pb_budget_layout") || "columns"; } catch (_) { /* default */ }
-const budgetLayoutEl = document.getElementById("budgetLayout");
-budgetLayoutEl.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-value]");
-  if (!btn) return;
-  budgetLayout = btn.dataset.value;
-  try { localStorage.setItem("pb_budget_layout", budgetLayout); } catch (_) { /* fine */ }
-  renderBudget();
-});
-const budgetCols = () => (budgetLayout === "columns" ? 6 : 4);
-
-// A row's money cells. "Logged" is what's logged but not invoiced yet, so
+// A row's money cells: Budget, Spent split into Invoiced and Logged, the
+// bar, Remaining. "Logged" is what's logged but not invoiced yet, so
 // Invoiced + Logged is everything spent (the bar's two darker parts).
 function moneyCells({ budget, spent, committed = spent, invoiced = 0 }, extra = "") {
   const remaining = budget - spent;
-  const bar = budgetBarHtml(spent, committed, budget, false, invoiced);
-  const remainingCell = `<td class="c-sep ${remaining < 0 ? "hours-over-strong" : ""}">${formatCurrency(remaining)}</td>`;
-  if (budgetLayout === "columns") {
-    return `<td class="c-sep">${formatCurrency(budget)}</td>
-      <td class="c-sep g-spent">${formatCurrency(invoiced)}</td><td class="g-spent">${formatCurrency(spent - invoiced)}</td>
-      <td class="c-sep progressCell">${bar}</td>${remainingCell}${extra}`;
-  }
   return `<td class="c-sep">${formatCurrency(budget)}</td>
-    <td class="c-sep progressCell">${bar}<div class="bar-figs">
-      <span title="Invoiced"><i class="invoiced"></i>${formatCurrency(invoiced)}</span>
-      <span title="Logged, not invoiced yet"><i class="spent"></i>${formatCurrency(spent - invoiced)}</span>
-    </div></td>${remainingCell}${extra}`;
+    <td class="c-sep g-spent">${formatCurrency(invoiced)}</td><td class="g-spent">${formatCurrency(spent - invoiced)}</td>
+    <td class="c-sep progressCell">${budgetBarHtml(spent, committed, budget, false, invoiced)}</td>
+    <td class="c-sep ${remaining < 0 ? "hours-over-strong" : ""}">${formatCurrency(remaining)}</td>${extra}`;
 }
 
 function invoicedOnTask(taskId) {
@@ -308,9 +286,7 @@ function renderBudget() {
   const admin = isAdmin();
   const projectTasks = selectedProjectTasks();
   const thead = document.querySelector("#budgetTable thead");
-  const cols = budgetCols();
-  document.getElementById("budgetTable").dataset.layout = budgetLayout;
-  budgetLayoutEl.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.value === budgetLayout));
+  const cols = 6;
 
   const pm = people.find((x) => x.id === project.pmPersonId);
   // The selected project: name, then client / internal and its PM, with
@@ -328,22 +304,17 @@ function renderBudget() {
   editInfoLink.style.display = admin ? "" : "none";
   editInfoLink.href = `setup.html?project=${project.id}`;
   barLegend.style.display = internal ? "none" : "";
-  document.getElementById("budgetLayoutWrap").hidden = internal;
 
   // Column widths (the Spent heading row would otherwise set them).
   document.getElementById("budgetColgroup").innerHTML = internal ? ""
-    : budgetLayout === "columns"
-      ? '<col /><col class="w-money" /><col class="w-money" /><col class="w-money" /><col class="w-bar" /><col class="w-money" />'
-      : '<col /><col class="w-money" /><col class="w-bar-wide" /><col class="w-money" />';
+    : '<col /><col class="w-money" /><col class="w-money" /><col class="w-money" /><col class="w-bar" /><col class="w-money" />';
   const key = (cls, label) => `<span class="th-key"><i class="${cls}"></i>${label}</span>`;
   thead.innerHTML = internal
     ? `<tr><th class="internal-task-col">Task</th><th colspan="${cols - 1}">Hours logged</th></tr>`
-    : budgetLayout === "columns"
-      ? `<tr class="budget-groups"><th></th><th></th><th colspan="2" class="c-sep g-spent">Spent</th><th></th><th></th></tr>
-        <tr><th>Task</th><th class="c-money c-sep">Budget</th>
-          <th class="c-money c-sep g-spent">${key("invoiced", "Invoiced")}</th><th class="c-money g-spent">${key("spent", "Logged")}</th>
-          <th class="c-bar c-sep">Progress</th><th class="c-money c-sep">Remaining</th></tr>`
-      : `<tr><th>Task</th><th class="c-money c-sep">Budget</th><th class="c-bar-wide c-sep">Progress</th><th class="c-money c-sep">Remaining</th></tr>`;
+    : `<tr class="budget-groups"><th></th><th></th><th colspan="2" class="c-sep g-spent">Spent</th><th></th><th></th></tr>
+      <tr><th>Task</th><th class="c-money c-sep">Budget</th>
+        <th class="c-money c-sep g-spent">${key("invoiced", "Invoiced")}</th><th class="c-money g-spent">${key("spent", "Logged")}</th>
+        <th class="c-bar c-sep">Progress</th><th class="c-money c-sep">Remaining</th></tr>`;
 
   // No tasks yet: say so, but still show the expense rows below.
   budgetEmpty.style.display = projectTasks.length ? "none" : "block";

@@ -4220,18 +4220,11 @@ table.appr-table.appr-no-money { min-width: 700px; }
 #budgetTable .c-sep { border-left: 1px solid #e6dfeb; }
 #budgetTable .g-spent { box-shadow: inset 0 0 0 999px rgba(110, 50, 140, 0.045); }
 #budgetTable tr.budget-groups th { padding-top: 0; padding-bottom: 2px; border-bottom: none; font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; text-align: center; color: var(--navy); }
-#budgetTable col.w-money { width: 112px; }
-#budgetTable[data-layout="columns"] col.w-money { width: 100px; }
+#budgetTable col.w-money { width: 100px; }
 #budgetTable col.w-bar { width: 140px; }
-#budgetTable col.w-bar-wide { width: 230px; }
 #budgetTable td.progressCell { vertical-align: middle; }
 #budgetTable td.hours-over-strong { color: var(--red); }
 .th-key { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.th-key i, .bar-figs i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
-.th-key i.invoiced, .bar-figs i.invoiced { background: #9a5a16; }
-.th-key i.spent, .bar-figs i.spent { background: var(--accent); }
-.bar-figs { display: flex; gap: 12px; margin-top: 4px; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.bar-figs span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.budget-layout { display: flex; align-items: center; gap: 6px; }
-.budget-layout[hidden] { display: none; }
-.budget-layout > span { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-muted); }
+.th-key i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+.th-key i.invoiced { background: #9a5a16; }
+.th-key i.spent { background: var(--accent); }
