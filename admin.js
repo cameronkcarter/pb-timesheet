@@ -1,8 +1,8 @@
 // The Analytics tab (admins): analytics, and the data tools (Google Sheet
 // sync, Excel backup). People and default expense rates are on the Staff
 // tab.
-import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses, Settings } from "./db.js";
-import { formatCurrency, showToast, esc } from "./util.js";
+import { Staff, People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses, Settings } from "./db.js";
+import { formatCurrency, formatDate, showToast, esc } from "./util.js";
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import { createAnalytics } from "./analytics.js";
 import { createSheetSync } from "./sheet-sync.js";
@@ -19,6 +19,7 @@ let dueDates = [];
 let invoices = [];
 let expenses = [];
 let settings = {};
+let staff = [];
 let adminCheckDone = false;
 
 wireLogout("logoutLink");
@@ -38,15 +39,56 @@ if (sessionPersonId) {
     }
     analytics.render();
     renderBackupRow();
+    renderUsage();
   });
+  Staff.listen((d) => { staff = d; renderUsage(); });
   Projects.listen((d) => { projects = d; analytics.render(); });
   Tasks.listen((d) => { tasks = d; analytics.render(); });
   Assignments.listen((d) => { assignments = d; });
-  TimeEntries.listen((d) => { timeEntries = d; analytics.render(); });
+  TimeEntries.listen((d) => { timeEntries = d; analytics.render(); renderUsage(); });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; renderSheetRow(); });
   Settings.listen((d) => { settings = d; renderSheetRow(); renderBackupRow(); });
   Expenses.listen((d) => { expenses = d; });
+}
+
+// ---------- Usage ----------
+// Each active person's last visit (stamped by session.js) and when they last
+// logged hours, longest-quiet first.
+const usageBody = document.getElementById("usageBody");
+
+// Firestore times arrive as Timestamps, or as plain {seconds} once copied
+// into Test Mode; newer ones are ISO strings.
+function toMs(t) {
+  if (!t) return 0;
+  if (typeof t === "string") return Date.parse(t) || 0;
+  if (typeof t.toMillis === "function") return t.toMillis();
+  return t.seconds ? t.seconds * 1000 : 0;
+}
+
+function ago(ms) {
+  if (!ms) return '<span class="muted">Never</span>';
+  const mins = Math.round((Date.now() - ms) / 60000);
+  const when = new Date(ms);
+  const time = when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  let rel;
+  if (mins < 60) rel = mins <= 1 ? "Just now" : `${mins} min ago`;
+  else if (mins < 60 * 24) rel = `${Math.round(mins / 60)} hr ago`;
+  else rel = `${Math.round(mins / 1440)} days ago`;
+  if (rel === "1 days ago") rel = "Yesterday";
+  const stale = mins > 7 * 1440;
+  return `<span class="${stale ? "usage-stale" : ""}" title="${formatDate(when.toISOString().slice(0, 10))}, ${time}">${rel}</span>`;
+}
+
+function renderUsage() {
+  if (!usageBody) return;
+  const rows = people.filter((p) => !p.inactive).map((p) => {
+    const seen = toMs(staff.find((x) => x.personId === p.id)?.lastSeenAt);
+    const logged = timeEntries.filter((e) => e.personId === p.id).reduce((m, e) => Math.max(m, toMs(e.createdAt)), 0);
+    return { name: p.name, seen, logged };
+  }).sort((a, b) => a.seen - b.seen || a.name.localeCompare(b.name));
+  usageBody.innerHTML = `<table class="usage-table"><thead><tr><th>Staff</th><th>Last Active</th><th>Last Logged Hours</th></tr></thead>
+    <tbody>${rows.map((u) => `<tr><td>${esc(u.name)}</td><td>${ago(u.seen)}</td><td>${ago(u.logged)}</td></tr>`).join("")}</tbody></table>`;
 }
 
 function personById(id) {

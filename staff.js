@@ -145,7 +145,7 @@ async function removePerson(id) {
 
 function openPersonModal(person) {
   modalEditingPersonId = person ? person.id : null;
-  personModalTitle.textContent = person ? "Edit Person" : "New Person";
+  personModalTitle.textContent = person ? "Edit Staff" : "Add Staff";
   modalPersonName.value = person ? person.name : "";
   modalPersonRate.value = person ? person.rate : "";
   // New people start at the firm's standard bill rate.
@@ -185,7 +185,7 @@ document.getElementById("modalSavePerson").addEventListener("click", async () =>
       showToast("Person updated.");
     } else {
       await People.add({ name, email, rate, billRate, isAdmin: false });
-      showToast("Person added.");
+      showToast("Staff added.");
     }
     closePersonModal();
   } catch (err) {
@@ -200,73 +200,67 @@ function personById(id) {
 // ---------- Default expense rates ----------
 // The categories staff pick from when recording an expense (see expenses.js).
 // Invoices show a category's group (Mileage and Meals both show as "Travel");
-// a category on its own (Materials) is its own group, and invoices show its
-// name. Each has an optional default rate per unit (e.g. $0.70 / mile —
-// entered as a quantity; no unit means an amount) and whether to prompt for
-// a receipt. Each change saves the whole list. Past expenses keep the
-// category they were recorded with.
+// a category with no group (Materials) shows as itself. Each has an optional
+// default rate per unit (e.g. $0.70 / mile — entered as a quantity; no unit
+// means an amount) and whether to prompt for a receipt. Each change saves
+// the whole list. Past expenses keep the category they were recorded with.
+//
+// One row per category. Its Group box lists the groups already in use, so
+// putting rows together is picking the same group; typing a new name starts
+// one; clearing it leaves the category on its own. Rows sharing a group sit
+// together in a tinted band.
 const categoryRows = document.getElementById("categoryRows");
-let unsaved = null; // a just-added row: { group, newGroup } (group "" for a category on its own)
+let adding = false; // a blank row from "+ Add Category", until it's named
 
-// Categories in blocks: a group's categories together, or one on its own.
-function categoryBlocks() {
-  const blocks = [];
-  expenseCategories().forEach((c) => {
-    const group = categoryGroup(c.name);
-    const grouped = group !== c.name;
-    const block = grouped && blocks.find((b) => b.group === group);
-    if (block) block.items.push(c);
-    else blocks.push({ group: grouped ? group : "", items: [c] });
-  });
-  if (unsaved) {
-    const block = unsaved.group && blocks.find((b) => b.group === unsaved.group);
-    const blank = { name: "", unit: "", rate: null, receipt: true, isNew: true };
-    if (block) block.items.push(blank);
-    else blocks.push({ group: unsaved.group, items: [blank], newGroup: unsaved.newGroup });
-  }
-  return blocks;
+// A category's group, or "" when it has none (a group named after the
+// category itself, from older settings, counts as none).
+function groupOf(c) {
+  const group = categoryGroup(c.name);
+  return group && group !== c.name ? group : "";
+}
+
+// Grouped categories first (by group), then the ones on their own.
+function sortedCategories() {
+  const list = expenseCategories().map((c) => ({ ...c, group: groupOf(c) }));
+  return list.sort((a, b) => (!a.group - !b.group) || a.group.localeCompare(b.group) || 0);
 }
 
 function renderCategories() {
   if (categoryRows.contains(document.activeElement)) return;
-  const rest = (c) => `
-      <div class="money-input ${c.unit ? "" : "disabled"}"><span>$</span><input type="number" class="cat-rate" min="0" step="0.01"
-        value="${c.unit && c.rate != null ? c.rate : ""}" ${c.unit ? "" : "disabled"} aria-label="Default rate" /></div>
-      <div class="cat-per"><span>/</span><input type="text" class="cat-unit" value="${esc(c.unit || "")}" placeholder="none" aria-label="Unit" /></div>
-      <label class="cat-receipt"><input type="checkbox" class="cat-receipt-box" ${c.receipt ? "checked" : ""} aria-label="Ask for a receipt" /></label>
-      <button type="button" class="icon-btn cat-remove" title="Remove" aria-label="Remove">&times;</button>`;
-  categoryRows.innerHTML = categoryBlocks().map((b) => (b.group || b.newGroup
-    ? `<div class="cat-block grouped">
-        ${b.items.map((c, i) => `<div class="cat-grid cat-row">
-          ${i === 0 ? `<input type="text" class="cat-group-name" value="${esc(b.group)}" placeholder="Group" aria-label="Group" />` : "<span></span>"}
-          <input type="text" class="cat-name" value="${esc(c.name)}" placeholder="Category" aria-label="Category" ${c.isNew ? "data-new" : ""} />
-          ${rest(c)}
-        </div>`).join("")}
-        ${b.group ? `<button type="button" class="link-btn cat-add-to" data-group="${esc(b.group)}">+ Add to ${esc(b.group)}</button>` : ""}
-      </div>`
-    : `<div class="cat-block">
-        <div class="cat-grid cat-row">
-          <input type="text" class="cat-name" value="${esc(b.items[0].name)}" placeholder="Category" aria-label="Category" ${b.items[0].isNew ? "data-new" : ""} />
-          <span class="cat-none"></span>
-          ${rest(b.items[0])}
-        </div>
-      </div>`)).join("");
+  const list = sortedCategories();
+  if (adding) list.push({ name: "", group: "", unit: "", rate: null, receipt: true, isNew: true });
+  const groups = [...new Set(list.map((c) => c.group).filter(Boolean))].sort();
+  let band = 0;
+  categoryRows.innerHTML = `<datalist id="catGroups">${groups.map((g) => `<option value="${esc(g)}"></option>`).join("")}</datalist>`
+    + list.map((c, i) => {
+      // A new band starts with each group (each ungrouped row is its own).
+      if (i > 0 && (!c.group || c.group !== list[i - 1].group)) band += 1;
+      const first = !c.group || i === 0 || list[i - 1].group !== c.group;
+      const last = !c.group || i === list.length - 1 || list[i + 1].group !== c.group;
+      return `<div class="cat-grid cat-row ${c.group ? "grouped" : ""} ${first ? "first" : ""} ${last ? "last" : ""}" data-band="${band}">
+        <input type="text" class="cat-group" list="catGroups" value="${esc(c.group)}" placeholder="No group" aria-label="Group" />
+        <input type="text" class="cat-name" value="${esc(c.name)}" placeholder="Category name" aria-label="Category" ${c.isNew ? "data-new" : ""} />
+        <div class="money-input ${c.unit ? "" : "disabled"}"><span>$</span><input type="number" class="cat-rate" min="0" step="0.01"
+          value="${c.unit && c.rate != null ? c.rate : ""}" ${c.unit ? "" : "disabled"} aria-label="Default rate" /></div>
+        <div class="cat-per"><span>/</span><input type="text" class="cat-unit" value="${esc(c.unit || "")}" placeholder="none" aria-label="Unit" /></div>
+        <label class="cat-receipt"><input type="checkbox" class="cat-receipt-box" ${c.receipt ? "checked" : ""} aria-label="Ask for a receipt" /></label>
+        <button type="button" class="icon-btn cat-remove" title="Remove" aria-label="Remove">&times;</button>
+      </div>`;
+    }).join("")
+    + '<button type="button" class="link-btn cat-add">+ Add Category</button>';
 }
 
 function readCategories() {
-  return [...categoryRows.querySelectorAll(".cat-block")].flatMap((block) => {
-    const group = block.classList.contains("grouped") ? block.querySelector(".cat-group-name").value.trim() : "";
-    return [...block.querySelectorAll(".cat-row")].map((row) => {
-      const unit = row.querySelector(".cat-unit").value.trim().toLowerCase();
-      const rate = Number(row.querySelector(".cat-rate").value);
-      return {
-        name: row.querySelector(".cat-name").value.trim(),
-        group,
-        unit,
-        rate: unit && rate > 0 ? rate : null,
-        receipt: row.querySelector(".cat-receipt-box").checked,
-      };
-    });
+  return [...categoryRows.querySelectorAll(".cat-row")].map((row) => {
+    const unit = row.querySelector(".cat-unit").value.trim().toLowerCase();
+    const rate = Number(row.querySelector(".cat-rate").value);
+    return {
+      name: row.querySelector(".cat-name").value.trim(),
+      group: row.querySelector(".cat-group").value.trim(),
+      unit,
+      rate: unit && rate > 0 ? rate : null,
+      receipt: row.querySelector(".cat-receipt-box").checked,
+    };
   });
 }
 
@@ -275,9 +269,10 @@ async function saveCategories(list, message = "Saved.") {
   const names = named.map((c) => c.name.toLowerCase());
   if (names.some((n, i) => names.indexOf(n) !== i)) return showToast("Two categories have the same name.");
   if (!named.length) return showToast("Keep at least one category.");
-  if (list.length === named.length) unsaved = null;
+  if (list.length === named.length) adding = false;
   try {
-    await Settings.set({ expenseCategories: named });
+    // A group with the category's own name is the same as no group.
+    await Settings.set({ expenseCategories: named.map((c) => ({ ...c, group: c.group === c.name ? "" : c.group })) });
     showToast(message);
   } catch (err) {
     showToast("Error: " + err.message);
@@ -294,26 +289,23 @@ categoryRows.addEventListener("input", (e) => {
 });
 
 categoryRows.addEventListener("change", (e) => {
-  // Keep a new group's name while its first category is still unnamed.
-  const newRow = categoryRows.querySelector(".cat-name[data-new]");
-  const groupInput = newRow?.closest(".cat-block").querySelector(".cat-group-name");
-  if (unsaved && groupInput) unsaved.group = groupInput.value.trim();
   const list = readCategories();
   if (list.some((c) => c.unit && !c.rate) && e.target.classList.contains("cat-rate")) return showToast("Enter a default rate above $0.");
+  // A new row waits for its name before saving.
+  if (e.target.closest(".cat-row")?.querySelector("[data-new]") && !e.target.closest(".cat-row").querySelector(".cat-name").value.trim()) return;
   saveCategories(list);
 });
 
 categoryRows.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("input")) e.target.blur(); });
 
-// Saving re-renders once focus leaves the list.
+// Saving re-renders once focus leaves the list (rows re-sort into groups).
 categoryRows.addEventListener("focusout", () => setTimeout(() => {
   if (!categoryRows.contains(document.activeElement)) renderCategories();
 }, 0));
 
 categoryRows.addEventListener("click", (e) => {
-  const add = e.target.closest(".cat-add-to");
-  if (add) {
-    unsaved = { group: add.dataset.group };
+  if (e.target.closest(".cat-add")) {
+    adding = true;
     renderCategories();
     categoryRows.querySelector(".cat-name[data-new]").focus();
     return;
@@ -322,25 +314,7 @@ categoryRows.addEventListener("click", (e) => {
   if (!btn) return;
   const row = btn.closest(".cat-row");
   const name = row.querySelector(".cat-name").value.trim();
-  // The group's name sits on its first row: keep it for the rows left.
-  const block = row.closest(".cat-block");
-  const groupInput = row.querySelector(".cat-group-name");
-  const next = row.nextElementSibling;
-  if (groupInput && next && next.classList.contains("cat-row")) next.firstElementChild.replaceWith(groupInput);
   row.remove();
-  if (!block.querySelector(".cat-row")) block.remove();
-  if (!name) { unsaved = null; renderCategories(); return; }
+  if (!name) { adding = false; renderCategories(); return; }
   saveCategories(readCategories(), `Removed "${name}". Past expenses keep it.`);
-});
-
-document.getElementById("addGroup").addEventListener("click", () => {
-  unsaved = { group: "", newGroup: true };
-  renderCategories();
-  categoryRows.querySelector(".cat-name[data-new]").closest(".cat-block").querySelector(".cat-group-name").focus();
-});
-
-document.getElementById("addCategory").addEventListener("click", () => {
-  unsaved = { group: "" };
-  renderCategories();
-  categoryRows.querySelector(".cat-name[data-new]").focus();
 });

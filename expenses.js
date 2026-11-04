@@ -2,7 +2,7 @@
 // add/edit popup (used on the Dashboard and the Projects tab). Markup is
 // created here so every page gets the same popup.
 import { Expenses, Settings } from "./db.js";
-import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO, confirmDialog } from "./util.js";
+import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO, confirmDialog, projectShortName } from "./util.js";
 import { notifyEntries } from "./notifications.js";
 
 // Expense categories are set by admins (Staff > Default Expense Rates, saved as
@@ -12,7 +12,7 @@ import { notifyEntries } from "./notifications.js";
 //   unit    — "mile", "night"…: entered as a quantity × rate (rate is the
 //             default, editable per expense; a project can override it in
 //             project.expenseRates). Blank: entered as an amount.
-//   receipt — prompt to email the receipt to the project's PM.
+//   receipt — prompt to save the receipt in the project folder.
 // Expenses store the category's name (and unit), so renaming or removing a
 // category never changes past expenses.
 export const DEFAULT_CATEGORIES = [
@@ -20,8 +20,8 @@ export const DEFAULT_CATEGORIES = [
   { name: "Transit", group: "Travel", unit: "", rate: null, receipt: true },
   { name: "Lodging", group: "Travel", unit: "night", rate: 150, receipt: true },
   { name: "Meals", group: "Travel", unit: "", rate: null, receipt: true },
-  { name: "Materials", group: "Materials", unit: "", rate: null, receipt: true },
-  { name: "Other", group: "Other", unit: "", rate: null, receipt: true },
+  { name: "Materials", group: "", unit: "", rate: null, receipt: true },
+  { name: "Other", group: "", unit: "", rate: null, receipt: true },
 ];
 
 let categories = DEFAULT_CATEGORIES;
@@ -223,15 +223,14 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
     updateCost();
   }
 
-  // A reminder to email the receipt to the project's PM.
+  // A reminder to save the receipt in the project folder.
   function updateReceipt() {
-    const { people, projects } = getData();
+    const { projects } = getData();
     const project = projects.find((p) => p.id === projectSelect.value);
-    const pm = project && people.find((p) => p.id === project.pmPersonId);
     const on = kind === "project" && !!project && !!info(category.value)?.receipt;
     receipt.style.display = on ? "" : "none";
     if (!on) return;
-    receipt.textContent = `Email the receipt to ${pm ? pm.name : "the project manager"}.`;
+    receipt.textContent = `Save the receipt in the ${projectShortName(project)} project folder.`;
   }
 
   function updateCost() {
@@ -363,7 +362,7 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
       if (editing) notifyEntries([{ ...editing, ...data, isExpense: true }], { by: sessionPersonId, data: getData(), verb: "edited" });
       close();
       showToast(editing ? "Expense updated." : kind === "sub" ? "Sub expense added."
-        : info(data.category)?.receipt ? "Expense added. Remember to email the receipt." : "Expense added.");
+        : info(data.category)?.receipt ? "Expense added. Remember to save the receipt in the project folder." : "Expense added.");
     } catch (err) {
       showToast("Error: " + err.message);
     }

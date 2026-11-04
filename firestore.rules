@@ -38,9 +38,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId == projectId;
     }
 
+    // Everyone stamps their own lastSeenAt (Analytics → Usage), nothing else.
     match /staff/{staffEmail} {
       allow read: if signedIn() && (staffEmail == email() || isAdmin());
       allow write: if isAdmin();
+      allow update: if signedIn() && staffEmail == email()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lastSeenAt"]);
     }
 
     match /people/{id} {

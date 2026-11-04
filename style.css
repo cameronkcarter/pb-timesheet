@@ -4232,3 +4232,56 @@ table.appr-table.appr-no-money { min-width: 700px; }
 #budgetTable th.num .th-key { justify-content: flex-end; }
 #budgetTable td.num .zero { color: #c9bfd0; }
 #budgetTable td.progressCell { padding-left: 14px; padding-right: 14px; }
+
+/* Assigned (not logged yet): gray slashes, so the bars only use color for
+   money actually spent (invoiced, logged). */
+.budget-progress .fill.assigned,
+.bar-legend i.assigned,
+.hb-left {
+  background: repeating-linear-gradient(-45deg, #c9c3cf 0 2px, #ece8f0 2px 5px);
+}
+.budget-progress .fill.assigned.over { background: repeating-linear-gradient(-45deg, #e6a39b 0 2px, #f8e1de 2px 5px); }
+
+/* Timesheet: the shared project picker, inside the Log Hours section. */
+.ts-picker.project-picker { padding: 8px 0 0; }
+.ts-picker[hidden] { display: none; }
+.ts-picker .picker-top { padding: 0; }
+.ts-picker .picker-results { margin-left: 0; margin-right: 0; }
+.ts-picker .chip-label { margin: 12px 0 6px; }
+.ts-picker .project-chips { padding: 0; }
+.ts-picker button.project-chip { padding: 4px 11px; font-size: 13px; }
+
+/* Staff: default expense rates. Rows in the same group share a tinted band;
+   the group name reads once (later rows muted), each row can still change it. */
+.cat-row { border-top: none; padding: 5px 8px; }
+#categoryRows .cat-row + .cat-row.first { margin-top: 6px; }
+#categoryRows .cat-row:not(.grouped) { border-bottom: 1px solid var(--border); }
+.cat-row.grouped { background: #f6f1f9; }
+.cat-row.grouped.first { border-radius: 8px 8px 0 0; padding-top: 8px; }
+.cat-row.grouped.last { border-radius: 0 0 8px 8px; padding-bottom: 8px; }
+.cat-row.grouped.first.last { border-radius: 8px; }
+.cat-row.grouped.first .cat-group { font-weight: 600; }
+.cat-row.grouped:not(.first) .cat-group { color: var(--text-muted); }
+.cat-row .cat-group::placeholder { font-style: italic; }
+#categoryRows .cat-add { margin: 10px 0 0 8px; }
+.cat-head { padding: 0 8px 6px; }
+
+/* "Got it": clears a post from your board. A clear purple-outline button so
+   people see they can clear posts. */
+button.mb-dismiss {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-color: #d3c3de;
+  color: var(--navy);
+}
+button.mb-dismiss span { font-size: 13px; line-height: 1; }
+button.mb-dismiss:hover { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+/* Analytics: Usage */
+.usage-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.usage-table th { text-align: left; font-size: 12px; font-weight: 600; color: #6b6275; padding: 6px 10px; border-bottom: 1px solid #e6e0ea; }
+.usage-table td { padding: 8px 10px; border-bottom: 1px solid #f0ecf3; }
+.usage-table tr:last-child td { border-bottom: 0; }
+.usage-table .usage-stale { color: #b5532f; font-weight: 600; }

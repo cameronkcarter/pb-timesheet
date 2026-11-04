@@ -374,7 +374,7 @@ function detailHtml(row) {
   const inv = row.inv;
   const canPdf = !inv.historical && inv.taskRows && inv.laborRows;
   if (inv.void) {
-    return `<div class="inv-note">${esc(inv.periodLabel || "")} &middot; Voided${inv.voidedDate ? " " + shortDate(inv.voidedDate) : ""} — its hours and expenses went back to Unbilled hours.</div>
+    return `<div class="inv-note">${esc(inv.periodLabel || "")} &middot; Voided${inv.voidedDate ? " " + shortDate(inv.voidedDate) : ""} — its hours and expenses went back to Ready to Invoice.</div>
       ${expenseTableHtml(inv.expenseRows || [])}
       <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}</div>`;
   }
@@ -1035,6 +1035,16 @@ async function generate(row, isPreview) {
   const invoiceNumber = row.number.trim() || nextInvoiceNumber();
   if (!isPreview && invoices.some((i) => i.invoiceNumber === invoiceNumber) &&
     !(await confirmDialog(`Invoice # ${invoiceNumber} has already been used.`, { title: "Use this number again?", confirmText: "Use it anyway" }))) return;
+  if (!isPreview) {
+    const what = [
+      entries.length ? `${fmtHrs(sumHours(entries))} hrs` : "",
+      exps.length ? `${formatCurrency(sumAmount(exps))} in expenses` : "",
+    ].filter(Boolean).join(" and ");
+    if (!(await confirmDialog(
+      `Its ${what} will be locked and can't be edited. To change anything later, void the invoice.`,
+      { title: `Generate invoice ${invoiceNumber}?`, confirmText: "Generate Invoice" },
+    ))) return;
+  }
 
   const buttons = [...invoiceBody.querySelectorAll(".inv-actions button")];
   buttons.forEach((x) => { x.disabled = true; });
@@ -1127,9 +1137,12 @@ async function viewPdf(inv) {
 }
 
 // Voiding keeps the invoice (marked Void, number not reused) but sends its
-// hours, expenses and subconsultant invoices back to Unbilled hours.
+// hours, expenses and sub expenses back to Ready to Invoice.
 async function voidInvoice(inv) {
-  if (!(await confirmDialog("Its hours and expenses go back to Unbilled hours so they can go on a new invoice. The voided invoice stays in the list for the record.", { title: `Void invoice ${inv.invoiceNumber}?`, confirmText: "Void Invoice", danger: true }))) return;
+  if (!(await confirmDialog(
+    "Its hours and expenses go back to Ready to Invoice, unchanged, so you can fix anything and generate a new one. This invoice stays in the list, marked Void.",
+    { title: `Void invoice ${inv.invoiceNumber}?`, confirmText: "Void Invoice" },
+  ))) return;
   try {
     const entries = timeEntries.filter((e) => e.invoiceId === inv.id);
     const exps = expenses.filter((e) => e.invoiceId === inv.id);

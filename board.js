@@ -95,7 +95,7 @@ export function createMessageBoard({ el, getData, sessionPersonId }) {
           ${mine || me()?.isAdmin ? '<button type="button" class="link-btn mb-delete" data-action="delete">Delete</button>' : ""}
         </div>
       </div>
-      ${canDismiss ? '<button type="button" class="mb-dismiss" data-action="dismiss" title="Hide it for you; it moves to Earlier">Dismiss</button>' : ""}
+      ${canDismiss ? '<button type="button" class="mb-dismiss" data-action="dismiss" title="Clear it from your board (it moves to Earlier)"><span aria-hidden="true">&#10003;</span> Got it</button>' : ""}
     </div>`;
   }
 
@@ -214,7 +214,7 @@ export function createMessageBoard({ el, getData, sessionPersonId }) {
       }
       if (action === "dismiss") {
         await Messages.update(m.id, { dismissedBy: toggled(m.dismissedBy, true) });
-        showToast("Dismissed. It's under Earlier.", {
+        showToast("Cleared. It's under Earlier.", {
           action: "Undo",
           onAction: () => Messages.update(m.id, { dismissedBy: toggled(m.dismissedBy, false) }).catch((err) => showToast("Error: " + err.message)),
         });

@@ -489,11 +489,11 @@ function internalTaskHtml(task) {
 }
 
 // ---------- Assigned hours (admins and the project's PM) ----------
-// Each person's hours box saves itself a moment after typing; "+ Person"
+// Each person's hours box saves itself a moment after typing; "+ Add Staff"
 // adds people. The bars and Unassigned update as you type.
-let addingTaskId = null;    // task whose "Add person" chips are showing
+let addingTaskId = null;    // task whose "Add Staff" chips are showing
 let focusPersonId = null;   // just added: focus their hours box once it appears
-let justAdded = [];         // people added since "+ Person" was opened
+let justAdded = [];         // people added since "+ Add Staff" was opened
 let renderDeferred = false; // skip re-rendering while someone is editing hours
 const saveTimers = {};      // assignmentId -> pending auto-save
 const SAVE_DELAY_MS = 800;
@@ -550,7 +550,7 @@ function addPersonHtml(task) {
       <button type="button" class="link-btn" data-action="cancel-add">Done</button></div>` : "";
   }
   if (addingTaskId !== task.id) {
-    return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Person</button>`;
+    return `<button class="link-btn" data-action="open-add" data-task-id="${task.id}">+ Add Staff</button>`;
   }
   // Tap people to add them (0 hrs each); Done puts the cursor in the first
   // one's hours box.

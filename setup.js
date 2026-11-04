@@ -70,7 +70,7 @@ const saveBtn = $("setupSave");
 const revertBtn = $("setupRevert");
 let color = null;     // picked swatch; null keeps the automatic color
 let type = "rates";   // "rates" or "internal" (null on a new project until picked)
-let extraPeople = []; // added with "Add someone" before saving
+let extraPeople = []; // added with "Add Staff" before saving
 let ratesOpen = false;
 
 const project = () => projects.find((p) => p.id === shownId);
@@ -161,8 +161,8 @@ function renderRateRows(p, billRates, expenseRates) {
     .sort((a, b) => a.name.localeCompare(b.name));
   billRatesEl.innerHTML = list.map((x) => rateRow(x.id, x.name, personBillRate(x), billRates[x.id], "hr")).join("")
     + (list.length ? "" : '<div class="setup-none">No one is on this project yet.</div>')
-    + (others.length ? `<select class="setup-add-person" aria-label="Add someone">
-        <option value="">+ Add someone</option>${others.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}
+    + (others.length ? `<select class="setup-add-person" aria-label="Add staff">
+        <option value="">+ Add Staff</option>${others.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}
       </select>` : "");
   const unitCats = expenseCategories().filter((c) => c.unit && c.rate != null);
   expenseRatesEl.innerHTML = unitCats.map((c) => rateRow(c.name, c.name, c.rate, expenseRates[c.name], c.unit)).join("")

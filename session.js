@@ -1,5 +1,5 @@
 import { authChecked, signOutUser, db } from "./firebase-config.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const KEY = "pb_session_person_id";
 const TEST_ACTIVE_KEY = "pb_test_active";
@@ -130,10 +130,23 @@ export function requireSession() {
         clearSession();
         await signOutUser();
         window.location.href = "index.html";
+        return;
       }
+      if (!isTestMode()) recordActive(user, entry);
     });
   }
   return id;
+}
+
+// Usage (Analytics): stamps the time on the person's staff record, at most
+// every 15 minutes. Google keeps people signed in, so this is "last active"
+// (last opened the app), not just the last time they typed a password.
+const ACTIVE_EVERY_MS = 15 * 60 * 1000;
+function recordActive(user, entry) {
+  const last = Date.parse(entry.lastSeenAt || "") || 0;
+  if (Date.now() - last < ACTIVE_EVERY_MS) return;
+  updateDoc(doc(db, "staff", user.email.toLowerCase()), { lastSeenAt: new Date().toISOString() })
+    .catch((err) => console.warn("Couldn't record activity.", err.code || err));
 }
 
 // Call once a person record has loaded, on pages restricted to admins

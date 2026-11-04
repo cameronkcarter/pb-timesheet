@@ -5,6 +5,7 @@ import {
   hoursBarHtml, hoursScale,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
+import { createProjectPicker } from "./project-picker.js";
 import { assignedHours, isInternal } from "./rates.js";
 
 // Three cards: a calendar of your hours (two weeks, or the whole month), the
@@ -49,7 +50,7 @@ const calTodayBtn = document.getElementById("calToday");
 const dayCard = document.getElementById("dayCard");
 const dayHeading = document.getElementById("dayHeading");
 const dayEntries = document.getElementById("dayEntries");
-const projectCardsEl = document.getElementById("projectCards");
+const projectPickerEl = document.getElementById("projectPicker");
 const projectCardsEmpty = document.getElementById("projectCardsEmpty");
 const projectSelectedEl = document.getElementById("projectSelected");
 const noAssignmentsEmpty = document.getElementById("noAssignmentsEmpty");
@@ -475,7 +476,7 @@ function renderLogForm() {
   if (!selectedPersonId) return;
   const mine = myProjects();
   if (mine.length === 0) {
-    projectCardsEl.innerHTML = "";
+    projectPickerEl.hidden = true;
     projectSelectedEl.hidden = true;
     projectCardsEmpty.style.display = "block";
     noAssignmentsEmpty.style.display = "none";
@@ -486,10 +487,10 @@ function renderLogForm() {
   if (selectedProjectId && !mine.some((p) => p.id === selectedProjectId)) selectedProjectId = null;
   if (!projectPicked || !selectedProjectId) selectedProjectId = mine[0].id;
 
-  // Your projects as chips (short names), then the picked one's full name,
-  // client and PM underneath.
-  projectCardsEl.innerHTML = mine.map((p) => `<button type="button" class="project-chip ${p.id === selectedProjectId ? "on" : ""}"
-    data-project-card="${p.id}" style="--c:${projectColor(p.id)};" title="${esc(p.name)}"><i aria-hidden="true"></i>${esc(projectShortName(p))}</button>`).join("");
+  // Search and your projects as chips (short names), the same picker as
+  // Projects and Setup, then the picked one's full name, client and PM.
+  projectPickerEl.hidden = false;
+  picker.render();
   const picked = mine.find((p) => p.id === selectedProjectId);
   const pm = picked && people.find((x) => x.id === picked.pmPersonId);
   projectSelectedEl.hidden = !picked;
@@ -632,16 +633,22 @@ function renderExistingHint() {
     : "";
 }
 
-projectCardsEl.addEventListener("click", (e) => {
-  const card = e.target.closest(".project-chip");
-  if (!card || card.dataset.projectCard === selectedProjectId) return;
-  selectedProjectId = card.dataset.projectCard;
+// Only projects you can log to (myProjects) are offered or searched.
+const picker = createProjectPicker({
+  root: projectPickerEl,
+  getData: () => ({ projects: myProjects(), mine: myProjects(), selectedId: selectedProjectId }),
+  onPick: (id) => pickLogProject(id),
+});
+
+function pickLogProject(id) {
+  if (id === selectedProjectId) return;
+  selectedProjectId = id;
   projectPicked = true;
   selectedTaskId = null;
   showOtherTasks = false;
   addingTask = false;
   renderLogForm();
-});
+}
 
 taskRowsEl.addEventListener("click", (e) => {
   const action = e.target.closest("[data-action]")?.dataset.action;
