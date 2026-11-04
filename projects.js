@@ -298,6 +298,12 @@ function renderBudget() {
   // The selected project: name, then client / internal and its PM, with
   // a link to its Setup (admins) beside them.
   projectHead.style.setProperty("--c", projectColor(project.id));
+  // The same project, tagged on the panels below, so it's clear they're its.
+  document.querySelectorAll(".panel-project-tag").forEach((tag) => {
+    tag.style.setProperty("--c", projectColor(project.id));
+    tag.textContent = projectShortName(project);
+    tag.title = project.name;
+  });
   renderProjectStats(project);
   projectHeadName.textContent = project.name;
   projectHeadMeta.textContent = [

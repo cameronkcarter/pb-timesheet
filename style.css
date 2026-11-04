@@ -4298,3 +4298,15 @@ button.mb-dismiss:hover { background: var(--navy); color: #fff; border-color: va
   #projectModal .task-edit-grid { grid-template-columns: minmax(0, 1fr) 100px 128px 128px 30px; }
   #projectModal #modalTaskRows.internal .task-edit-grid, #projectModal .task-edit-grid.internal { grid-template-columns: minmax(0, 1fr) 128px 128px 30px; }
 }
+
+/* Projects: the open project, tagged beside each panel's title. */
+.panel-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.panel-project-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 8px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; color: #3d3346; white-space: nowrap;
+  background: color-mix(in srgb, var(--c, #7b3d86) 12%, #fff);
+  border: 1px solid color-mix(in srgb, var(--c, #7b3d86) 35%, #fff);
+}
+.panel-project-tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c, #7b3d86); }
+.panel-project-tag:empty { display: none; }
