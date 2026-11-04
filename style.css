@@ -4314,3 +4314,4 @@ button.mb-dismiss:hover { background: var(--navy); color: #fff; border-color: va
 /* Projects: solid lines above and below each subtotal, to set it apart. */
 #budgetTable tr.budget-subtotal-row td { border-top: 1px solid #a99fb3; border-bottom: 1px solid #a99fb3; }
 #budgetTable tr:has(+ tr.budget-subtotal-row) > td { border-bottom: 1px solid #a99fb3; }
+#budgetTable thead tr:last-child > th { border-bottom: 1px solid #a99fb3; }
