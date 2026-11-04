@@ -4285,3 +4285,16 @@ button.mb-dismiss:hover { background: var(--navy); color: #fff; border-color: va
 .usage-table td { padding: 8px 10px; border-bottom: 1px solid #f0ecf3; }
 .usage-table tr:last-child td { border-bottom: 0; }
 .usage-table .usage-stale { color: #b5532f; font-weight: 600; }
+
+/* Editable task number ("Task [3]:"), so numbers can be skipped. */
+#modalTaskRows.numbered .task-num { display: flex; align-items: center; gap: 3px; }
+.task-name-cell .task-num-input { flex: none; width: 38px; padding: 4px 2px; text-align: center; font-weight: 600; -moz-appearance: textfield; }
+.task-num-input::-webkit-outer-spin-button, .task-num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Tasks & Budgets editor: wider, and the name gets all the room the
+   budget and dates do not need, so long task names fit. */
+#projectModal .modal.sheet-modal { max-width: 940px; }
+@media (min-width: 701px) {
+  #projectModal .task-edit-grid { grid-template-columns: minmax(0, 1fr) 100px 128px 128px 30px; }
+  #projectModal #modalTaskRows.internal .task-edit-grid, #projectModal .task-edit-grid.internal { grid-template-columns: minmax(0, 1fr) 128px 128px 30px; }
+}

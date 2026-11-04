@@ -73,17 +73,37 @@ export function createProjectEditor({ getData, onSaved }) {
 
   // Numbered tasks ("Task 1: …"): on by default for client projects, off for
   // internal ones (e.g. RFPs), until it's set by hand. The "Task N:" prefix
-  // is a label in front of each name, numbered in row order, and is added to
-  // the name when saved.
+  // is in front of each name and added to the name when saved. Each number
+  // can be changed, to skip ones that aren't ours (a sub on tasks 1, 3, 4, 5):
+  // a new row takes the next number, and changing one moves the rows after
+  // it up so the numbers stay in order. Removing a row leaves the gap.
   const numberTasksBox = $("modalNumberTasks");
-  const stripTaskNumber = (name) => name.replace(/^Task\s*\d+\s*[:.\-–]?\s*/i, "");
+  const TASK_NUM_RE = /^Task\s*(\d+)\s*[:.\-–]?\s*/i;
+  const stripTaskNumber = (name) => name.replace(TASK_NUM_RE, "");
+  const taskNumberOf = (name) => Number((name || "").match(TASK_NUM_RE)?.[1]) || null;
+  const numInputs = () => [...modalTaskRows.querySelectorAll(".task-num-input")];
   function setNumbered(on) {
     numberTasksBox.checked = on;
     modalTaskRows.classList.toggle("numbered", on);
-    renumberTasks();
+    fillTaskNumbers();
   }
-  function renumberTasks() {
-    modalTaskRows.querySelectorAll(".task-num").forEach((el, i) => { el.textContent = `Task ${i + 1}:`; });
+  // Blank numbers (new rows) take the one after the row above.
+  function fillTaskNumbers() {
+    let prev = 0;
+    for (const input of numInputs()) {
+      if (!(Number(input.value) > 0)) input.value = prev + 1;
+      prev = Number(input.value);
+    }
+  }
+  // After a number changes, rows below that would be out of order move up.
+  function cascadeTaskNumbers(from) {
+    const inputs = numInputs();
+    let prev = Number(from.value) || 1;
+    from.value = prev;
+    for (const input of inputs.slice(inputs.indexOf(from) + 1)) {
+      if (Number(input.value) <= prev) input.value = prev + 1;
+      prev = Number(input.value);
+    }
   }
   numberTasksBox.addEventListener("change", () => setNumbered(numberTasksBox.checked));
 
@@ -99,7 +119,8 @@ export function createProjectEditor({ getData, onSaved }) {
 
   function taskRowHtml(taskId, name, budget, startDate, endDate) {
     return `<div class="modal-task-row task-edit-grid" data-task-id="${taskId || ""}">
-      <div class="task-name-cell"><span class="task-num"></span><input type="text" class="modalTaskName" placeholder="Task name" value="${esc(stripTaskNumber(name || ""))}" /></div>
+      <div class="task-name-cell"><label class="task-num">Task <input type="number" class="task-num-input" min="1" step="1"
+        value="${taskNumberOf(name) || ""}" aria-label="Task number" />:</label><input type="text" class="modalTaskName" placeholder="Task name" value="${esc(stripTaskNumber(name || ""))}" /></div>
       <div class="money-input col-budget"><span>$</span><input type="number" class="modalTaskBudget" placeholder="0" min="0" step="0.01" value="${budget || ""}" /></div>
       <input type="date" class="modalTaskStart" value="${startDate || ""}" title="Start (optional)" />
       <input type="date" class="modalTaskEnd" value="${endDate || ""}" title="End (optional)" />
@@ -166,12 +187,15 @@ export function createProjectEditor({ getData, onSaved }) {
 
   $("modalAddTaskRow").addEventListener("click", () => {
     modalTaskRows.insertAdjacentHTML("beforeend", taskRowHtml());
-    renumberTasks();
+    fillTaskNumbers();
     modalTaskRows.lastElementChild.querySelector(".modalTaskName").focus();
     updateTaskTotal();
   });
   modalTaskRows.addEventListener("input", (e) => {
     if (e.target.classList.contains("modalTaskBudget")) updateTaskTotal();
+  });
+  modalTaskRows.addEventListener("change", (e) => {
+    if (e.target.classList.contains("task-num-input")) cascadeTaskNumbers(e.target);
   });
   modalTaskRows.addEventListener("click", async (e) => {
     const btn = e.target.closest(".removeTaskRow");
@@ -190,7 +214,6 @@ export function createProjectEditor({ getData, onSaved }) {
       pendingTaskDeletions.add(taskId);
     }
     row.remove();
-    renumberTasks();
     updateTaskTotal();
   });
   $("modalCancelProject").addEventListener("click", close);
@@ -214,10 +237,12 @@ export function createProjectEditor({ getData, onSaved }) {
       });
 
       const numbered = numberTasksBox.checked;
-      for (const [i, row] of [...modalTaskRows.querySelectorAll(".modal-task-row")].entries()) {
+      if (numbered) fillTaskNumbers();
+      for (const row of modalTaskRows.querySelectorAll(".modal-task-row")) {
         const taskId = row.dataset.taskId;
         const bareName = stripTaskNumber(row.querySelector(".modalTaskName").value.trim());
-        const taskName = bareName && numbered ? `Task ${i + 1}: ${bareName}` : bareName;
+        const num = Number(row.querySelector(".task-num-input").value);
+        const taskName = bareName && numbered ? `Task ${num}: ${bareName}` : bareName;
         const taskBudget = internal() ? 0 : Number(row.querySelector(".modalTaskBudget").value) || 0;
         const startDate = row.querySelector(".modalTaskStart").value || null;
         const endDate = row.querySelector(".modalTaskEnd").value || null;
