@@ -4310,3 +4310,7 @@ button.mb-dismiss:hover { background: var(--navy); color: #fff; border-color: va
 }
 .panel-project-tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c, #7b3d86); }
 .panel-project-tag:empty { display: none; }
+
+/* Projects: solid lines above and below each subtotal, to set it apart. */
+#budgetTable tr.budget-subtotal-row td { border-top: 1px solid #a99fb3; border-bottom: 1px solid #a99fb3; }
+#budgetTable tr:has(+ tr.budget-subtotal-row) > td { border-bottom: 1px solid #a99fb3; }
