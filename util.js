@@ -26,14 +26,28 @@ const PROJECT_COLORS = [
   "#2f6db5", "#2e8b57", "#c0632a", "#8e44ad", "#b8860b",
   "#c0392b", "#16808a", "#6d4c41", "#d14d8a", "#4a5d23",
 ];
-// Swatches offered in Edit project: the defaults plus a few brand tones.
-export const PROJECT_COLOR_CHOICES = [...PROJECT_COLORS, "#6e3073", "#4a5fa8", "#2a8a8a", "#6f6874"];
+// Swatches offered in Edit project / Edit Pursuit: the defaults, brand
+// tones, and lighter and deeper versions of the main hues.
+export const PROJECT_COLOR_CHOICES = [
+  ...PROJECT_COLORS, "#6e3073", "#4a5fa8", "#2a8a8a", "#6f6874",
+  "#1f3f73", "#5b8fd6", "#3fa66b", "#7a9a3a", "#d4a017", "#e08a3c",
+  "#e05a4f", "#8a2235", "#ef7fb1", "#a974c9", "#2bb0b8", "#9b6b4f",
+];
 
+// Pursuits are marked with a diamond (projects with a dot), so a Pursuit can
+// share a color with a project and still look different. Every page that
+// shows a color dot adds markClass(projectId) to it.
 const chosenColors = new Map();
+const pursuitIds = new Set();
 export function setProjectColors(projects) {
   chosenColors.clear();
-  projects.forEach((p) => { if (p.color) chosenColors.set(p.id, p.color); });
+  pursuitIds.clear();
+  projects.forEach((p) => {
+    if (p.color) chosenColors.set(p.id, p.color);
+    if (p.internal) pursuitIds.add(p.id);
+  });
 }
+export const markClass = (projectId) => (pursuitIds.has(projectId) ? "mark-pursuit" : "");
 
 // Short name for chips: the one set in Edit project, or the name's first
 // words up to about 16 characters.

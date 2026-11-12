@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   formatCurrency, esc, fmtHrs,
-  todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, sortProjects, subtaskActionsHtml,
+  todayISO, toISODate, getWeekStart, addDays, projectColor, markClass, projectShortName, sortProjects, subtaskActionsHtml,
   hoursBarHtml, hoursScale,
 } from "./util.js";
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
@@ -212,7 +212,7 @@ function render() {
     return `<div class="card project-card-v2 ${open ? "open" : ""}" style="--c:${color};">
       <div class="pc-head" role="button" tabindex="0" aria-expanded="${open}" data-action="toggle-card" data-project-id="${projectId}">
         <div class="pc-title">
-          <h2><span class="pc-chev" aria-hidden="true">&#9656;</span><span class="cal-swatch"></span>${esc(project.name)}${chip}</h2>
+          <h2><span class="pc-chev" aria-hidden="true">&#9656;</span><span class="cal-swatch ${markClass(project.id)}"></span>${esc(project.name)}${chip}</h2>
           <div class="pc-meta">${esc([project.client || (internal ? "Internal" : ""), pm ? `PM ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>
         </div>
         <div class="pc-hours">${internal ? `<span class="hb-label"><b>${fmtHrs(loggedTotal)} hrs logged</b></span>` : hoursBarHtml(assignedTotal, loggedTotal, Math.max(1, assignedTotal, loggedTotal))}</div>
@@ -325,7 +325,7 @@ function renderPay(myEntries) {
       return `<tr>
         <td class="col-num ${r.date ? "" : "blank"}">${r.date ? shortDate(r.date) : "—"}</td>
         <td class="col-num ${r.number ? "" : "blank"}">${r.number ? esc(r.number) : "—"}</td>
-        <td class="proj"><span class="pay-dot" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : r.projectName || "Project")}</td>
+        <td class="proj"><span class="pay-dot ${project ? markClass(project.id) : ""}" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : r.projectName || "Project")}</td>
         <td class="num">${r.entries.length ? fmtHrs(hoursOf(r.entries)) : "—"}</td>
         <td class="num ${r.exps.length ? "" : "blank"}">${r.exps.length ? formatCurrency(expSum(r.exps)) : "—"}</td>
         <td class="num"><strong>${formatCurrency(paidAmount(r.entries, ctx) + expSum(r.exps))}</strong></td>

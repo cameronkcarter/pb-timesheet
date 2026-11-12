@@ -1,7 +1,7 @@
 import { People, Projects, Tasks, Assignments, TimeEntries } from "./db.js";
 import {
   todayISO, toISODate, getWeekStart, monthKey, showToast, fmtHrs, confirmDialog, dateRange, entryDate,
-  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, projectShortName, sortProjects, esc,
+  firstOfMonth, addMonths, addDays, formatMonthLabel, projectColor, markClass, projectShortName, sortProjects, esc,
   hoursBarHtml, hoursScale,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
@@ -144,7 +144,7 @@ function projectBarHtml(entries) {
   entries.forEach((e) => { hours[e.projectId] = (hours[e.projectId] || 0) + Number(e.hours || 0); });
   return `<span class="cal-bar">${Object.keys(hours)
     .sort((a, b) => projectName(a).localeCompare(projectName(b)))
-    .map((pid) => `<span style="flex:${hours[pid]}; background:${projectColor(pid)};" title="${esc(projectName(pid))} — ${fmtHrs(hours[pid])} hrs"></span>`)
+    .map((pid) => `<span class="${markClass(pid)}" style="flex:${hours[pid]}; --c:${projectColor(pid)}; background:var(--c);" title="${esc(projectName(pid))} — ${fmtHrs(hours[pid])} hrs"></span>`)
     .join("")}</span>`;
 }
 
@@ -290,7 +290,7 @@ function dayRowHtml(e) {
   const project = projects.find((p) => p.id === e.projectId);
   const task = tasks.find((t) => t.id === e.taskId);
   return `<tr class="${formEditId === e.id ? "in-form" : ""}" data-entry-id="${e.id}">
-    <td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>
+    <td class="day-project" title="${esc(project?.name || "")}"><span class="cal-swatch ${markClass(e.projectId)}" style="--c:${projectColor(e.projectId)};"></span>${project ? esc(projectShortName(project)) : "—"}</td>
     <td class="cell-td">${cellText(task ? esc(task.name) : "—", "cell-task")}</td>
     <td class="cell-td">${cellText(esc(e.note || ""))}${declineNote(e)}</td>
     <td class="cell-td num">${cellText(fmtHrs(Number(e.hours || 0)), "cell-hours")}</td>
@@ -801,7 +801,7 @@ function renderList(force = false) {
       const pEntries = month.filter((e) => e.projectId === pid);
       const taskIds = [...new Set(pEntries.map((e) => e.taskId))].sort((a, b) => taskName(a).localeCompare(taskName(b), undefined, { numeric: true }));
       return `<tbody>
-        <tr class="appr-group"><td colspan="2"><span class="pay-dot" style="--c:${projectColor(pid)};"></span><strong>${project ? esc(project.name) : "—"}</strong></td><td class="num">${fmtHrs(sumHrs(pEntries))}</td><td colspan="3"></td></tr>
+        <tr class="appr-group"><td colspan="2"><span class="pay-dot ${markClass(pid)}" style="--c:${projectColor(pid)};"></span><strong>${project ? esc(project.name) : "—"}</strong></td><td class="num">${fmtHrs(sumHrs(pEntries))}</td><td colspan="3"></td></tr>
         ${taskIds.map((tid) => {
           const key = `${pid}|${tid}`;
           const open = openListKey === key;

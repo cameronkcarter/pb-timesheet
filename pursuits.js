@@ -1,7 +1,7 @@
 // The Pursuits tab: the firm's own work (RFPs, business development,
-// education, ...). Never billed; it tracks hours. Laid out unlike Projects:
-// a list of Pursuits on the left (closed ones tucked away), the open one on
-// the right with its total hours and its tasks, each with a Close button.
+// education, ...). Never billed; it tracks hours. Pursuits as tiles across
+// the top (closed ones tucked away), the picked one below with its total
+// hours and its tasks, each with a Close button.
 //
 // Anyone can start a Pursuit, add and rename tasks, and close or reopen
 // tasks and Pursuits. A Pursuit is Unpaid (hours approve themselves) or
@@ -100,7 +100,7 @@ function render() {
 function listItem(p) {
   const open = tasks.filter((t) => t.projectId === p.id && !t.closed).length;
   return `<button type="button" class="pursuit-item ${p.id === selectedId ? "on" : ""} ${p.closed ? "closed" : ""}" data-id="${p.id}" style="--c:${projectColor(p.id)};">
-    <span class="pursuit-item-name">${esc(p.name)}</span>
+    <span class="pursuit-item-name"><i class="mark-pursuit" aria-hidden="true"></i>${esc(p.name)}</span>
     <span class="pursuit-item-meta">${fmtHrs(hoursOn((e) => e.projectId === p.id))} hrs${p.closed ? "" : ` · ${open} open`}</span>
     ${p.closed ? '<span class="closed-tag">Closed</span>' : payTag(p)}
   </button>`;
@@ -354,10 +354,11 @@ let editingId = null; // null = new
 let pickedColor = null;
 let payable = false;
 
-// Colors other projects use are crossed out (all open again if every one is taken).
+// Colors other Pursuits use are crossed out (projects don't count: they're
+// dots, Pursuits are diamonds). All open again if every one is taken.
 function takenColors(exceptId) {
   const taken = new Map();
-  projects.forEach((p) => { if (p.id !== exceptId && !taken.has(projectColor(p.id))) taken.set(projectColor(p.id), projectShortName(p)); });
+  projects.forEach((p) => { if (isInternal(p) && p.id !== exceptId && !taken.has(projectColor(p.id))) taken.set(projectColor(p.id), projectShortName(p)); });
   return PROJECT_COLOR_CHOICES.every((c) => taken.has(c)) ? new Map() : taken;
 }
 const firstFreeColor = (exceptId, also = []) => {

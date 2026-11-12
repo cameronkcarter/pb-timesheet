@@ -75,7 +75,11 @@
           <label for="pursuitName">Name</label>
           <input type="text" id="pursuitName" placeholder="RFPs" />
         </div>
-        <div class="field field-wide">
+        <div class="field" style="grid-column:1;">
+          <label for="pursuitShortName">Short name <span class="field-optional">for lists</span></label>
+          <input type="text" id="pursuitShortName" maxlength="24" />
+        </div>
+        <div class="field" style="grid-column:1;">
           <label>Pay</label>
           <div class="segmented pay-choice" id="pursuitPay" role="radiogroup" aria-label="Pay">
             <button type="button" data-value="unpaid" role="radio">Unpaid</button>
@@ -86,10 +90,6 @@
         <div class="field" id="pursuitPmField">
           <label for="pursuitPm">PM <span class="field-optional">approves the hours</span></label>
           <select id="pursuitPm"></select>
-        </div>
-        <div class="field">
-          <label for="pursuitShortName">Short name <span class="field-optional">for lists</span></label>
-          <input type="text" id="pursuitShortName" maxlength="24" />
         </div>
         <div class="field field-wide">
           <label>Color</label>

@@ -17,7 +17,7 @@
 // isBillable in rates.js). Clicking an entry's hours or note changes it in
 // place; "Change task" moves it to another task on the same project.
 import { TimeEntries, Expenses } from "./db.js";
-import { esc, fmtHrs, showToast, projectColor, sortProjects, formatCurrency, dateRange, entryDate } from "./util.js";
+import { esc, fmtHrs, showToast, projectColor, markClass, sortProjects, formatCurrency, dateRange, entryDate } from "./util.js";
 import { expenseLabel, createExpenseEditor } from "./expenses.js";
 import { assignedHours, isInternal, isBillable, billRateOf } from "./rates.js";
 import { notifyEntries, unnotify } from "./notifications.js";
@@ -244,7 +244,7 @@ export function createApprovals({ getData, sessionPersonId }) {
       <thead><tr><th>Date</th><th>${byTask() ? "Task" : "Person"}</th><th class="num">Hours</th>${money() ? '<th class="num">Rate</th><th class="num">Billed</th>' : ""}<th>Notes</th><th></th><th></th></tr></thead>
       ${gs.map((g) => `<tbody>
         <tr class="appr-group">
-          <td colspan="${cols() - 2}"><span class="pay-dot" style="--c:${g.project ? projectColor(g.project.id) : "#c9c2cf"};"></span>${g.project ? esc(g.project.name) : "—"}</td>
+          <td colspan="${cols() - 2}"><span class="pay-dot ${g.project ? markClass(g.project.id) : ""}" style="--c:${g.project ? projectColor(g.project.id) : "#c9c2cf"};"></span>${g.project ? esc(g.project.name) : "—"}</td>
           <td class="num" colspan="2">${view === "pending"
             ? `<button type="button" class="small btn-approve-project" data-action="approve-project" data-id="${g.projectId}">Approve All (${g.entries.length})</button>` : ""}</td>
         </tr>

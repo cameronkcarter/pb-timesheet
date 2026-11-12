@@ -42,12 +42,13 @@ export function createSetupPanel({ getData, onCreated, onRemoved, onCancelNew, o
   Settings.listen((d) => { applyExpenseSettings(d); });
 
   // ---------- Color ----------
-  // Colors other projects use are crossed out, so no two look alike. If
-  // every color is taken, all of them can be picked again.
+  // Colors other projects use are crossed out, so no two look alike.
+  // Pursuits don't count: they show as diamonds, not dots. If every color
+  // is taken, all of them can be picked again.
   function takenColors() {
     const taken = new Map();
     getData().projects.forEach((p) => {
-      if (p.id === shownId) return;
+      if (p.id === shownId || p.internal) return;
       const c = projectColor(p.id);
       if (!taken.has(c)) taken.set(c, projectShortName(p));
     });

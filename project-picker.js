@@ -8,7 +8,7 @@
 //   onPick   — (projectId) => void
 //   action   — optional HTML for a button beside the search (e.g. + New Project)
 //   label    — heading over the chips (default "Your Projects")
-import { esc, projectColor, projectShortName } from "./util.js";
+import { esc, projectColor, markClass, projectShortName } from "./util.js";
 
 const SEARCH_ICON = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
 
@@ -31,7 +31,7 @@ export function createProjectPicker({ root, getData, onPick, action = "", label 
   const others = root.querySelector(".other-projects");
   let othersOpen = false;
 
-  const dot = (p) => `<i aria-hidden="true" style="--c:${projectColor(p.id)};"></i>`;
+  const dot = (p) => `<i aria-hidden="true" class="${markClass(p.id)}" style="--c:${projectColor(p.id)};"></i>`;
 
   function matches(query) {
     const q = query.trim().toLowerCase();
@@ -57,7 +57,7 @@ export function createProjectPicker({ root, getData, onPick, action = "", label 
     const mineIds = new Set(mine.map((p) => p.id));
     const rest = projects.filter((p) => !mineIds.has(p.id)).sort((x, y) => x.name.localeCompare(y.name));
     const selected = projects.find((p) => p.id === selectedId);
-    const chip = (p) => `<button type="button" class="project-chip ${p.id === selectedId ? "on" : ""}" data-project-card="${p.id}"
+    const chip = (p) => `<button type="button" class="project-chip ${markClass(p.id)} ${p.id === selectedId ? "on" : ""}" data-project-card="${p.id}"
       style="--c:${projectColor(p.id)};" title="${esc(p.name)}"><i aria-hidden="true"></i>${esc(projectShortName(p))}</button>`;
     root.classList.toggle("grouped", !!groups);
     if (groups) {
@@ -71,7 +71,7 @@ export function createProjectPicker({ root, getData, onPick, action = "", label 
           All projects (${projects.length}) <span class="chev ${othersOpen ? "up" : ""}" aria-hidden="true">&#9662;</span></button>` : "");
     others.hidden = !othersOpen;
     others.innerHTML = [...projects].sort((x, y) => x.name.localeCompare(y.name))
-      .map((p) => `<button type="button" class="other-project ${p.id === selectedId ? "on" : ""}" data-project-card="${p.id}"
+      .map((p) => `<button type="button" class="other-project ${markClass(p.id)} ${p.id === selectedId ? "on" : ""}" data-project-card="${p.id}"
         style="--c:${projectColor(p.id)};"><i aria-hidden="true"></i>${esc(p.name)}</button>`).join("");
   }
 
