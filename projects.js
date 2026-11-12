@@ -34,8 +34,9 @@ let selectedProjectId = urlParams.get("project");
 const clientProjects = () => projects.filter((p) => !isInternal(p));
 let projectPicked = !!selectedProjectId;
 // Admins: Edit Project Info swaps the panels below the picker for the
-// project's setup (?edit=1); + New Project fills it in blank (?new=1).
-let editing = urlParams.has("edit");
+// project's setup; + New Project fills it in blank (?new=1). The page
+// always opens on Tasks & Budgets.
+let editing = false;
 let creating = urlParams.has("new");
 let expandedTaskId = null;
 let showCompleted = false; // completed subtasks and past events are hidden unless shown
@@ -212,7 +213,7 @@ const setupPanel = createSetupPanel({
 
 function updateUrl() {
   const q = creating ? "?new=1"
-    : selectedProjectId ? `?project=${selectedProjectId}${editing ? "&edit=1" : ""}` : "";
+    : selectedProjectId ? `?project=${selectedProjectId}` : "";
   history.replaceState(null, "", location.pathname + q);
 }
 
@@ -229,7 +230,10 @@ function renderMode() {
   const admin = isAdmin();
   const inSetup = admin && (editing || creating);
   editInfoBtn.hidden = !admin || creating || !selectedProjectId || !clientProjects().length;
-  editInfoBtn.textContent = editing ? "‹ Back to Tasks" : "Edit Project Info";
+  editInfoBtn.textContent = editing ? "← Back to Tasks & Budgets" : "Edit Project Info";
+  editInfoBtn.classList.toggle("secondary", !editing);
+  editInfoBtn.classList.toggle("back-btn", editing);
+  projectHead.classList.toggle("editing-info", editing);
   setupForm.hidden = !inSetup;
   if (clientProjects().length || creating) projectDetail.style.display = inSetup ? "none" : "block";
   if (creating) {

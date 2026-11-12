@@ -1,16 +1,19 @@
-// The Pursuits tab: the firm's internal projects (RFPs, business
-// development, education, ...). Never billed; they track hours. Any staff
-// can start a Pursuit and add tasks. A task is either unpaid (hours approve
-// themselves) or payable (admins only): paid at the person's pay rate once
-// the Pursuit's PM approves them, then an admin marks them paid. See rates.js.
+// The Pursuits tab: the firm's own work (RFPs, business development,
+// education, ...). Never billed; it tracks hours. Laid out unlike Projects:
+// a list of Pursuits on the left (closed ones tucked away), the open one on
+// the right with its total hours and its tasks, each with a Close button.
+//
+// Anyone can start a Pursuit, add and rename tasks, and close or reopen
+// tasks and Pursuits. A Pursuit is Unpaid (hours approve themselves) or
+// Payable (admins only): hours are paid at each person's pay rate once its
+// PM approves them, then an admin marks them paid. See rates.js.
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
-  esc, fmtHrs, showToast, todayISO, projectColor, projectShortName, sortProjects, formatCurrency,
+  esc, fmtHrs, showToast, projectColor, projectShortName, formatCurrency,
   closeOnBackdropClick, confirmDialog, alertDialog, PROJECT_COLOR_CHOICES,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
-import { isInternal, isPayableTask, payRateOf } from "./rates.js";
-import { createProjectPicker } from "./project-picker.js";
+import { isInternal, payRateOf } from "./rates.js";
 import { removeProject } from "./project-editor.js";
 
 const sessionPersonId = requireSession();
@@ -27,8 +30,8 @@ let expenses = [];
 let navChecked = false;
 let selectedId = new URLSearchParams(location.search).get("project");
 let expandedTaskId = null;
-let showClosed = false;
-let adding = false;
+let showClosedTasks = false;
+let showClosedPursuits = false;
 
 wireLogout("logoutLink");
 
@@ -53,197 +56,146 @@ if (sessionPersonId) {
 
 const me = () => people.find((p) => p.id === sessionPersonId);
 const isAdmin = () => !!me()?.isAdmin;
-const pursuits = () => sortProjects(projects.filter(isInternal));
 const current = () => projects.find((p) => p.id === selectedId && isInternal(p));
 const sumHrs = (list) => list.reduce((s, e) => s + Number(e.hours || 0), 0);
 const personName = (id) => people.find((p) => p.id === id)?.name || "—";
+const hoursOn = (filter) => sumHrs(timeEntries.filter((e) => !e.declined && filter(e)));
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
 
-// This month / this year, by entry date.
-const today = todayISO();
-const inMonth = (e) => String(e.date).slice(0, 7) === today.slice(0, 7);
-const inYear = (e) => String(e.date).slice(0, 4) === today.slice(0, 4);
+// The standing categories first (RFPs at the top), then the rest A–Z.
+const PINNED = ["RFPs", "Business Development", "Education"];
+function sortPursuits(list) {
+  const rank = (p) => { const i = PINNED.indexOf(p.name); return i === -1 ? PINNED.length : i; };
+  return [...list].sort((a, b) => rank(a) - rank(b) || byName(a, b));
+}
+const openPursuits = () => sortPursuits(projects.filter((p) => isInternal(p) && !p.closed));
+const closedPursuits = () => sortPursuits(projects.filter((p) => isInternal(p) && p.closed));
 
-// ---------- Picker and heading ----------
-const picker = createProjectPicker({
-  root: $("projectPicker"),
-  getData: () => ({ projects: pursuits(), mine: pursuits(), selectedId }),
-  onPick: (id) => {
-    selectedId = id;
-    expandedTaskId = null;
-    adding = false;
-    history.replaceState(null, "", `?project=${id}`);
-    render();
-  },
-  action: '<button type="button" id="newPursuitBtn" class="small">+ New Pursuit</button>',
-  label: "Pursuits",
-});
+const payTag = (p) => (p.payable
+  ? `<span class="pay-tag">Payable</span>`
+  : `<span class="unpaid-tag">Unpaid</span>`);
+
+function select(id) {
+  selectedId = id;
+  expandedTaskId = null;
+  showClosedTasks = false;
+  history.replaceState(null, "", `?project=${id}`);
+  render();
+}
 
 function render() {
   if (!navChecked) return;
   renderMoveCard();
-  const list = pursuits();
-  if (!current()) selectedId = list[0]?.id || null;
-  picker.render();
-  $("pursuitsEmpty").style.display = list.length ? "none" : "block";
-  $("projectHead").hidden = !selectedId;
-  $("pursuitDetail").style.display = selectedId ? "block" : "none";
-  if (!selectedId) return;
-  renderHead();
+  if (!current()) selectedId = openPursuits()[0]?.id || closedPursuits()[0]?.id || null;
+  const any = projects.some(isInternal);
+  $("pursuitsEmpty").style.display = any ? "none" : "block";
+  $("pursuitsLayout").hidden = !any;
+  if (!any) return;
+  renderList();
+  renderHero();
   renderTasks();
-  renderPeople();
 }
 
-function renderHead() {
-  const p = current();
-  const pm = people.find((x) => x.id === p.pmPersonId);
-  const entries = timeEntries.filter((e) => e.projectId === p.id && !e.declined);
-  const payable = tasks.filter((t) => t.projectId === p.id && t.payable).length;
-  $("projectHead").style.setProperty("--c", projectColor(p.id));
-  $("projectHeadName").textContent = p.name;
-  $("projectHeadMeta").textContent = [
-    pm ? `PM: ${pm.name}` : "",
-    payable ? `${payable} payable ${payable === 1 ? "task" : "tasks"}` : "Unpaid",
-  ].filter(Boolean).join(" · ");
-  const stat = (v, label) => `<div><b>${v}</b>${label}</div>`;
-  const ppl = new Set(entries.map((e) => e.personId)).size;
-  $("projectStats").innerHTML = `<div class="project-stat-row">
-    ${stat(`${fmtHrs(sumHrs(entries.filter(inMonth)))} hrs`, "this month")}
-    ${stat(`${fmtHrs(sumHrs(entries.filter(inYear)))} hrs`, "this year")}
-    ${stat(`${fmtHrs(sumHrs(entries))} hrs`, "total")}
-    ${stat(ppl, ppl === 1 ? "person" : "people")}
-  </div>`;
-  document.querySelectorAll(".panel-project-tag").forEach((tag) => {
-    tag.style.setProperty("--c", projectColor(p.id));
-    tag.textContent = projectShortName(p);
-    tag.title = p.name;
-  });
+// ---------- The list ----------
+function listItem(p) {
+  const open = tasks.filter((t) => t.projectId === p.id && !t.closed).length;
+  return `<button type="button" class="pursuit-item ${p.id === selectedId ? "on" : ""} ${p.closed ? "closed" : ""}" data-id="${p.id}" style="--c:${projectColor(p.id)};">
+    <span class="pursuit-item-name">${esc(p.name)}</span>
+    <span class="pursuit-item-meta">${fmtHrs(hoursOn((e) => e.projectId === p.id))} hrs${p.closed ? "" : ` · ${open} open`}</span>
+    ${p.closed ? '<span class="closed-tag">Closed</span>' : payTag(p)}
+  </button>`;
 }
 
-// ---------- Tasks ----------
-const payTag = (t) => (t.payable
-  ? '<span class="pay-tag" title="Hours are paid at each person\'s pay rate once the PM approves them">Payable</span>'
-  : '<span class="unpaid-tag" title="Hours are tracked, not paid">Not payable</span>');
-
-function renderTasks() {
-  const p = current();
-  const all = tasks.filter((t) => t.projectId === p.id)
-    .sort((a, b) => (!!a.closed - !!b.closed) || (!!b.payable - !!a.payable) || a.name.localeCompare(b.name, undefined, { numeric: true }));
-  const closedCount = all.filter((t) => t.closed).length;
-  const shown = all.filter((t) => showClosed || !t.closed || t.id === expandedTaskId);
-  const toggle = $("toggleClosedBtn");
-  toggle.hidden = !closedCount;
-  toggle.textContent = showClosed ? "Hide closed" : `Show closed (${closedCount})`;
-  $("addTaskForm").hidden = !adding;
-  $("newTaskPayableLabel").hidden = !isAdmin();
-  $("tasksEmpty").style.display = shown.length ? "none" : "block";
-  $("tasksEmpty").textContent = all.length ? "All tasks are closed." : "No tasks yet. Add one for each RFP, event or effort.";
-  $("pursuitTable").style.display = shown.length ? "" : "none";
-  $("pursuitTable").querySelector("tbody").innerHTML = shown.map((t) => {
-    const entries = timeEntries.filter((e) => e.taskId === t.id && !e.declined);
-    const open = t.id === expandedTaskId;
-    return `<tr class="task-row pursuit-row ${t.payable ? "payable" : ""} ${open ? "expanded" : ""} ${t.closed ? "task-closed" : ""}" data-task-row="${t.id}">
-        <td><div class="task-cell" title="${esc(t.name)}"><span class="task-chevron" aria-hidden="true">&#9656;</span><span class="task-name">${esc(t.name)}</span>${t.closed ? '<span class="pill">Closed</span>' : ""}</div></td>
-        <td>${payTag(t)}</td>
-        <td class="num">${fmtHrs(sumHrs(entries.filter(inMonth)))}</td>
-        <td class="num"><b>${fmtHrs(sumHrs(entries))}</b></td>
-      </tr>${open ? `<tr class="task-detail"><td colspan="4" class="accordion-cell">${taskDetailHtml(t, entries)}</td></tr>` : ""}`;
-  }).join("");
+function renderList() {
+  const closed = closedPursuits();
+  // A closed one that's open on the right keeps its section showing.
+  const showClosed = showClosedPursuits || closed.some((p) => p.id === selectedId);
+  $("pursuitList").innerHTML = `${openPursuits().map(listItem).join("") || '<div class="empty">No open Pursuits.</div>'}
+    ${closed.length ? `<button type="button" class="pursuit-closed-toggle" data-action="toggle-closed-pursuits" aria-expanded="${showClosed}">
+      Closed Pursuits (${closed.length}) <span class="chev ${showClosed ? "up" : ""}">&#9662;</span></button>
+      ${showClosed ? `<div class="pursuit-closed-list">${closed.map(listItem).join("")}</div>` : ""}` : ""}`;
 }
 
-// Opened task: hours per person (payable: waiting / approved / paid), then
-// its actions.
-function taskDetailHtml(t, entries) {
-  const ids = [...new Set(entries.map((e) => e.personId))].sort((a, b) => personName(a).localeCompare(personName(b)));
-  const ctx = { projects, people };
-  let table;
-  if (!ids.length) table = '<div class="empty" style="padding:4px 0;">No hours on this task yet.</div>';
-  else if (!t.payable) {
-    table = `<div class="tp-list pursuit-people">
-      <div class="tp-row tp-head"><div>Person</div><div class="num">This month</div><div class="num">Total</div></div>
-      ${ids.map((id) => {
-        const mine = entries.filter((e) => e.personId === id);
-        return `<div class="tp-row"><div>${esc(personName(id))}</div><div class="num">${fmtHrs(sumHrs(mine.filter(inMonth)))}</div><div class="num">${fmtHrs(sumHrs(mine))}</div></div>`;
-      }).join("")}
-    </div>`;
-  } else {
-    const cell = (list) => (list.length ? fmtHrs(sumHrs(list)) : '<span class="zero">—</span>');
-    table = `<div class="tp-list pursuit-people pursuit-pay">
-      <div class="tp-row tp-head"><div>Person</div><div class="num">Waiting approval</div><div class="num">Approved</div><div class="num">Paid</div></div>
-      ${ids.map((id) => {
-        const mine = entries.filter((e) => e.personId === id);
-        return `<div class="tp-row"><div>${esc(personName(id))}</div>
-          <div class="num">${cell(mine.filter((e) => !e.approved))}</div>
-          <div class="num">${cell(mine.filter((e) => e.approved && !e.paid))}</div>
-          <div class="num">${cell(mine.filter((e) => e.paid))}</div></div>`;
-      }).join("")}
-    </div>`;
+$("pursuitList").addEventListener("click", (e) => {
+  if (e.target.closest('[data-action="toggle-closed-pursuits"]')) {
+    showClosedPursuits = !showClosedPursuits;
+    renderList();
+    return;
   }
-  const toPay = entries.filter((e) => t.payable && e.approved && !e.paid);
-  const payTotal = toPay.reduce((s, e) => s + Number(e.hours || 0) * payRateOf(e, ctx), 0);
-  const actions = [
-    isAdmin() && toPay.length ? `<button type="button" class="small" data-action="mark-paid" data-task-id="${t.id}">Mark ${fmtHrs(sumHrs(toPay))} hrs paid (${formatCurrency(payTotal)})</button>` : "",
-    `<button type="button" class="link-btn" data-action="rename-task" data-task-id="${t.id}">Rename</button>`,
-    isAdmin() ? `<button type="button" class="link-btn" data-action="toggle-payable" data-task-id="${t.id}">${t.payable ? "Make not payable" : "Make payable"}</button>` : "",
-    `<button type="button" class="link-btn" data-action="${t.closed ? "reopen-task" : "close-task"}" data-task-id="${t.id}">${t.closed ? "Reopen task" : "Close task"}</button>`,
-  ].filter(Boolean).join("");
-  const note = t.payable
-    ? `Paid at each person's pay rate once ${current().pmPersonId ? `${esc(personName(current().pmPersonId))} approves` : "the PM approves"} the hours.`
-    : "Hours are tracked, not paid.";
-  return `<div class="pursuit-detail-note">${note}</div>${table}<div class="pursuit-actions">${actions}</div>`;
-}
-
-$("pursuitTable").addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-action]");
-  if (btn) return taskAction(btn.dataset.action, tasks.find((t) => t.id === btn.dataset.taskId));
-  const row = e.target.closest("tr.task-row");
-  if (!row) return;
-  expandedTaskId = expandedTaskId === row.dataset.taskRow ? null : row.dataset.taskRow;
-  renderTasks();
+  const item = e.target.closest(".pursuit-item");
+  if (item) select(item.dataset.id);
 });
 
-async function taskAction(action, t) {
-  if (!t) return;
+// ---------- The open Pursuit ----------
+function renderHero() {
+  const p = current();
+  const hero = $("pursuitHero");
+  if (!p) { hero.innerHTML = ""; return; }
+  const entries = timeEntries.filter((e) => e.projectId === p.id && !e.declined);
+  const pm = people.find((x) => x.id === p.pmPersonId);
+  const byPerson = [...new Set(entries.map((e) => e.personId))]
+    .map((id) => ({ id, hrs: sumHrs(entries.filter((e) => e.personId === id)) }))
+    .sort((a, b) => b.hrs - a.hrs);
+  // Payable: where the hours stand, and (admins) paying them.
+  let payLine = "";
+  if (p.payable) {
+    const waiting = entries.filter((e) => !e.approved);
+    const toPay = entries.filter((e) => e.approved && !e.paid);
+    const paid = entries.filter((e) => e.paid);
+    const owed = toPay.reduce((s, e) => s + Number(e.hours || 0) * payRateOf(e, { projects, people }), 0);
+    payLine = `<div class="pursuit-pay-line">
+      <span>${fmtHrs(sumHrs(waiting))} hrs waiting for ${pm ? esc(pm.name) : "the PM"}</span>
+      <span>${fmtHrs(sumHrs(toPay))} hrs approved, not paid</span>
+      <span>${fmtHrs(sumHrs(paid))} hrs paid</span>
+      ${isAdmin() && toPay.length ? `<button type="button" class="small" data-action="mark-paid">Mark ${fmtHrs(sumHrs(toPay))} hrs paid (${formatCurrency(owed)})</button>` : ""}
+    </div>`;
+  }
+  hero.style.setProperty("--c", projectColor(p.id));
+  hero.classList.toggle("closed", !!p.closed);
+  hero.innerHTML = `
+    <div class="pursuit-hero-top">
+      <div class="pursuit-hero-title">
+        <h2>${esc(p.name)}</h2>
+        <div class="pursuit-hero-tags">
+          ${p.closed ? '<span class="closed-tag">Closed</span>' : ""}
+          ${p.payable
+            ? `<span class="pay-tag big">Payable</span><span class="pursuit-hero-note">Paid at each person's pay rate once ${pm ? esc(pm.name) : "the PM"} approves</span>`
+            : `<span class="unpaid-tag big">Unpaid</span><span class="pursuit-hero-note">Hours are tracked, not paid</span>`}
+        </div>
+      </div>
+      <button type="button" class="small secondary" data-action="edit-pursuit">Edit Pursuit</button>
+    </div>
+    <div class="pursuit-hero-total"><b>${fmtHrs(sumHrs(entries))}</b> hrs spent${byPerson.length ? ` by ${byPerson.length} ${byPerson.length === 1 ? "person" : "people"}` : ""}</div>
+    ${byPerson.length ? `<div class="pursuit-people-chips">${byPerson.map((x) => `<span>${esc(personName(x.id))} <b>${fmtHrs(x.hrs)}</b></span>`).join("")}</div>` : ""}
+    ${payLine}
+    <div class="pursuit-hero-foot">
+      ${p.closed
+        ? `<span class="appr-muted">Closed — not on the Timesheet. Hours are kept.</span><button type="button" class="small" data-action="reopen-pursuit">Reopen Pursuit</button>`
+        : `<button type="button" class="close-btn" data-action="close-pursuit">Close Pursuit</button>`}
+    </div>`;
+}
+
+$("pursuitHero").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const p = current();
+  const action = btn.dataset.action;
   try {
-    if (action === "close-task" || action === "reopen-task") {
-      const closed = action === "close-task";
-      await Tasks.update(t.id, { closed });
-      showToast(closed ? "Task closed. It's off the Timesheet; its hours are kept." : "Task reopened.");
+    if (action === "edit-pursuit") openPursuitModal(p);
+    if (action === "close-pursuit") {
+      const open = tasks.filter((t) => t.projectId === p.id && !t.closed).length;
+      if (!(await confirmDialog(`It comes off everyone's Timesheet${open ? `, with its ${open} open task${open === 1 ? "" : "s"}` : ""}. Its hours are kept, and you can reopen it anytime.`,
+        { title: `Close ${p.name}?`, confirmText: "Close Pursuit" }))) return;
+      await Projects.update(p.id, { closed: true });
+      showToast(`${p.name} closed.`, { action: "Undo", onAction: () => Projects.update(p.id, { closed: false }) });
     }
-    if (action === "rename-task") {
-      const name = prompt("Task name", t.name);
-      if (name && name.trim() && name.trim() !== t.name) await Tasks.update(t.id, { name: name.trim() });
-    }
-    if (action === "toggle-payable") {
-      if (!t.payable) {
-        if (!current().pmPersonId) {
-          await alertDialog("Payable hours need a PM to approve them. Pick one with Edit first.", "No PM on this Pursuit");
-          return;
-        }
-        const logged = timeEntries.filter((x) => x.taskId === t.id && !x.declined && !x.paid);
-        const ok = await confirmDialog(logged.length
-          ? `The ${fmtHrs(sumHrs(logged))} hrs already logged on it will go to ${personName(current().pmPersonId)} for approval and be paid too.`
-          : `Hours will be paid at each person's pay rate once ${personName(current().pmPersonId)} approves them.`,
-        { title: `Make "${t.name}" payable?`, confirmText: "Make Payable" });
-        if (!ok) return;
-        await Tasks.update(t.id, { payable: true });
-        // Hours that approved themselves go back for the PM to approve.
-        for (const x of logged.filter((x) => x.approved)) await TimeEntries.update(x.id, { approved: false, approvedDate: null });
-        showToast("Task is payable.");
-      } else {
-        const paid = timeEntries.filter((x) => x.taskId === t.id && x.paid);
-        if (!(await confirmDialog(paid.length ? "Hours already marked paid stay paid. New hours won't be." : "Its hours won't be paid.",
-          { title: `Make "${t.name}" not payable?`, confirmText: "Make Not Payable" }))) return;
-        await Tasks.update(t.id, { payable: false });
-        // Unpaid hours don't need approval.
-        for (const x of timeEntries.filter((x) => x.taskId === t.id && !x.paid && !x.approved && !x.declined)) {
-          await TimeEntries.update(x.id, { approved: true, approvedDate: new Date().toISOString() });
-        }
-        showToast("Task is not payable.");
-      }
+    if (action === "reopen-pursuit") {
+      await Projects.update(p.id, { closed: false });
+      showToast(`${p.name} reopened.`);
     }
     if (action === "mark-paid") {
       const ctx = { projects, people };
-      const toPay = timeEntries.filter((x) => x.taskId === t.id && x.approved && !x.paid && !x.declined);
+      const toPay = timeEntries.filter((x) => x.projectId === p.id && x.approved && !x.paid && !x.declined);
       const total = toPay.reduce((s, x) => s + Number(x.hours || 0) * payRateOf(x, ctx), 0);
       if (!(await confirmDialog(`${fmtHrs(sumHrs(toPay))} hrs, ${formatCurrency(total)} at each person's current pay rate (locked in once paid).`,
         { title: "Mark these hours paid?", confirmText: "Mark Paid" }))) return;
@@ -253,62 +205,154 @@ async function taskAction(action, t) {
   } catch (err) {
     showToast("Error: " + err.message);
   }
+});
+
+// ---------- Tasks ----------
+// Open tasks with their hours and a Close button; closed ones below a toggle.
+function taskRow(t) {
+  const entries = timeEntries.filter((e) => e.taskId === t.id && !e.declined);
+  const open = t.id === expandedTaskId;
+  const ppl = [...new Set(entries.map((e) => e.personId))];
+  const detail = open ? `<div class="pursuit-task-detail">${ppl.length
+    ? ppl.map((id) => ({ id, hrs: sumHrs(entries.filter((e) => e.personId === id)) }))
+      .sort((a, b) => b.hrs - a.hrs)
+      .map((x) => `<div><span>${esc(personName(x.id))}</span><b>${fmtHrs(x.hrs)} hrs</b></div>`).join("")
+    : '<div class="appr-muted">No hours yet.</div>'}</div>` : "";
+  return `<div class="pursuit-task ${t.closed ? "closed" : ""} ${open ? "open" : ""}" data-task-id="${t.id}">
+      <button type="button" class="pursuit-task-main" data-action="expand" aria-expanded="${open}">
+        <span class="task-chevron" aria-hidden="true">&#9656;</span>
+        <span class="pursuit-task-name">${esc(t.name)}</span>
+        <span class="pursuit-task-who">${ppl.length ? `${ppl.length} ${ppl.length === 1 ? "person" : "people"}` : ""}</span>
+        <span class="pursuit-task-hrs"><b>${fmtHrs(sumHrs(entries))}</b> hrs</span>
+      </button>
+      ${t.closed
+        ? `<button type="button" class="small secondary" data-action="reopen-task">Reopen</button>`
+        : `<button type="button" class="close-btn" data-action="close-task" title="Done with it: it comes off the Timesheet, hours are kept">&#10003; Close</button>`}
+    </div>${detail}`;
 }
 
-$("toggleClosedBtn").addEventListener("click", () => { showClosed = !showClosed; renderTasks(); });
-$("addTaskBtn").addEventListener("click", () => {
-  adding = true;
-  renderTasks();
-  $("newTaskName").value = "";
-  $("newTaskPayable").checked = false;
-  $("newTaskName").focus();
-});
-$("cancelTaskBtn").addEventListener("click", () => { adding = false; renderTasks(); });
-$("newTaskName").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") $("saveTaskBtn").click();
-  if (e.key === "Escape") $("cancelTaskBtn").click();
-});
-$("saveTaskBtn").addEventListener("click", async () => {
+function renderTasks() {
   const p = current();
-  const name = $("newTaskName").value.trim();
-  const payable = isAdmin() && $("newTaskPayable").checked;
-  if (!name) return showToast("Give the task a name.");
-  if (tasks.some((t) => t.projectId === p.id && !t.closed && t.name.toLowerCase() === name.toLowerCase())) {
-    return showToast("There's already a task with that name.");
-  }
-  if (payable && !p.pmPersonId) {
-    return alertDialog("Payable hours need a PM to approve them. Pick one with Edit first.", "No PM on this Pursuit");
-  }
-  try {
-    await Tasks.add({
-      projectId: p.id, name, budget: 0, startDate: null, endDate: null,
-      closed: false, payable, createdByPersonId: sessionPersonId,
-    });
-    adding = false;
+  if (!p) return;
+  const all = tasks.filter((t) => t.projectId === p.id).sort(byName);
+  const open = all.filter((t) => !t.closed);
+  const closed = all.filter((t) => t.closed);
+  $("openCount").textContent = open.length ? `${open.length}` : "";
+  $("openTasks").innerHTML = open.map(taskRow).join("")
+    || `<div class="empty">${closed.length ? "All tasks are closed." : "No tasks yet. Add one for each RFP, event or effort."}</div>`;
+  const toggle = $("closedTasksToggle");
+  toggle.hidden = !closed.length;
+  toggle.innerHTML = `Closed Tasks (${closed.length}) <span class="chev ${showClosedTasks ? "up" : ""}">&#9662;</span>`;
+  toggle.setAttribute("aria-expanded", String(showClosedTasks));
+  $("closedTasks").hidden = !showClosedTasks || !closed.length;
+  $("closedTasks").innerHTML = showClosedTasks ? closed.map(taskRow).join("") : "";
+}
+
+$("closedTasksToggle").addEventListener("click", () => { showClosedTasks = !showClosedTasks; renderTasks(); });
+
+[$("openTasks"), $("closedTasks")].forEach((el) => el.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const t = tasks.find((x) => x.id === btn.closest("[data-task-id]").dataset.taskId);
+  if (!t) return;
+  if (btn.dataset.action === "expand") {
+    expandedTaskId = expandedTaskId === t.id ? null : t.id;
     renderTasks();
-    showToast("Task added.");
+    return;
+  }
+  const closed = btn.dataset.action === "close-task";
+  try {
+    await Tasks.update(t.id, { closed });
+    showToast(closed ? `Closed ${t.name}.` : `Reopened ${t.name}.`,
+      closed ? { action: "Undo", onAction: () => Tasks.update(t.id, { closed: false }) } : {});
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}));
+
+// ---------- Edit Tasks ----------
+// Rename, add, close/reopen, and remove tasks with no hours.
+const tasksModal = $("tasksModal");
+const rowsEl = $("tasksModalRows");
+
+function editRow(t = null) {
+  const hrs = t ? hoursOn((e) => e.taskId === t.id) : 0;
+  // Admins can remove a task with no hours or subtasks; anyone else closes it.
+  const removable = !t || (isAdmin() && !timeEntries.some((e) => e.taskId === t.id) && !dueDates.some((d) => d.taskId === t.id));
+  return `<div class="edit-task-row" data-task-id="${t?.id || ""}">
+    <input type="text" class="edit-task-name" value="${esc(t?.name || "")}" placeholder="Task name, e.g. Moab ATP RFP" aria-label="Task name" />
+    <span class="num appr-muted">${t ? fmtHrs(hrs) : ""}</span>
+    <label class="edit-task-closed"><input type="checkbox" ${t?.closed ? "checked" : ""} aria-label="Closed" /></label>
+    <button type="button" class="icon-btn" data-action="remove-row" ${removable ? "" : `disabled title="${isAdmin() ? "It has hours or subtasks; close it instead" : "Close it instead"}"`} aria-label="Remove task">&times;</button>
+  </div>`;
+}
+
+function openTasksModal(addRow = false) {
+  const p = current();
+  $("tasksModalName").textContent = p.name;
+  const list = tasks.filter((t) => t.projectId === p.id).sort((a, b) => (!!a.closed - !!b.closed) || byName(a, b));
+  rowsEl.innerHTML = list.map(editRow).join("") + (addRow || !list.length ? editRow() : "");
+  tasksModal.style.display = "flex";
+  (addRow ? rowsEl.lastElementChild : rowsEl.firstElementChild)?.querySelector("input")?.focus();
+}
+const closeTasksModal = () => { tasksModal.style.display = "none"; };
+
+$("editTasksBtn").addEventListener("click", () => openTasksModal(false));
+$("quickAddBtn").addEventListener("click", () => openTasksModal(true));
+$("tasksModalAdd").addEventListener("click", () => {
+  rowsEl.insertAdjacentHTML("beforeend", editRow());
+  rowsEl.lastElementChild.querySelector("input").focus();
+});
+rowsEl.addEventListener("click", (e) => {
+  const btn = e.target.closest('[data-action="remove-row"]');
+  if (btn && !btn.disabled) btn.closest(".edit-task-row").remove();
+});
+rowsEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches(".edit-task-name")) $("tasksModalAdd").click();
+});
+$("tasksModalCancel").addEventListener("click", closeTasksModal);
+$("tasksModalClose").addEventListener("click", closeTasksModal);
+closeOnBackdropClick(tasksModal, closeTasksModal);
+
+$("tasksModalSave").addEventListener("click", async () => {
+  const p = current();
+  const rows = [...rowsEl.querySelectorAll(".edit-task-row")].map((r) => ({
+    id: r.dataset.taskId, name: r.querySelector(".edit-task-name").value.trim(), closed: r.querySelector(".edit-task-closed input").checked,
+  }));
+  const names = rows.filter((r) => r.name).map((r) => r.name.toLowerCase());
+  if (new Set(names).size !== names.length) return showToast("Two tasks have the same name.");
+  const kept = new Set(rows.map((r) => r.id).filter(Boolean));
+  // Tasks as they were (new ones added below must not look removed).
+  const before = tasks.filter((x) => x.projectId === p.id);
+  try {
+    for (const r of rows) {
+      const t = tasks.find((x) => x.id === r.id);
+      if (t) {
+        const changes = {};
+        if (r.name && r.name !== t.name) changes.name = r.name;
+        if (r.closed !== !!t.closed) changes.closed = r.closed;
+        if (Object.keys(changes).length) await Tasks.update(t.id, changes);
+      } else if (r.name) {
+        await Tasks.add({ projectId: p.id, name: r.name, budget: 0, startDate: null, endDate: null, closed: r.closed, createdByPersonId: sessionPersonId });
+      }
+    }
+    // Removed rows (only ones with no hours or subtasks could be).
+    for (const t of before.filter((x) => !kept.has(x.id))) {
+      for (const a of assignments.filter((x) => x.taskId === t.id)) await Assignments.remove(a.id);
+      await Tasks.remove(t.id);
+    }
+    closeTasksModal();
+    showToast("Tasks saved.");
   } catch (err) {
     showToast("Error: " + err.message);
   }
 });
 
-// ---------- Hours by person ----------
-function renderPeople() {
-  const entries = timeEntries.filter((e) => e.projectId === selectedId && !e.declined);
-  const ids = [...new Set(entries.map((e) => e.personId))].sort((a, b) => personName(a).localeCompare(personName(b)));
-  $("peopleEmpty").style.display = ids.length ? "none" : "block";
-  $("peopleTable").style.display = ids.length ? "" : "none";
-  $("peopleTable").querySelector("tbody").innerHTML = ids.map((id) => {
-    const mine = entries.filter((e) => e.personId === id);
-    return `<tr><td>${esc(personName(id))}</td><td class="num">${fmtHrs(sumHrs(mine.filter(inMonth)))}</td>
-      <td class="num">${fmtHrs(sumHrs(mine.filter(inYear)))}</td><td class="num"><b>${fmtHrs(sumHrs(mine))}</b></td></tr>`;
-  }).join("");
-}
-
 // ---------- New / Edit Pursuit ----------
 const modal = $("pursuitModal");
 let editingId = null; // null = new
 let pickedColor = null;
+let payable = false;
 
 // Colors other projects use are crossed out (all open again if every one is taken).
 function takenColors(exceptId) {
@@ -330,16 +374,32 @@ function renderSwatches() {
   }).join("");
 }
 
-function openModal(p) {
+// Unpaid / Payable. Only admins can pick Payable (and its PM).
+function renderPay() {
+  $("pursuitPay").querySelectorAll("button").forEach((b) => {
+    const on = (b.dataset.value === "payable") === payable;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", on);
+    b.disabled = !isAdmin() && b.dataset.value === "payable" && !payable;
+  });
+  $("pursuitPayHint").textContent = payable
+    ? "Hours are paid at each person's pay rate once the PM approves them."
+    : `Hours are tracked, not paid.${isAdmin() ? "" : " Only admins can make a Pursuit payable."}`;
+  $("pursuitPmField").hidden = !payable;
+  $("pursuitPm").disabled = !isAdmin();
+}
+
+function openPursuitModal(p) {
   editingId = p ? p.id : null;
   $("pursuitModalTitle").textContent = p ? "Edit Pursuit" : "New Pursuit";
   $("pursuitName").value = p ? p.name : "";
   $("pursuitShortName").value = p?.shortName || "";
   $("pursuitShortName").placeholder = p ? projectShortName({ name: p.name }) : "";
-  $("pursuitPmField").hidden = !isAdmin();
   const choices = people.filter((x) => !x.inactive || x.id === p?.pmPersonId).sort((a, b) => a.name.localeCompare(b.name));
-  $("pursuitPm").innerHTML = '<option value="">None</option>' + choices.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
+  $("pursuitPm").innerHTML = '<option value="">Pick a PM</option>' + choices.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
   $("pursuitPm").value = p?.pmPersonId || "";
+  payable = !!p?.payable;
+  renderPay();
   pickedColor = p ? projectColor(p.id) : firstFreeColor(null);
   renderSwatches();
   $("pursuitSave").textContent = p ? "Save" : "Create Pursuit";
@@ -349,6 +409,12 @@ function openModal(p) {
 }
 const closeModal = () => { modal.style.display = "none"; };
 
+$("pursuitPay").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-value]");
+  if (!b || b.disabled) return;
+  payable = b.dataset.value === "payable";
+  renderPay();
+});
 $("pursuitColor").addEventListener("click", (e) => {
   const b = e.target.closest("[data-color]");
   if (!b || b.disabled) return;
@@ -358,33 +424,44 @@ $("pursuitColor").addEventListener("click", (e) => {
 $("pursuitCancel").addEventListener("click", closeModal);
 $("pursuitModalClose").addEventListener("click", closeModal);
 closeOnBackdropClick(modal, closeModal);
-$("editPursuitBtn").addEventListener("click", () => openModal(current()));
-$("newPursuitBtn").addEventListener("click", () => openModal(null));
+$("newPursuitBtn").addEventListener("click", () => openPursuitModal(null));
 
 $("pursuitSave").addEventListener("click", async () => {
   const name = $("pursuitName").value.trim();
   if (!name) return showToast("Give it a name.");
-  const data = { name, shortName: $("pursuitShortName").value.trim() || null, color: pickedColor };
   const pmPersonId = $("pursuitPm").value || null;
+  if (payable && !pmPersonId) return showToast("Pick a PM to approve the hours.");
+  const data = { name, shortName: $("pursuitShortName").value.trim() || null, color: pickedColor };
   try {
     if (!editingId) {
-      const ref = await Projects.add({ ...data, internal: true, pmPersonId: isAdmin() ? pmPersonId : null, createdByPersonId: sessionPersonId });
-      selectedId = ref.id;
-      history.replaceState(null, "", `?project=${ref.id}`);
-      showToast("Pursuit created. Add its tasks below.");
-    } else {
-      const p = current();
-      if (isAdmin()) {
-        if (!pmPersonId && tasks.some((t) => t.projectId === p.id && t.payable)) {
-          return alertDialog("It has payable tasks, which need a PM to approve their hours.", "Pick a PM");
-        }
-        data.pmPersonId = pmPersonId;
-      }
-      await Projects.update(editingId, data);
-      showToast("Saved.");
+      const ref = await Projects.add({
+        ...data, internal: true, closed: false, createdByPersonId: sessionPersonId,
+        payable: isAdmin() && payable, pmPersonId: isAdmin() && payable ? pmPersonId : null,
+      });
+      closeModal();
+      select(ref.id);
+      showToast("Pursuit created. Add its tasks.");
+      return;
     }
+    const p = current();
+    if (isAdmin() && payable !== !!p.payable) {
+      const open = timeEntries.filter((x) => x.projectId === p.id && !x.declined && !x.paid);
+      if (payable) {
+        // Hours that approved themselves go to the PM, and will be paid.
+        if (!(await confirmDialog(open.length
+          ? `The ${fmtHrs(sumHrs(open))} hrs already logged on it go to ${personName(pmPersonId)} for approval and will be paid.`
+          : `Hours will be paid at each person's pay rate once ${personName(pmPersonId)} approves them.`,
+        { title: `Make ${name} payable?`, confirmText: "Make Payable" }))) return;
+        for (const x of open.filter((x) => x.approved)) await TimeEntries.update(x.id, { approved: false, approvedDate: null });
+      } else {
+        if (!(await confirmDialog("Hours already paid stay paid. Other hours won't be paid.", { title: `Make ${name} unpaid?`, confirmText: "Make Unpaid" }))) return;
+        for (const x of open.filter((x) => !x.approved)) await TimeEntries.update(x.id, { approved: true, approvedDate: new Date().toISOString() });
+      }
+    }
+    if (isAdmin()) Object.assign(data, { payable, pmPersonId: payable ? pmPersonId : p.pmPersonId || null });
+    await Projects.update(editingId, data);
     closeModal();
-    render();
+    showToast("Saved.");
   } catch (err) {
     showToast("Error: " + err.message);
   }
@@ -406,7 +483,6 @@ $("pursuitRemove").addEventListener("click", async () => {
 const SOURCE_RE = /^(p\s*&\s*p|proposals?\s*(&|and)\s*pursuits?)$/i;
 const sourceProject = () => projects.find((p) => isInternal(p) && SOURCE_RE.test(String(p.name).trim())
   && tasks.some((t) => t.projectId === p.id));
-const CATEGORIES = ["RFPs", "Business Development", "Education"];
 let moveOpen = false;
 
 function guessFor(t) {
@@ -419,7 +495,7 @@ function renderMoveCard() {
   const src = isAdmin() && sourceProject();
   card.hidden = !src;
   if (!src) return;
-  const list = tasks.filter((t) => t.projectId === src.id).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const list = tasks.filter((t) => t.projectId === src.id).sort(byName);
   if (!moveOpen) {
     card.innerHTML = `<div class="budget-header"><div><h2 style="margin:0;">Move ${esc(src.name)} into Pursuits</h2>
       <div class="appr-muted">${list.length} tasks to sort into RFPs, other categories, or their own Pursuit. Hours come along.</div></div>
@@ -429,11 +505,11 @@ function renderMoveCard() {
   }
   // Keep what's been picked while things redraw.
   const picked = Object.fromEntries([...card.querySelectorAll("select[data-task-id]")].map((s) => [s.dataset.taskId, s.value]));
-  const others = pursuits().filter((p) => p.id !== src.id && !CATEGORIES.includes(p.name));
+  const others = sortPursuits(projects.filter((p) => isInternal(p) && p.id !== src.id && !PINNED.includes(p.name)));
   const options = (t) => {
     const value = picked[t.id] || guessFor(t);
     const opt = (v, label) => `<option value="${esc(v)}" ${v === value ? "selected" : ""}>${esc(label)}</option>`;
-    return [...CATEGORIES.map((c) => opt(`cat:${c}`, c)), opt("own", "Its own Pursuit"),
+    return [...PINNED.map((c) => opt(`cat:${c}`, c)), opt("own", "Its own Pursuit"),
       ...others.map((p) => opt(`id:${p.id}`, p.name)), opt("stay", `Leave in ${src.name}`)].join("");
   };
   card.innerHTML = `<div class="budget-header"><h2 style="margin:0;">Move ${esc(src.name)} into Pursuits</h2>
@@ -454,19 +530,21 @@ async function moveTasks(src) {
   const picks = [...$("moveCard").querySelectorAll("select[data-task-id]")].map((s) => ({ task: tasks.find((t) => t.id === s.dataset.taskId), to: s.value }))
     .filter((x) => x.task && x.to !== "stay");
   if (!picks.length) return;
+  const exists = (name) => projects.some((p) => isInternal(p) && p.name === name);
   const newOnes = new Set(picks.filter((x) => x.to === "own").map((x) => x.task.name));
-  picks.filter((x) => x.to.startsWith("cat:") && !pursuits().some((p) => p.name === x.to.slice(4))).forEach((x) => newOnes.add(x.to.slice(4)));
+  picks.filter((x) => x.to.startsWith("cat:") && !exists(x.to.slice(4))).forEach((x) => newOnes.add(x.to.slice(4)));
   if (!(await confirmDialog(`${picks.length} tasks move${newOnes.size ? `, creating ${newOnes.size} new Pursuit${newOnes.size === 1 ? "" : "s"} (${[...newOnes].join(", ")})` : ""}.`,
     { title: "Move these tasks?", confirmText: "Move Tasks" }))) return;
-  $("moveGoBtn").disabled = true;
+  moveOpen = false;
   const created = new Map(); // name -> id
   const usedColors = [];
   const pursuitFor = async (name) => {
-    const existing = pursuits().find((p) => p.name === name) || (created.has(name) && { id: created.get(name) });
+    const existing = projects.find((p) => isInternal(p) && p.name === name);
     if (existing) return existing.id;
+    if (created.has(name)) return created.get(name);
     const color = firstFreeColor(null, usedColors);
     usedColors.push(color);
-    const ref = await Projects.add({ name, shortName: null, color, internal: true, pmPersonId: null, createdByPersonId: sessionPersonId });
+    const ref = await Projects.add({ name, shortName: null, color, internal: true, payable: false, closed: false, pmPersonId: null, createdByPersonId: sessionPersonId });
     created.set(name, ref.id);
     return ref.id;
   };
@@ -478,14 +556,15 @@ async function moveTasks(src) {
       for (const a of assignments.filter((x) => x.taskId === task.id)) await Assignments.update(a.id, { projectId });
       for (const d of dueDates.filter((x) => x.taskId === task.id)) await DueDates.update(d.id, { projectId });
     }
-    const leftover = tasks.some((t) => t.projectId === src.id && !picks.some((x) => x.task.id === t.id))
-      || dueDates.some((d) => d.projectId === src.id && !d.taskId) || timeEntries.some((e) => e.projectId === src.id && !picks.some((x) => x.task.id === e.taskId));
+    const movedIds = new Set(picks.map((x) => x.task.id));
+    const leftover = tasks.some((t) => t.projectId === src.id && !movedIds.has(t.id))
+      || dueDates.some((d) => d.projectId === src.id && !d.taskId)
+      || timeEntries.some((e) => e.projectId === src.id && !movedIds.has(e.taskId));
     if (!leftover) await Projects.remove(src.id);
-    moveOpen = false;
+    if (selectedId === src.id) selectedId = null;
     showToast(leftover ? "Tasks moved." : `Tasks moved. ${src.name} was empty, so it's removed.`);
     render();
   } catch (err) {
     showToast("Error: " + err.message);
-    $("moveGoBtn").disabled = false;
   }
 }

@@ -6,9 +6,9 @@ rules_version = '2';
 //
 // - Staff can read what the app shows them, log and edit their own hours
 //   (until invoiced, at their own pay rate), manage subtasks, and create
-//   Pursuits (internal projects) and their tasks. Only admins pick a
-//   Pursuit's PM or make a task payable (paid at pay rate, after the PM
-//   approves); other Pursuit hours approve themselves.
+//   Pursuits (internal projects) and their tasks. Only admins make a
+//   Pursuit payable (paid at pay rate, after its PM approves) and pick its
+//   PM; hours on other Pursuits approve themselves.
 // - A project's manager (its pmPersonId), admin or not, can set who's on its
 //   tasks and their hours, and approve, decline, edit, move between tasks and
 //   mark "No charge" the hours and expenses on that project, until they're
@@ -39,8 +39,8 @@ service cloud.firestore {
     function taskIsOn(taskId, projectId) {
       return get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId == projectId;
     }
-    function taskPayable(taskId) {
-      return get(/databases/$(database)/documents/tasks/$(taskId)).data.get("payable", false) == true;
+    function isPayablePursuit(projectId) {
+      return get(/databases/$(database)/documents/projects/$(projectId)).data.get("payable", false) == true;
     }
 
     // Everyone stamps their own lastSeenAt (Analytics → Usage), nothing else.
@@ -56,8 +56,8 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Staff can start a Pursuit (no PM; admins set that) and rename or
-    // recolor one.
+    // Staff can start an unpaid Pursuit (admins make one payable and set
+    // its PM), and rename, recolor, close or reopen one.
     match /projects/{id} {
       allow read: if isStaff();
       allow write: if isAdmin();
@@ -65,21 +65,20 @@ service cloud.firestore {
         && request.resource.data.internal == true
         && request.resource.data.createdByPersonId == myPersonId()
         && request.resource.data.get("pmPersonId", null) == null
-        && request.resource.data.keys().hasOnly(["name", "shortName", "color", "internal", "pmPersonId", "createdByPersonId", "createdAt"]);
+        && request.resource.data.get("payable", false) == false
+        && request.resource.data.keys().hasOnly(["name", "shortName", "color", "internal", "payable", "closed", "pmPersonId", "createdByPersonId", "createdAt"]);
       allow update: if isStaff() && resource.data.get("internal", false) == true
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "shortName", "color"]);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "shortName", "color", "closed"]);
     }
 
-    // Staff can add unpaid tasks to Pursuits, rename them and close/reopen
-    // them. Only admins make one payable.
+    // Staff can add tasks to Pursuits, rename them and close/reopen them.
     match /tasks/{id} {
       allow read: if isStaff();
       allow write: if isAdmin();
       allow create: if isStaff() && isInternal(request.resource.data.projectId)
         && request.resource.data.createdByPersonId == myPersonId()
-        && request.resource.data.keys().hasOnly(["projectId", "name", "budget", "startDate", "endDate", "closed", "payable", "createdByPersonId", "createdAt"])
-        && request.resource.data.get("budget", 0) == 0
-        && request.resource.data.get("payable", false) == false;
+        && request.resource.data.keys().hasOnly(["projectId", "name", "budget", "startDate", "endDate", "closed", "createdByPersonId", "createdAt"])
+        && request.resource.data.get("budget", 0) == 0;
       allow update: if isStaff() && isInternal(resource.data.projectId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["closed", "name"]);
     }
@@ -189,11 +188,11 @@ service cloud.firestore {
           && data.get("paid", false) == false;
       }
       // What staff may save: their own, not invoiced, and not approved
-      // (except Pursuit hours, which auto-approve unless the task is payable).
+      // (except Pursuit hours, which auto-approve unless the Pursuit is payable).
       function okToSave(data) {
         return mineAndOpen(data)
           && (data.get("approved", false) == false
-              || (isInternal(data.projectId) && !taskPayable(data.taskId)));
+              || (isInternal(data.projectId) && !isPayablePursuit(data.projectId)));
       }
 
       allow read: if isStaff();

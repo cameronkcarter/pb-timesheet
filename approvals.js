@@ -5,7 +5,7 @@
 //   approved — approved but not invoiced yet (Unapprove)
 //   internal — hours on Pursuits (internal projects), which don't need
 //              approval, by task so each one's hours add up. Hours on a
-//              payable Pursuit task do: they're in pending/approved (until
+//              payable Pursuit do: they're in pending/approved (until
 //              paid) like client hours, never billed.
 // Each is grouped by project, then one row per person (per task when
 // internal); opening a row lists its entries, grouped by task (by person when
@@ -19,7 +19,7 @@
 import { TimeEntries, Expenses } from "./db.js";
 import { esc, fmtHrs, showToast, projectColor, sortProjects, formatCurrency, dateRange, entryDate } from "./util.js";
 import { expenseLabel, createExpenseEditor } from "./expenses.js";
-import { assignedHours, isInternal, isBillable, billRateOf, isPayableTask } from "./rates.js";
+import { assignedHours, isInternal, isBillable, billRateOf } from "./rates.js";
 import { notifyEntries, unnotify } from "./notifications.js";
 
 const sumHours = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
@@ -77,8 +77,9 @@ export function createApprovals({ getData, sessionPersonId }) {
     const { projects } = getData();
     const internalIds = new Set(projects.filter(isInternal).map((p) => p.id));
     const waiting = (e) => !!e.approved === approved && !e.invoiced && !e.declined && ids.has(e.projectId);
-    // Pursuit hours only when their task is payable, until they're paid.
-    const counts = (e) => !internalIds.has(e.projectId) || (isPayableTask(e.taskId) && !e.paid);
+    // Pursuit hours only on payable Pursuits, until they're paid.
+    const payableIds = new Set(projects.filter((p) => isInternal(p) && p.payable).map((p) => p.id));
+    const counts = (e) => !internalIds.has(e.projectId) || (payableIds.has(e.projectId) && !e.paid);
     const hours = timeEntries.filter((e) => waiting(e) && counts(e));
     const exps = expenses.filter((e) => e.kind !== "sub" && waiting(e))
       .map((e) => ({ ...e, isExpense: true, hours: 0, personId: e.personId || e.createdByPersonId }));

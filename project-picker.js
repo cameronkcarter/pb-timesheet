@@ -2,7 +2,9 @@
 // project, your projects as chips, and "All projects" listing the rest.
 // The page shows the picked project's details under it.
 //   root     — element to fill (inside the page's project card)
-//   getData  — () => ({ projects, mine, selectedId })
+//   getData  — () => ({ projects, mine, selectedId, groups })
+//              groups (optional): [{ label, list, cls }] — chips in labeled
+//              sections instead of one "mine" row (Timesheet: Projects, Pursuits)
 //   onPick   — (projectId) => void
 //   action   — optional HTML for a button beside the search (e.g. + New Project)
 //   label    — heading over the chips (default "Your Projects")
@@ -51,12 +53,19 @@ export function createProjectPicker({ root, getData, onPick, action = "", label 
   }
 
   function render() {
-    const { projects, mine, selectedId } = getData();
+    const { projects, mine, selectedId, groups } = getData();
     const mineIds = new Set(mine.map((p) => p.id));
     const rest = projects.filter((p) => !mineIds.has(p.id)).sort((x, y) => x.name.localeCompare(y.name));
     const selected = projects.find((p) => p.id === selectedId);
     const chip = (p) => `<button type="button" class="project-chip ${p.id === selectedId ? "on" : ""}" data-project-card="${p.id}"
       style="--c:${projectColor(p.id)};" title="${esc(p.name)}"><i aria-hidden="true"></i>${esc(projectShortName(p))}</button>`;
+    root.classList.toggle("grouped", !!groups);
+    if (groups) {
+      chips.innerHTML = groups.filter((g) => g.list.length).map((g) => `<div class="chip-group ${g.cls || ""}">
+        <div class="chip-label">${esc(g.label)}</div><div class="chip-group-row">${g.list.map(chip).join("")}</div></div>`).join("");
+      others.hidden = true;
+      return;
+    }
     chips.innerHTML = [...mine, ...(selected && !mineIds.has(selected.id) ? [selected] : [])].map(chip).join("")
       + (rest.length ? `<button type="button" class="project-chip project-chip-more" data-action="all-projects" aria-expanded="${othersOpen}">
           All projects (${projects.length}) <span class="chev ${othersOpen ? "up" : ""}" aria-hidden="true">&#9662;</span></button>` : "");

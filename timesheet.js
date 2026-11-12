@@ -6,7 +6,7 @@ import {
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createProjectPicker } from "./project-picker.js";
-import { assignedHours, isInternal, autoApproves, isPayableTask } from "./rates.js";
+import { assignedHours, isInternal, autoApproves } from "./rates.js";
 
 // Three cards: a calendar of your hours (two weeks, or the whole month), the
 // selected day (its entries and a form to log more), and the month's hours
@@ -300,10 +300,10 @@ function dayRowHtml(e) {
 }
 
 // Saving any change resubmits the entry for approval (Pursuits auto-approve,
-// except payable tasks, which their PM approves) and clears a decline.
+// except payable ones, which their PM approves) and clears a decline.
 function approvalFields(projectId, taskId) {
   return {
-    ...(autoApproves(projects.find((p) => p.id === projectId), taskId)
+    ...(autoApproves(projects.find((p) => p.id === projectId))
       ? { approved: true, approvedDate: new Date().toISOString() }
       : { approved: false, approvedDate: null }),
     declined: false, declineReason: null,
@@ -356,7 +356,7 @@ async function saveEntry(row) {
 async function deleteEntry(entry) {
   if (!(await confirmDialog("", { title: "Delete this entry?", confirmText: "Delete", danger: true }))) return;
   const { id, createdAt, ...data } = entry;
-  if (data.approved && !autoApproves(projects.find((p) => p.id === data.projectId), data.taskId)) {
+  if (data.approved && !autoApproves(projects.find((p) => p.id === data.projectId))) {
     Object.assign(data, { approved: false, approvedDate: null });
   }
   try {
@@ -409,11 +409,16 @@ listView.addEventListener("input", (e) => {
 window.addEventListener("resize", () => fitNotes(listView));
 
 // ---------- Log hours for the selected day ----------
-// Projects you can log to: the ones you're assigned on, plus every internal
-// project (e.g. Proposals & Pursuits), which is open to everyone.
+// Projects you can log to: the ones you're assigned on, plus every open
+// Pursuit (internal project), which is open to everyone.
 function myProjects() {
   const ids = new Set(assignments.filter((a) => a.personId === selectedPersonId).map((a) => a.projectId));
-  return sortProjects(projects.filter((p) => ids.has(p.id) || isInternal(p)));
+  return sortProjects(projects.filter((p) => (ids.has(p.id) && !isInternal(p)) || (isInternal(p) && !p.closed)));
+}
+const PINNED_PURSUITS = ["RFPs", "Business Development", "Education"];
+function pursuitOrder(list) {
+  const rank = (p) => { const i = PINNED_PURSUITS.indexOf(p.name); return i === -1 ? 99 : i; };
+  return [...list].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
 
 function selectedProjectIsInternal() {
@@ -496,8 +501,14 @@ function renderLogForm() {
   projectSelectedEl.hidden = !picked;
   if (picked) {
     projectSelectedEl.style.setProperty("--c", projectColor(picked.id));
-    projectSelectedEl.innerHTML = `<div class="name">${esc(picked.name)}</div>
-      <div class="meta">${esc([picked.client || (isInternal(picked) ? "Internal" : ""), pm ? `PM: ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>`;
+    projectSelectedEl.classList.toggle("is-pursuit", isInternal(picked));
+    projectSelectedEl.innerHTML = isInternal(picked)
+      ? `<div class="name"><span class="kind">Pursuit</span>${esc(picked.name)}</div>
+        <div class="meta">${picked.payable
+          ? `<span class="pay-tag">Payable</span> Paid at your pay rate once ${esc(pm ? pm.name : "the PM")} approves`
+          : '<span class="unpaid-tag">Unpaid</span> Hours are tracked, not paid'}</div>`
+      : `<div class="name">${esc(picked.name)}</div>
+      <div class="meta">${esc([picked.client, pm ? `PM: ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>`;
   }
 
   const options = myTaskOptions();
@@ -533,7 +544,7 @@ function taskRowHtml(c, scale) {
   else hours = hoursBarHtml(assigned, logged, scale);
   return `<button type="button" class="ts-task ${active ? "on" : ""} ${!c.internal && !c.assignment ? "unassigned" : ""}"
       data-task-id="${c.task.id}" role="radio" aria-checked="${active}">
-    <span class="ts-task-name">${esc(c.task.name)}${c.internal && isPayableTask(c.task.id) ? ' <span class="pay-tag" title="Hours on this task are paid at your pay rate, once your PM approves them">Payable</span>' : ""}</span>
+    <span class="ts-task-name">${esc(c.task.name)}</span>
     <span class="ts-task-bar">${hours}</span>
     <span class="ts-task-hrs">${c.assignment ? `${fmtHrs(assigned)} hrs` : ""}</span>
   </button>`;
@@ -636,7 +647,16 @@ function renderExistingHint() {
 // Only projects you can log to (myProjects) are offered or searched.
 const picker = createProjectPicker({
   root: projectPickerEl,
-  getData: () => ({ projects: myProjects(), mine: myProjects(), selectedId: selectedProjectId }),
+  getData: () => {
+    const mine = myProjects();
+    return {
+      projects: mine, mine, selectedId: selectedProjectId,
+      groups: [
+        { label: "Projects", list: mine.filter((p) => !isInternal(p)) },
+        { label: "Pursuits", list: pursuitOrder(mine.filter(isInternal)), cls: "pursuit-chips" },
+      ],
+    };
+  },
   onPick: (id) => pickLogProject(id),
 });
 

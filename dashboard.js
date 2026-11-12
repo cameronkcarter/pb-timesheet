@@ -4,7 +4,7 @@ import {
   todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, sortProjects, subtaskActionsHtml,
   hoursBarHtml, hoursScale,
 } from "./util.js";
-import { paidAmount, billedAmount, assignedHours, isInternal, isPayableTask } from "./rates.js";
+import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
 import { createExpenseEditor, expenseLabel, expenseStatus, expenseClientPaid } from "./expenses.js";
@@ -245,9 +245,9 @@ function renderPay(myEntries) {
 
   const ctx = { projects, people };
   const projectOf = (id) => projects.find((p) => p.id === id);
-  // Client hours, plus Pursuit hours on payable tasks (paid without an invoice).
+  // Client hours, plus hours on payable Pursuits (paid without an invoice).
   const pursuitOf = (e) => isInternal(projectOf(e.projectId));
-  const billable = myEntries.filter((e) => !pursuitOf(e) || isPayableTask(e.taskId));
+  const billable = myEntries.filter((e) => !pursuitOf(e) || !!projectOf(e.projectId)?.payable);
   const hoursOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
   // Your expenses go on the same invoices as your hours.

@@ -7,7 +7,7 @@
 <script>
   // Setup moved onto the Projects tab (Edit Project Info).
   const q = new URLSearchParams(location.search);
-  location.replace("projects.html" + (q.has("new") ? "?new=1" : q.get("project") ? `?project=${encodeURIComponent(q.get("project"))}&edit=1` : "?edit=1"));
+  location.replace("projects.html" + (q.has("new") ? "?new=1" : q.get("project") ? `?project=${encodeURIComponent(q.get("project"))}` : ""));
 </script>
 </head>
 <body></body>

@@ -15,7 +15,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { isTestMode } from "./session.js";
 import { setProjectColors } from "./util.js";
-import { setPayableTasks } from "./rates.js";
 import {
   listenTest,
   addTest,
@@ -147,7 +146,8 @@ export const Settings = {
 // Project documents look like:
 // { name, client, projectNumber, billToName, billToTitle, billToCompany, billToAddress1,
 //   billToAddress2, pmPersonId (project manager: approves its hours),
-//   internal (a Pursuit: never billed; see rates.js), createdByPersonId,
+//   internal (a Pursuit: never billed; see rates.js), payable (Pursuits:
+//   hours paid at pay rate after PM approval), closed (Pursuits), createdByPersonId,
 //   color, shortName (optional; see projectColor / projectShortName in util.js) }
 export const Projects = {
   listen: (cb) => listenCollection("projects", (list) => { setProjectColors(list); cb(list); }, "name"),
@@ -157,10 +157,9 @@ export const Projects = {
 };
 
 // Task documents look like: { projectId, name, budget ($), startDate, endDate,
-//   closed, payable (Pursuits: hours paid at pay rate, after PM approval),
-//   createdByPersonId }
+//   closed, createdByPersonId }
 export const Tasks = {
-  listen: (cb) => listenCollection("tasks", (list) => { setPayableTasks(list); cb(list); }, "name"),
+  listen: (cb) => listenCollection("tasks", cb, "name"),
   add: (data) => add("tasks", data),
   update: (id, data) => update("tasks", id, data),
   remove: (id) => remove("tasks", id),

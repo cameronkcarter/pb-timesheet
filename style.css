@@ -4329,43 +4329,152 @@ button.swatch.taken::after {
   margin-left: -1px; background: #fff; transform: rotate(45deg); border-radius: 1px;
 }
 
+/* Projects: while editing project info, the way back is a solid button and
+   the head card says what's open. */
+#projectHead #editInfoBtn.back-btn { background: var(--plum); color: #fff; border: 1px solid var(--plum); font-weight: 600; padding-left: 12px; padding-right: 14px; }
+#projectHead #editInfoBtn.back-btn:hover { background: var(--navy-light, #5a2d63); }
+#projectHead.editing-info { background: #faf6fc; }
+#projectHead.editing-info #projectHeadName::after {
+  content: "Editing info"; margin-left: 10px; padding: 2px 9px; border-radius: 999px; vertical-align: 3px;
+  font-size: 11.5px; font-weight: 700; color: var(--plum); background: #efe4f4;
+}
+
+/* Timesheet: Projects and Pursuits as their own chip groups. Pursuit chips
+   are squarer and tinted, so the two read as different kinds of work. */
+.project-picker.grouped > .chip-label { display: none; }
+.project-picker.grouped .project-chips { display: flex; flex-direction: column; gap: 10px; }
+.chip-group-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-group .chip-label { margin: 0 0 6px; }
+.chip-group.pursuit-chips { padding-top: 10px; border-top: 1px dashed #d9cfe0; }
+.pursuit-chips button.project-chip { border-radius: 7px; background: #f7f4f9; border-color: #e2d9e8; }
+.pursuit-chips button.project-chip i { border-radius: 2px; }
+.pursuit-chips button.project-chip.on { background: #fff; }
+.ts-project-selected.is-pursuit { background: #f7f4f9; }
+.ts-project-selected .kind {
+  margin-right: 8px; padding: 1px 7px; border-radius: 5px; vertical-align: 1px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #fff; background: #8f8796;
+}
+.ts-project-selected .meta .pay-tag, .ts-project-selected .meta .unpaid-tag { margin-right: 6px; font-size: 10.5px; padding: 1px 7px; }
+
 /* ---------- Pursuits ---------- */
-/* Payable vs not: a strong green tag against a quiet gray one. */
-.pay-tag, .unpaid-tag {
-  display: inline-block; padding: 2px 9px; border-radius: 999px;
-  font-size: 11.5px; font-weight: 700; letter-spacing: 0.2px; white-space: nowrap; vertical-align: 1px;
+/* Its own layout: a list of Pursuits on the left, the open one on the right. */
+.pursuits-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.pursuits-title h1 { margin-bottom: 2px; }
+.pursuits-title button { margin: 0; }
+.pursuits-sub { font-size: 14px; color: var(--text-muted); }
+.pursuits-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 20px; align-items: start; }
+.pursuits-layout[hidden] { display: none; }
+
+/* Payable vs unpaid: a strong green tag against a quiet gray one. */
+.pay-tag, .unpaid-tag, .closed-tag {
+  display: inline-block; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.2px;
 }
 .pay-tag { background: #e3f3e8; color: #1f6b3a; border: 1px solid #a9d8b8; }
 .pay-tag::before { content: "$ "; }
-.unpaid-tag { background: transparent; color: var(--text-muted); border: 1px solid var(--border); font-weight: 600; }
-.ts-task-name .pay-tag { margin-left: 6px; }
+.unpaid-tag { color: #6f6874; background: #f1eef3; border: 1px solid #ddd6e2; }
+.closed-tag { color: #fff; background: #8f8796; border: 1px solid #8f8796; }
+.pay-tag.big, .unpaid-tag.big { font-size: 13px; padding: 4px 12px; }
 
-.pursuit-table { width: 100%; }
-.pursuit-table th:nth-child(2), .pursuit-table td:nth-child(2) { width: 120px; }
-.pursuit-table .num { width: 110px; text-align: right; }
-#pursuitTable tr.pursuit-row.payable > td:first-child { box-shadow: inset 3px 0 0 #3a9a5c; }
-#pursuitTable tr.task-row { cursor: pointer; }
-.pursuit-add-task { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 14px; }
-.pursuit-add-task input[type="text"] { flex: 1 1 260px; margin: 0; }
-.pursuit-add-task button { margin: 0; }
-.pursuit-add-task[hidden], .pursuit-add-task [hidden], #moveCard[hidden] { display: none; }
-.pursuit-detail-note { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
-.pursuit-people .tp-row { grid-template-columns: minmax(0, 1fr) 110px 110px; padding: 7px 0; }
-.pursuit-people .tp-row + .tp-row:not(.tp-head) { border-top: 1px solid var(--border); }
-.pursuit-pay .tp-row { grid-template-columns: minmax(0, 1fr) 130px 100px 100px; }
-.pursuit-people .num, .move-list .num { text-align: right; font-variant-numeric: tabular-nums; }
-.pursuit-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
-.pursuit-actions button { margin: 0; }
-.move-list .tp-row { grid-template-columns: minmax(0, 1fr) 70px 220px; padding: 6px 0; }
-.move-list .tp-row + .tp-row:not(.tp-head) { border-top: 1px solid var(--border); }
-.move-list select { margin: 0; width: 100%; }
-#moveCard { border: 1px solid #e6c89f; background: #fffaf2; }
+.pursuit-list { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 6px; }
+button.pursuit-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center;
+  width: 100%; margin: 0; padding: 11px 12px 11px 14px; text-align: left; color: var(--text);
+  background: #fff; border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: 10px;
+  font-weight: 400; box-shadow: none;
+}
+button.pursuit-item:hover { background: #fbf8fc; color: var(--text); border-color: #d9cfe0; border-left-color: var(--c); }
+button.pursuit-item.on { background: color-mix(in srgb, var(--c) 9%, #fff); border-color: color-mix(in srgb, var(--c) 45%, #fff); border-left-color: var(--c); box-shadow: 0 1px 4px rgba(60, 30, 70, 0.08); }
+.pursuit-item-name { font-weight: 700; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pursuit-item-meta { grid-column: 1; font-size: 12.5px; color: var(--text-muted); }
+.pursuit-item > .pay-tag, .pursuit-item > .unpaid-tag, .pursuit-item > .closed-tag { grid-column: 2; grid-row: 1 / 3; }
+button.pursuit-item.closed { opacity: 0.7; border-left-color: #b9b1c0; }
+button.pursuit-closed-toggle {
+  margin: 6px 0 0; padding: 8px 4px; width: 100%; text-align: left; background: none; border: none; box-shadow: none;
+  color: var(--text-muted); font-size: 13px; font-weight: 600;
+}
+button.pursuit-closed-toggle:hover { background: none; color: var(--text); }
+button.pursuit-closed-toggle[hidden] { display: none; }
+.pursuit-closed-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* The open Pursuit: name, pay, and the hours, big. */
+.pursuit-hero { border-top: 5px solid var(--c); }
+.pursuit-hero.closed { border-top-color: #b9b1c0; background: #faf9fb; }
+.pursuit-hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pursuit-hero-top button { margin: 0; flex: 0 0 auto; }
+.pursuit-hero-title h2 { font-size: 24px; margin: 0 0 8px; }
+.pursuit-hero-tags { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pursuit-hero-note { font-size: 13px; color: var(--text-muted); }
+.pursuit-hero-total { margin-top: 20px; font-size: 15px; color: var(--text-muted); }
+.pursuit-hero-total b { font-size: 40px; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.pursuit-people-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.pursuit-people-chips span { padding: 3px 10px; border-radius: 999px; background: #f4f0f6; font-size: 12.5px; }
+.pursuit-pay-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: #f1f8f3; font-size: 13px; color: #2f5a3e; }
+.pursuit-pay-line button { margin: 0 0 0 auto; }
+.pursuit-hero-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pursuit-hero-foot button { margin: 0; }
+
+/* Close: outlined and easy to hit, since tasks close all the time. */
+button.close-btn {
+  margin: 0; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; white-space: nowrap;
+  background: #fff; color: var(--plum); border: 1.5px solid #cdb8d6; box-shadow: none;
+}
+button.close-btn:hover { background: var(--plum); color: #fff; border-color: var(--plum); }
+
+.pursuit-tasks-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.pursuit-tasks-head h2 { margin: 0; }
+.pursuit-tasks-actions { display: flex; align-items: center; gap: 14px; }
+.pursuit-tasks-actions button { margin: 0; }
+.pursuit-task { display: flex; align-items: center; gap: 12px; padding: 4px 0; border-top: 1px solid var(--border); }
+.pursuit-task:first-child { border-top: none; }
+.pursuit-task > button { flex: 0 0 auto; }
+button.pursuit-task-main {
+  flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 80px; gap: 10px; align-items: center;
+  margin: 0; padding: 10px 4px; background: none; border: none; box-shadow: none; text-align: left; color: var(--text); font-weight: 400;
+}
+button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
+.pursuit-task.open .task-chevron { transform: rotate(90deg); }
+.pursuit-task-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pursuit-task-who { font-size: 12.5px; color: var(--text-muted); white-space: nowrap; }
+.pursuit-task-hrs { text-align: right; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.pursuit-task-hrs b { font-size: 15px; color: var(--text); }
+.pursuit-task.closed .pursuit-task-name { color: var(--text-muted); font-weight: 500; }
+.pursuit-task-detail { margin: 0 0 10px 28px; padding: 8px 12px; border-radius: 8px; background: #f8f5f9; font-size: 13px; }
+.pursuit-task-detail > div { display: flex; justify-content: space-between; padding: 3px 0; max-width: 360px; }
+#closedTasks[hidden] { display: none; }
+
+/* Edit Tasks */
+.edit-tasks-head, .edit-task-row { display: grid; grid-template-columns: minmax(0, 1fr) 60px 56px 28px; gap: 10px; align-items: center; }
+.edit-tasks-head { font-size: 12px; color: var(--text-muted); padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.edit-task-row { padding: 4px 0; }
+.edit-task-row input[type="text"] { margin: 0; }
+.edit-task-row .num, .edit-tasks-head .num { text-align: right; }
+.edit-task-closed { display: flex; justify-content: center; margin: 0; }
+.edit-tasks-head span:nth-child(3) { text-align: center; }
+.edit-task-row .icon-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+/* Edit Pursuit */
 .pursuit-modal { max-width: 560px; }
 .sheet-foot .item-delete { margin-right: auto; }
-.sheet-foot .item-delete[hidden], #pursuitPmField[hidden] { display: none; }
-@media (max-width: 600px) {
-  .pursuit-table th:nth-child(3), .pursuit-table td:nth-child(3) { display: none; }
-  .pursuit-pay .tp-row { grid-template-columns: minmax(0, 1fr) 70px 70px 60px; gap: 8px; }
+.sheet-foot .item-delete[hidden], #pursuitPmField[hidden], #moveCard[hidden] { display: none; }
+.pay-choice button[data-value="payable"].on { background: #e3f3e8; color: #1f6b3a; }
+.pay-choice button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Moving P&P */
+#moveCard { border: 1px solid #e6c89f; background: #fffaf2; }
+.move-list .tp-row { grid-template-columns: minmax(0, 1fr) 70px 220px; padding: 6px 0; }
+.move-list .tp-row + .tp-row:not(.tp-head) { border-top: 1px solid var(--border); }
+.move-list .num { text-align: right; }
+.move-list select { margin: 0; width: 100%; }
+.pursuit-actions { display: flex; gap: 12px; margin-top: 12px; }
+.pursuit-actions button { margin: 0; }
+
+@media (max-width: 800px) {
+  .pursuits-layout { grid-template-columns: 1fr; }
+  .pursuit-list { position: static; }
+  .pursuit-hero-total b { font-size: 32px; }
+  button.pursuit-task-main { grid-template-columns: 14px minmax(0, 1fr) 64px; }
+  .pursuit-task-who { display: none; }
   .move-list .tp-row { grid-template-columns: minmax(0, 1fr) 150px; }
   .move-list .tp-row > :nth-child(2) { display: none; }
 }

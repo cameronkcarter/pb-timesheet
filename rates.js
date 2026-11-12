@@ -13,7 +13,7 @@
 //
 // Projects either bill at each person's bill rate, or are internal (the
 // Pursuits tab; project.internal: never billed, only hours are tracked).
-// Internal hours are unpaid unless their task is payable (task.payable):
+// Internal hours are unpaid unless the Pursuit is payable (project.payable):
 // those are paid at the person's pay rate once the project's PM approves
 // them. On billable projects, single entries can be marked not billed (see
 // isBillable).
@@ -35,23 +35,12 @@ export function isInternal(project) {
   return !!(project && project.internal);
 }
 
-// Payable internal tasks, kept current by db.js from every tasks update (like
-// project colors), so pay can be worked out from an entry alone.
-const payableTaskIds = new Set();
-export function setPayableTasks(tasks) {
-  payableTaskIds.clear();
-  tasks.forEach((t) => { if (t.payable) payableTaskIds.add(t.id); });
-}
-export const isPayableTask = (taskId) => payableTaskIds.has(taskId);
+// A payable Pursuit: its hours are paid at pay rate, after its PM approves.
+export const isPayablePursuit = (project) => isInternal(project) && !!project.payable;
 
-// Hours on an internal project that are paid (a payable task).
-export function isPaidInternal(entry, projects) {
-  return isInternal(findProject(entry.projectId, projects)) && isPayableTask(entry.taskId);
-}
-
-// Internal hours that skip approval: everything but payable tasks.
-export function autoApproves(project, taskId) {
-  return isInternal(project) && !isPayableTask(taskId);
+// Pursuit hours that skip approval: every Pursuit but payable ones.
+export function autoApproves(project) {
+  return isInternal(project) && !project.payable;
 }
 
 export function personPayRate(person) {
@@ -72,7 +61,8 @@ export function projectBillRate(project, person) {
 
 // Locked once invoiced (or paid); until then, the person's current pay rate.
 export function payRateOf(entry, { projects, people }) {
-  if (isInternal(findProject(entry.projectId, projects)) && !isPayableTask(entry.taskId)) return 0;
+  const project = findProject(entry.projectId, projects);
+  if (isInternal(project) && !project.payable) return 0;
   const locked = (entry.invoiced || entry.paid) && entry.rate != null;
   return locked ? Number(entry.rate) : personPayRate(findPerson(entry.personId, people));
 }
