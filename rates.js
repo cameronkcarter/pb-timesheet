@@ -1,14 +1,15 @@
 // Two rates apply to every hour logged, both set per person on the Staff tab:
-//   Pay rate  (person.rate)     — what the person earns. Locked onto each
-//               time entry when it's logged (entry.rate), falling back to the
-//               person's current rate for old entries logged before that.
+//   Pay rate  (person.rate)     — what the person earns.
 //   Bill rate (person.billRate) — what the client is charged for that
-//               person's hours, and what project budgets are spent at. Locked
-//               onto each entry when it's invoiced (entry.billRate), so rate
-//               changes later never rewrite past invoices. Falls back to the
-//               pay rate if a person has no bill rate set. A project can
-//               bill someone at a different rate (project.billRates, set in
-//               Setup: { personId: rate }).
+//               person's hours, and what project budgets are spent at.
+// Hours not invoiced yet ALWAYS use the person's current rates, so changing
+// a rate on the Staff tab changes every uninvoiced hour everywhere. Invoicing
+// locks both onto each entry (entry.rate, entry.billRate), so later changes
+// never rewrite past invoices or pay. (entry.rate is also stamped when hours
+// are logged, but that's only a record; it's ignored until invoiced.)
+// Bill rate falls back to the pay rate if a person has no bill rate set. A
+// project can bill someone at a different rate (project.billRates, set in
+// Setup: { personId: rate }).
 //
 // Projects either bill at each person's bill rate, or are internal
 // (project.internal: not billed or paid, e.g. Proposals & Pursuits; only
@@ -48,9 +49,11 @@ export function projectBillRate(project, person) {
   return own != null && own !== "" ? Number(own) : personBillRate(person);
 }
 
+// Locked once invoiced (or paid); until then, the person's current pay rate.
 export function payRateOf(entry, { projects, people }) {
   if (isInternal(findProject(entry.projectId, projects))) return 0;
-  return entry.rate != null ? Number(entry.rate) : personPayRate(findPerson(entry.personId, people));
+  const locked = (entry.invoiced || entry.paid) && entry.rate != null;
+  return locked ? Number(entry.rate) : personPayRate(findPerson(entry.personId, people));
 }
 
 // Hours a PM marked "No charge" (entry.billable === false): still paid, never

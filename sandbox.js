@@ -106,12 +106,17 @@ export function removeTest(name, id) {
   return Promise.resolve();
 }
 
-export function markInvoicedTest(ids, invoiceId, billRates = {}) {
+export function markInvoicedTest(ids, invoiceId, billRates = {}, payRates = {}) {
   const items = readData("timeEntries");
   const invoicedDate = new Date().toISOString();
   ids.forEach((id) => {
     const idx = items.findIndex((i) => i.id === id);
-    if (idx !== -1) items[idx] = { ...items[idx], invoiced: true, invoicedDate, invoiceId, billRate: billRates[id] ?? null };
+    if (idx !== -1) {
+      items[idx] = {
+        ...items[idx], invoiced: true, invoicedDate, invoiceId, billRate: billRates[id] ?? null,
+        ...(payRates[id] != null ? { rate: payRates[id] } : {}),
+      };
+    }
   });
   writeData("timeEntries", items);
   notifyAll("timeEntries");
