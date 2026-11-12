@@ -1,5 +1,6 @@
 /* Brand colors from the Place Builders Branding Guidelines. */
 :root {
+  --chip-radius: 7px;   /* chips and tags: rounded boxes, not ovals */
   --ground: #261f12;
   --plum: #452961;
   --civic-purple: #6e3073;
@@ -348,7 +349,7 @@ th {
 }.pill {
   display: inline-block;
   padding: 2px 9px;
-  border-radius: 20px;
+  border-radius: var(--chip-radius);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
@@ -1580,7 +1581,7 @@ label.person-chip {
   margin: 0;
   padding: 4px 12px 4px 4px;
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--chip-radius);
   background: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -1803,7 +1804,7 @@ table.pay-table {
   font-size: 11px;
   font-weight: 600;
   padding: 3px 9px;
-  border-radius: 20px;
+  border-radius: var(--chip-radius);
   white-space: nowrap;
 }
 
@@ -2654,7 +2655,7 @@ button.person-chip {
   margin: 0;
   padding: 4px 12px 4px 4px;
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--chip-radius);
   background: #fff;
   color: var(--text);
   font-size: 13px;
@@ -3054,7 +3055,7 @@ select.analytics-select {
 /* Approved without billing the client. */
 .nc-tag {
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--chip-radius);
   background: #fbefe2;
   color: #9a5a16;
   font-size: 12px;
@@ -3318,7 +3319,7 @@ button.project-chip {
   align-items: center;
   gap: 7px;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--chip-radius);
   border: 1px solid var(--border);
   background: #fff;
   color: var(--text);
@@ -3468,7 +3469,7 @@ button.swatch.on { box-shadow: 0 0 0 2px var(--c); }
   display: inline-block;
   margin-left: 8px;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--chip-radius);
   background: #f1e7f6;
   color: var(--plum);
   font-size: 11px;
@@ -3892,7 +3893,7 @@ button.due-chip:hover { filter: brightness(0.95); text-decoration: underline; }
   gap: 5px;
   margin-left: 6px;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--chip-radius);
   background: color-mix(in srgb, var(--c) 14%, #fff);
   color: var(--text);
   font-size: 12px;
@@ -4081,7 +4082,7 @@ button.picker-result i { flex: 0 0 auto; width: 9px; height: 9px; border-radius:
 /* ---------- Setup ---------- */
 .rates-summary { font-size: 14px; color: var(--text); line-height: 1.7; }
 .rates-default { color: var(--text-muted); }
-.rates-custom { margin-right: 8px; padding: 2px 8px; border-radius: 999px; background: #f3eaf7; color: var(--navy); font-size: 12px; font-weight: 700; }
+.rates-custom { margin-right: 8px; padding: 2px 8px; border-radius: var(--chip-radius); background: #f3eaf7; color: var(--navy); font-size: 12px; font-weight: 700; }
 .rates-sep { margin: 0 8px; color: #c9bdd0; }
 .rates-rest { display: block; font-size: 13px; color: var(--text-muted); }
 .setup-rates { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
@@ -4302,7 +4303,7 @@ button.mb-dismiss:hover { background: var(--navy); color: #fff; border-color: va
 .panel-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .panel-project-tag {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 10px 3px 8px; border-radius: 999px;
+  padding: 3px 10px 3px 8px; border-radius: var(--chip-radius);
   font-size: 12.5px; font-weight: 600; color: #3d3346; white-space: nowrap;
   background: color-mix(in srgb, var(--c, #7b3d86) 12%, #fff);
   border: 1px solid color-mix(in srgb, var(--c, #7b3d86) 35%, #fff);
@@ -4335,26 +4336,26 @@ button.swatch.taken::after {
 #projectHead #editInfoBtn.back-btn:hover { background: var(--navy-light, #5a2d63); }
 #projectHead.editing-info { background: #faf6fc; }
 #projectHead.editing-info #projectHeadName::after {
-  content: "Editing info"; margin-left: 10px; padding: 2px 9px; border-radius: 999px; vertical-align: 3px;
+  content: "Editing info"; margin-left: 10px; padding: 2px 9px; border-radius: var(--chip-radius); vertical-align: 3px;
   font-size: 11.5px; font-weight: 700; color: var(--plum); background: #efe4f4;
 }
 
 /* Timesheet: Projects and Pursuits as their own chip groups. Pursuit chips
    are squarer and tinted, so the two read as different kinds of work. */
 .project-picker.grouped > .chip-label { display: none; }
-.project-picker.grouped .project-chips { display: flex; flex-direction: column; gap: 10px; }
+.project-picker.grouped .project-chips { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .chip-group-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip-group .chip-label { margin: 0 0 6px; }
 .chip-group.pursuit-chips { padding-top: 10px; border-top: 1px dashed #d9cfe0; }
-.pursuit-chips button.project-chip { border-radius: 7px; background: #f7f4f9; border-color: #e2d9e8; }
+.pursuit-chips button.project-chip { background: #f7f4f9; border-color: #e2d9e8; }
 .pursuit-chips button.project-chip i { border-radius: 2px; }
 .pursuit-chips button.project-chip.on { background: #fff; }
-.ts-project-selected.is-pursuit { background: #f7f4f9; }
+
 .ts-project-selected .kind {
   margin-right: 8px; padding: 1px 7px; border-radius: 5px; vertical-align: 1px;
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #fff; background: #8f8796;
 }
-.ts-project-selected .meta .pay-tag, .ts-project-selected .meta .unpaid-tag { margin-right: 6px; font-size: 10.5px; padding: 1px 7px; }
+.ts-project-selected .meta .pay-tag, .ts-project-selected .meta .unpaid-tag { font-size: 10.5px; padding: 0 6px; }
 
 /* ---------- Pursuits ---------- */
 /* The Projects picker on top, the picked Pursuit below. */
@@ -4363,7 +4364,7 @@ button.swatch.taken::after {
 
 /* Payable vs unpaid: a strong green tag against a quiet gray one. */
 .pay-tag, .unpaid-tag, .closed-tag {
-  display: inline-block; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  display: inline-block; padding: 2px 9px; border-radius: var(--chip-radius); white-space: nowrap;
   font-size: 11.5px; font-weight: 700; letter-spacing: 0.2px;
 }
 .pay-tag { background: #e3f3e8; color: #1f6b3a; border: 1px solid #a9d8b8; }
@@ -4390,7 +4391,7 @@ button.pursuit-closed-toggle[hidden] { display: none; }
 .pursuit-hero-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; margin-top: 12px; font-size: 14px; color: var(--text-muted); }
 .pursuit-hero-total > span:first-child { margin-right: 8px; }
 .pursuit-hero-total > span:first-child b { font-size: 30px; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; margin-right: 3px; }
-.pursuit-person { padding: 2px 9px; border-radius: 999px; background: #f4f0f6; font-size: 12.5px; color: var(--text); }
+.pursuit-person { padding: 2px 9px; border-radius: var(--chip-radius); background: #f4f0f6; font-size: 12.5px; color: var(--text); }
 .pursuit-pay-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: #f1f8f3; font-size: 13px; color: #2f5a3e; }
 .pursuit-pay-line button { margin: 0 0 0 auto; }
 

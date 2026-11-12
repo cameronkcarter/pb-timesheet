@@ -503,10 +503,8 @@ function renderLogForm() {
     projectSelectedEl.style.setProperty("--c", projectColor(picked.id));
     projectSelectedEl.classList.toggle("is-pursuit", isInternal(picked));
     projectSelectedEl.innerHTML = isInternal(picked)
-      ? `<div class="name"><span class="kind">Pursuit</span>${esc(picked.name)}</div>
-        <div class="meta">${picked.payable
-          ? `<span class="pay-tag">Payable</span> Paid at your pay rate once ${esc(pm ? pm.name : "the PM")} approves`
-          : '<span class="unpaid-tag">Unpaid</span> Hours are tracked, not paid'}</div>`
+      ? `<div class="name">${esc(picked.name)}</div>
+        <div class="meta">Pursuit · ${picked.payable ? `<span class="pay-tag">Payable</span>${pm ? ` · PM: ${esc(pm.name)}` : ""}` : '<span class="unpaid-tag">Unpaid</span>'}</div>`
       : `<div class="name">${esc(picked.name)}</div>
       <div class="meta">${esc([picked.client, pm ? `PM: ${pm.name}` : ""].filter(Boolean).join(" · "))}</div>`;
   }
@@ -652,12 +650,14 @@ const picker = createProjectPicker({
     return {
       projects: mine, mine, selectedId: selectedProjectId,
       groups: [
-        { label: "Projects", list: mine.filter((p) => !isInternal(p)) },
-        { label: "Pursuits", list: pursuitOrder(mine.filter(isInternal)), cls: "pursuit-chips" },
+        { label: "Your Projects", list: mine.filter((p) => !isInternal(p)) },
+        { label: "Your Pursuits", list: pursuitOrder(mine.filter(isInternal)), cls: "pursuit-chips" },
       ],
     };
   },
   onPick: (id) => pickLogProject(id),
+  placeholder: "Find a project or Pursuit",
+  noun: "projects or Pursuits",
 });
 
 function pickLogProject(id) {
