@@ -29,21 +29,16 @@
 </nav>
 
 <main>
-  <div class="pursuits-title">
-    <div>
-      <h1>Pursuits</h1>
-      <div class="pursuits-sub">RFPs, business development and other work for the firm. Hours are tracked here, not billed.</div>
-    </div>
-    <button type="button" id="newPursuitBtn">+ New Pursuit</button>
-  </div>
+  <h1>Pursuits</h1>
 
   <div class="card" id="moveCard" hidden></div>
 
-  <div id="pursuitsEmpty" class="card empty" style="display:none;">No Pursuits yet. Start one with + New Pursuit.</div>
+  <div class="card project-switch">
+    <div id="pursuitsEmpty" class="empty" style="display:none;">No Pursuits yet.</div>
+    <div id="pursuitPicker"></div>
+  </div>
 
   <div class="pursuits-layout" id="pursuitsLayout">
-    <aside class="pursuit-list" id="pursuitList" aria-label="Pursuits"></aside>
-
     <section class="pursuit-main" id="pursuitMain">
       <div class="card pursuit-hero" id="pursuitHero"></div>
 

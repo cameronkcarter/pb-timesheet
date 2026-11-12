@@ -1,7 +1,7 @@
 // The Pursuits tab: the firm's own work (RFPs, business development,
-// education, ...). Never billed; it tracks hours. Pursuits as tiles across
-// the top (closed ones tucked away), the picked one below with its total
-// hours and its tasks, each with a Close button.
+// education, ...). Never billed; it tracks hours. The same picker as
+// Projects on top (open Pursuits as chips, closed ones in a dropdown), the
+// picked one below with its total hours and its tasks, each with a Close button.
 //
 // Anyone can start a Pursuit, add and rename tasks, and close or reopen
 // tasks and Pursuits. A Pursuit is Unpaid (hours approve themselves) or
@@ -15,6 +15,7 @@ import {
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { isInternal, payRateOf } from "./rates.js";
 import { removeProject } from "./project-editor.js";
+import { createProjectPicker } from "./project-picker.js";
 
 const sessionPersonId = requireSession();
 const $ = (id) => document.getElementById(id);
@@ -30,8 +31,8 @@ let expenses = [];
 let navChecked = false;
 let selectedId = new URLSearchParams(location.search).get("project");
 let expandedTaskId = null;
+let picker = null; // set below; listeners can fire before it exists
 let showClosedTasks = false;
-let showClosedPursuits = false;
 
 wireLogout("logoutLink");
 
@@ -90,40 +91,22 @@ function render() {
   const any = projects.some(isInternal);
   $("pursuitsEmpty").style.display = any ? "none" : "block";
   $("pursuitsLayout").hidden = !any;
+  picker?.render();
   if (!any) return;
-  renderList();
   renderHero();
   renderTasks();
 }
 
-// ---------- The list ----------
-function listItem(p) {
-  const open = tasks.filter((t) => t.projectId === p.id && !t.closed).length;
-  return `<button type="button" class="pursuit-item ${p.id === selectedId ? "on" : ""} ${p.closed ? "closed" : ""}" data-id="${p.id}" style="--c:${projectColor(p.id)};">
-    <span class="pursuit-item-name"><i class="mark-pursuit" aria-hidden="true"></i>${esc(p.name)}</span>
-    <span class="pursuit-item-meta">${fmtHrs(hoursOn((e) => e.projectId === p.id))} hrs${p.closed ? "" : ` · ${open} open`}</span>
-    ${p.closed ? '<span class="closed-tag">Closed</span>' : payTag(p)}
-  </button>`;
-}
-
-function renderList() {
-  const closed = closedPursuits();
-  // A closed one that's open on the right keeps its section showing.
-  const showClosed = showClosedPursuits || closed.some((p) => p.id === selectedId);
-  $("pursuitList").innerHTML = `${openPursuits().map(listItem).join("") || '<div class="empty">No open Pursuits.</div>'}
-    ${closed.length ? `<button type="button" class="pursuit-closed-toggle" data-action="toggle-closed-pursuits" aria-expanded="${showClosed}">
-      Closed Pursuits (${closed.length}) <span class="chev ${showClosed ? "up" : ""}">&#9662;</span></button>
-      ${showClosed ? `<div class="pursuit-closed-list">${closed.map(listItem).join("")}</div>` : ""}` : ""}`;
-}
-
-$("pursuitList").addEventListener("click", (e) => {
-  if (e.target.closest('[data-action="toggle-closed-pursuits"]')) {
-    showClosedPursuits = !showClosedPursuits;
-    renderList();
-    return;
-  }
-  const item = e.target.closest(".pursuit-item");
-  if (item) select(item.dataset.id);
+// ---------- Picking one ----------
+picker = createProjectPicker({
+  root: $("pursuitPicker"),
+  getData: () => ({ projects: projects.filter(isInternal), mine: openPursuits(), more: closedPursuits(), selectedId }),
+  onPick: (id) => select(id),
+  action: '<button type="button" id="newPursuitBtn" class="small">+ New Pursuit</button>',
+  label: "Open Pursuits",
+  moreLabel: "Closed Pursuits",
+  placeholder: "Find a Pursuit",
+  noun: "Pursuits",
 });
 
 // ---------- The open Pursuit ----------
@@ -154,25 +137,19 @@ function renderHero() {
   hero.classList.toggle("closed", !!p.closed);
   hero.innerHTML = `
     <div class="pursuit-hero-top">
-      <div class="pursuit-hero-title">
-        <h2>${esc(p.name)}</h2>
-        <div class="pursuit-hero-tags">
-          ${p.closed ? '<span class="closed-tag">Closed</span>' : ""}
-          ${p.payable
-            ? `<span class="pay-tag big">Payable</span><span class="pursuit-hero-note">Paid at each person's pay rate once ${pm ? esc(pm.name) : "the PM"} approves</span>`
-            : `<span class="unpaid-tag big">Unpaid</span><span class="pursuit-hero-note">Hours are tracked, not paid</span>`}
-        </div>
+      <h2>${esc(p.name)}</h2>
+      ${p.payable ? '<span class="pay-tag big">Payable</span>' : '<span class="unpaid-tag big">Unpaid</span>'}
+      ${p.closed ? '<span class="closed-tag">Closed</span>' : ""}
+      <div class="pursuit-hero-actions">
+        <button type="button" class="small secondary" data-action="edit-pursuit">Edit Pursuit</button>
+        ${p.closed
+          ? '<button type="button" class="close-btn" data-action="reopen-pursuit">Reopen Pursuit</button>'
+          : '<button type="button" class="close-btn" data-action="close-pursuit">✓ Close Pursuit</button>'}
       </div>
-      <button type="button" class="small secondary" data-action="edit-pursuit">Edit Pursuit</button>
     </div>
-    <div class="pursuit-hero-total"><b>${fmtHrs(sumHrs(entries))}</b> hrs spent${byPerson.length ? ` by ${byPerson.length} ${byPerson.length === 1 ? "person" : "people"}` : ""}</div>
-    ${byPerson.length ? `<div class="pursuit-people-chips">${byPerson.map((x) => `<span>${esc(personName(x.id))} <b>${fmtHrs(x.hrs)}</b></span>`).join("")}</div>` : ""}
-    ${payLine}
-    <div class="pursuit-hero-foot">
-      ${p.closed
-        ? `<span class="appr-muted">Closed — not on the Timesheet. Hours are kept.</span><button type="button" class="small" data-action="reopen-pursuit">Reopen Pursuit</button>`
-        : `<button type="button" class="close-btn" data-action="close-pursuit">Close Pursuit</button>`}
-    </div>`;
+    <div class="pursuit-hero-total"><span><b>${fmtHrs(sumHrs(entries))}</b> hrs</span>
+      ${byPerson.map((x) => `<span class="pursuit-person">${esc(personName(x.id))} <b>${fmtHrs(x.hrs)}</b></span>`).join("")}</div>
+    ${payLine}`;
 }
 
 $("pursuitHero").addEventListener("click", async (e) => {
