@@ -4343,10 +4343,14 @@ button.swatch.taken::after {
 /* Timesheet: Projects and Pursuits as their own chip groups. Pursuit chips
    are squarer and tinted, so the two read as different kinds of work. */
 .project-picker.grouped > .chip-label { display: none; }
-.project-picker.grouped .project-chips { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.project-picker.grouped .project-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 12px 20px; margin-top: 16px; }
 .chip-group-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip-group .chip-label { margin: 0 0 6px; }
-.chip-group.pursuit-chips { padding-top: 10px; border-top: 1px dashed #d9cfe0; }
+.chip-group.pursuit-chips { padding-left: 20px; border-left: 1px dashed #d9cfe0; }
+@media (max-width: 640px) {
+  .project-picker.grouped .project-chips { grid-template-columns: 1fr; }
+  .chip-group.pursuit-chips { padding: 10px 0 0; border-left: none; border-top: 1px dashed #d9cfe0; }
+}
 .pursuit-chips button.project-chip { background: #f7f4f9; border-color: #e2d9e8; }
 .pursuit-chips button.project-chip i { border-radius: 2px; }
 .pursuit-chips button.project-chip.on { background: #fff; }
