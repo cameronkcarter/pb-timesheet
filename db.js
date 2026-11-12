@@ -61,14 +61,18 @@ async function remove(name, id) {
   return deleteDoc(doc(db, name, id));
 }
 
-// billRates: { entryId: rate } — locks in the rate each hour was billed at.
-async function markInvoiced(ids, invoiceId, billRates = {}) {
-  if (isTestMode()) return markInvoicedTest(ids, invoiceId, billRates);
+// billRates / payRates: { entryId: rate } — locks in the rates each hour was
+// billed and paid at (see rates.js).
+async function markInvoiced(ids, invoiceId, billRates = {}, payRates = {}) {
+  if (isTestMode()) return markInvoicedTest(ids, invoiceId, billRates, payRates);
   await authReady;
   const batch = writeBatch(db);
   const invoicedDate = new Date().toISOString();
   ids.forEach((id) => {
-    batch.update(doc(db, "timeEntries", id), { invoiced: true, invoicedDate, invoiceId, billRate: billRates[id] ?? null });
+    batch.update(doc(db, "timeEntries", id), {
+      invoiced: true, invoicedDate, invoiceId, billRate: billRates[id] ?? null,
+      ...(payRates[id] != null ? { rate: payRates[id] } : {}),
+    });
   });
   await batch.commit();
 }

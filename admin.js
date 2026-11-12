@@ -7,6 +7,7 @@ import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./s
 import { createAnalytics } from "./analytics.js";
 import { createSheetSync } from "./sheet-sync.js";
 import { expenseClientPaid } from "./expenses.js";
+import { payRateOf } from "./rates.js";
 
 const sessionPersonId = requireSession();
 
@@ -154,7 +155,7 @@ function excelSheets() {
     })),
     Hours: [...timeEntries].sort(byDate).map((e) => ({
       Date: e.date, Person: personName(e.personId), Project: projectName(e.projectId), Task: taskName(e.taskId),
-      Hours: Number(e.hours || 0), "Pay rate": e.rate == null ? "" : Number(e.rate),
+      Hours: Number(e.hours || 0), "Pay rate": payRateOf(e, { projects, people }),
       "Billed rate": e.billRate == null ? "" : Number(e.billRate), Status: hourStatus(e),
       "Invoice #": invoiceNumber(e.invoiceId), Note: e.note || "", "Decline reason": e.declineReason || "",
     })),
