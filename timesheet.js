@@ -6,7 +6,7 @@ import {
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createProjectPicker } from "./project-picker.js";
-import { assignedHours, isInternal } from "./rates.js";
+import { assignedHours, isInternal, autoApproves, isPayableTask } from "./rates.js";
 
 // Three cards: a calendar of your hours (two weeks, or the whole month), the
 // selected day (its entries and a form to log more), and the month's hours
@@ -299,11 +299,11 @@ function dayRowHtml(e) {
   </tr>`;
 }
 
-// Saving any change resubmits the entry for approval (internal projects
-// auto-approve) and clears a decline.
-function approvalFields(projectId) {
+// Saving any change resubmits the entry for approval (Pursuits auto-approve,
+// except payable tasks, which their PM approves) and clears a decline.
+function approvalFields(projectId, taskId) {
   return {
-    ...(isInternal(projects.find((p) => p.id === projectId))
+    ...(autoApproves(projects.find((p) => p.id === projectId), taskId)
       ? { approved: true, approvedDate: new Date().toISOString() }
       : { approved: false, approvedDate: null }),
     declined: false, declineReason: null,
@@ -340,7 +340,7 @@ async function saveEntry(row) {
   const before = { declined: !!entry.declined, declineReason: entry.declineReason || null };
   Object.keys(changes).forEach((k) => { before[k] = k === "hours" ? Number(entry.hours || 0) : entry[k] || ""; });
   try {
-    await TimeEntries.update(entry.id, { ...changes, ...approvalFields(entry.projectId) });
+    await TimeEntries.update(entry.id, { ...changes, ...approvalFields(entry.projectId, entry.taskId) });
     setEditing(null);
     showToast("Entry updated.", {
       action: "Undo",
@@ -356,7 +356,7 @@ async function saveEntry(row) {
 async function deleteEntry(entry) {
   if (!(await confirmDialog("", { title: "Delete this entry?", confirmText: "Delete", danger: true }))) return;
   const { id, createdAt, ...data } = entry;
-  if (data.approved && !isInternal(projects.find((p) => p.id === data.projectId))) {
+  if (data.approved && !autoApproves(projects.find((p) => p.id === data.projectId), data.taskId)) {
     Object.assign(data, { approved: false, approvedDate: null });
   }
   try {
@@ -533,7 +533,7 @@ function taskRowHtml(c, scale) {
   else hours = hoursBarHtml(assigned, logged, scale);
   return `<button type="button" class="ts-task ${active ? "on" : ""} ${!c.internal && !c.assignment ? "unassigned" : ""}"
       data-task-id="${c.task.id}" role="radio" aria-checked="${active}">
-    <span class="ts-task-name">${esc(c.task.name)}</span>
+    <span class="ts-task-name">${esc(c.task.name)}${c.internal && isPayableTask(c.task.id) ? ' <span class="pay-tag" title="Hours on this task are paid at your pay rate, once your PM approves them">Payable</span>' : ""}</span>
     <span class="ts-task-bar">${hours}</span>
     <span class="ts-task-hrs">${c.assignment ? `${fmtHrs(assigned)} hrs` : ""}</span>
   </button>`;
@@ -728,19 +728,19 @@ submitEntry.addEventListener("click", async () => {
         projectId: editing.projectId, taskId: editing.taskId, hours: Number(editing.hours || 0), note: editing.note || "",
         declined: !!editing.declined, declineReason: editing.declineReason || null,
       };
-      await TimeEntries.update(editing.id, { projectId, taskId, hours, note, ...approvalFields(projectId) });
+      await TimeEntries.update(editing.id, { projectId, taskId, hours, note, ...approvalFields(projectId, taskId) });
       showToast("Entry updated.", {
         action: "Undo",
         onAction: () => TimeEntries.update(editing.id, before).catch((err) => showToast("Error: " + err.message)),
       });
     } else if (existing) {
-      await TimeEntries.update(existing.id, { hours, note, ...approvalFields(projectId) });
+      await TimeEntries.update(existing.id, { hours, note, ...approvalFields(projectId, taskId) });
       showToast("Entry updated.");
     } else {
       const person = people.find((p) => p.id === selectedPersonId);
       await TimeEntries.add({
         personId: selectedPersonId, projectId, taskId, date, hours, note,
-        rate: person ? person.rate : 0, ...approvalFields(projectId),
+        rate: person ? person.rate : 0, ...approvalFields(projectId, taskId),
       });
       showToast("Hours logged.");
     }

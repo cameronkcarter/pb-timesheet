@@ -3,8 +3,10 @@
 // project manager yet ("All Projects" shows every project). Three panels:
 //   pending  — what's waiting (Decline, No charge, Approve)
 //   approved — approved but not invoiced yet (Unapprove)
-//   internal — hours on internal projects (e.g. Proposals & Pursuits), which
-//              don't need approval, by task so each proposal's hours add up
+//   internal — hours on Pursuits (internal projects), which don't need
+//              approval, by task so each one's hours add up. Hours on a
+//              payable Pursuit task do: they're in pending/approved (until
+//              paid) like client hours, never billed.
 // Each is grouped by project, then one row per person (per task when
 // internal); opening a row lists its entries, grouped by task (by person when
 // internal). Declined entries go back to the person's Timesheet (with the
@@ -17,7 +19,7 @@
 import { TimeEntries, Expenses } from "./db.js";
 import { esc, fmtHrs, showToast, projectColor, sortProjects, formatCurrency, dateRange, entryDate } from "./util.js";
 import { expenseLabel, createExpenseEditor } from "./expenses.js";
-import { assignedHours, isInternal, isBillable, billRateOf } from "./rates.js";
+import { assignedHours, isInternal, isBillable, billRateOf, isPayableTask } from "./rates.js";
 import { notifyEntries, unnotify } from "./notifications.js";
 
 const sumHours = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
@@ -60,7 +62,7 @@ export function createApprovals({ getData, sessionPersonId }) {
     const { projects } = getData();
     const all = showAll && isAdmin();
     return new Set(projects
-      .filter((p) => (v === "internal") === isInternal(p))
+      .filter((p) => v !== "internal" || isInternal(p))
       .filter((p) => all || p.pmPersonId === sessionPersonId || (isAdmin() && !p.pmPersonId))
       .map((p) => p.id));
   }
@@ -72,8 +74,12 @@ export function createApprovals({ getData, sessionPersonId }) {
     const { timeEntries, expenses = [] } = getData();
     if (v === "internal") return timeEntries.filter((e) => ids.has(e.projectId)).sort((a, b) => (a.date < b.date ? -1 : 1));
     const approved = v === "approved";
+    const { projects } = getData();
+    const internalIds = new Set(projects.filter(isInternal).map((p) => p.id));
     const waiting = (e) => !!e.approved === approved && !e.invoiced && !e.declined && ids.has(e.projectId);
-    const hours = timeEntries.filter(waiting);
+    // Pursuit hours only when their task is payable, until they're paid.
+    const counts = (e) => !internalIds.has(e.projectId) || (isPayableTask(e.taskId) && !e.paid);
+    const hours = timeEntries.filter((e) => waiting(e) && counts(e));
     const exps = expenses.filter((e) => e.kind !== "sub" && waiting(e))
       .map((e) => ({ ...e, isExpense: true, hours: 0, personId: e.personId || e.createdByPersonId }));
     return [...hours, ...exps].sort((a, b) => (a.date < b.date ? -1 : 1));
@@ -82,8 +88,9 @@ export function createApprovals({ getData, sessionPersonId }) {
 
   // What the client is billed: hours at the person's bill rate on the project
   // ("No charge" hours at $0), expenses at their amount. Internal hours aren't.
-  const rateOf = (e) => billRateOf(e, getData());
-  const billedOf = (e) => (e.isExpense ? Number(e.amount || 0) : Number(e.hours || 0) * rateOf(e));
+  // Pursuit hours have no bill rate (null: shown blank).
+  const rateOf = (e) => (isInternal(getData().projects.find((p) => p.id === e.projectId)) ? null : billRateOf(e, getData()));
+  const billedOf = (e) => (e.isExpense ? Number(e.amount || 0) : Number(e.hours || 0) * (rateOf(e) || 0));
   const billedSum = (items) => items.reduce((t, e) => t + billedOf(e), 0);
   const money = () => !byTask(); // Rate and Billed columns
   const cols = () => (money() ? 8 : 6);
@@ -194,7 +201,8 @@ export function createApprovals({ getData, sessionPersonId }) {
     const noteCell = field === "note"
       ? `<td><textarea class="appr-inline appr-inline-note" rows="1" placeholder="Note" aria-label="Note">${esc(e.note || "")}</textarea></td>`
       : `<td class="appr-entry-note appr-editable ${e.note ? "" : "appr-muted"}" data-edit="note" title="Change note">${e.note ? esc(e.note) : "No note"}</td>`;
-    const billed = billedCell(billedOf(e), isBillable(e) ? "" : '<div class="appr-sub">No charge</div>');
+    const pursuit = isInternal(getData().projects.find((p) => p.id === e.projectId));
+    const billed = billedCell(billedOf(e), pursuit ? '<div class="appr-sub">Paid Pursuit</div>' : isBillable(e) ? "" : '<div class="appr-sub">No charge</div>');
     return `<tr class="appr-entry ${stripe} ${field ? "editing" : ""}" data-id="${e.id}">${lead}${moveCell}${hoursCell}${rateCell(isBillable(e) ? rateOf(e) : null)}${billed}${noteCell}
       <td class="num appr-actions" colspan="2">${actionsHtml(e)}</td></tr>`;
   }
@@ -212,7 +220,8 @@ export function createApprovals({ getData, sessionPersonId }) {
       const tag = !e.isExpense && !isBillable(e) ? '<span class="nc-tag">No charge</span>' : "";
       return `<div class="appr-btns">${edit}${tag}<button type="button" class="appr-unapprove" data-action="unapprove-entry" ${id}>Unapprove</button></div>`;
     }
-    const noCharge = e.isExpense ? ""
+    const pursuit = !e.isExpense && isInternal(getData().projects.find((p) => p.id === e.projectId));
+    const noCharge = e.isExpense || pursuit ? ""
       : `<button type="button" class="split-nocharge ${isBillable(e) ? "" : "on"}" data-action="nocharge-entry" ${id} title="Approve, but don't bill the client (still paid)">No charge</button>`;
     return `<div class="appr-btns">${edit}<span class="appr-split"><button type="button" class="split-decline" data-action="decline-entry" ${id}>Decline</button>${noCharge}<button type="button" class="split-approve" data-action="approve-entry" ${id}>Approve</button></span></div>`;
   }
@@ -243,7 +252,7 @@ export function createApprovals({ getData, sessionPersonId }) {
           const over = !byTask() && r.entries.some((e) => !e.isExpense && isOver(e.personId, e.taskId));
           const unbilled = sumHours(r.entries.filter((e) => !e.isExpense && !isBillable(e)));
           const people = byTask() ? new Set(r.entries.map((e) => e.personId)).size : 0;
-          const rates = [...new Set(r.entries.filter((e) => !e.isExpense && isBillable(e)).map(rateOf))];
+          const rates = [...new Set(r.entries.filter((e) => !e.isExpense && isBillable(e)).map(rateOf).filter((x) => x != null))];
           const detail = [
             `${r.entries.length} ${r.entries.length === 1 ? "entry" : "entries"}`,
             people > 1 ? `${people} people` : "",

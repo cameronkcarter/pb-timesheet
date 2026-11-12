@@ -71,14 +71,8 @@ export function createSetupPanel({ getData, onCreated, onRemoved, onCancelNew, o
     }).join("");
   }
 
+  // Every project here is billed to a client (Pursuits have their own tab).
   function renderType() {
-    $("setupType").querySelectorAll("button").forEach((b) => {
-      const on = b.dataset.value === type;
-      b.classList.toggle("on", on);
-      b.setAttribute("aria-checked", on);
-    });
-    $("setupTypeHint").textContent = type === "internal" ? "Not billed or paid. Just tracks hours."
-      : type === "rates" ? "Billed at each person's bill rate." : "Choose one.";
     const internal = type === "internal";
     $("setupBilling").hidden = internal;
     $("rates").hidden = internal || creating();
@@ -178,7 +172,7 @@ export function createSetupPanel({ getData, onCreated, onRemoved, onCancelNew, o
     fields.pmPersonId.innerHTML = '<option value="">None</option>' + pmChoices.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
     fields.pmPersonId.value = src.pmPersonId || "";
     color = src.color || null;
-    type = p ? (isInternal(p) ? "internal" : "rates") : null;
+    type = p && isInternal(p) ? "internal" : "rates";
     renderSwatches();
     renderType();
     if (p) renderRateRows(p, p.billRates || {}, p.expenseRates || {});
@@ -226,13 +220,6 @@ export function createSetupPanel({ getData, onCreated, onRemoved, onCancelNew, o
     renderSwatches();
     isDirty();
   });
-  $("setupType").addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-value]");
-    if (!b) return;
-    type = b.dataset.value;
-    renderType();
-    isDirty();
-  });
 
   revertBtn.addEventListener("click", () => {
     if (creating()) {
@@ -250,7 +237,6 @@ export function createSetupPanel({ getData, onCreated, onRemoved, onCancelNew, o
       fields.name.focus();
       return showToast("Give the project a name.");
     }
-    if (!type) return showToast("Choose Billed to a client or Internal.");
     saveBtn.disabled = true;
     try {
       if (creating()) {

@@ -15,6 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { isTestMode } from "./session.js";
 import { setProjectColors } from "./util.js";
+import { setPayableTasks } from "./rates.js";
 import {
   listenTest,
   addTest,
@@ -77,13 +78,15 @@ async function markInvoiced(ids, invoiceId, billRates = {}, payRates = {}) {
   await batch.commit();
 }
 
-async function markPaid(ids) {
-  if (isTestMode()) return markPaidTest(ids);
+// payRates ({ entryId: rate }, optional) locks in the pay rate — for Pursuit
+// hours, which are paid without ever being invoiced.
+async function markPaid(ids, payRates = {}) {
+  if (isTestMode()) return markPaidTest(ids, payRates);
   await authReady;
   const batch = writeBatch(db);
   const paidDate = new Date().toISOString();
   ids.forEach((id) => {
-    batch.update(doc(db, "timeEntries", id), { paid: true, paidDate });
+    batch.update(doc(db, "timeEntries", id), { paid: true, paidDate, ...(payRates[id] != null ? { rate: payRates[id] } : {}) });
   });
   await batch.commit();
 }
@@ -144,7 +147,7 @@ export const Settings = {
 // Project documents look like:
 // { name, client, projectNumber, billToName, billToTitle, billToCompany, billToAddress1,
 //   billToAddress2, pmPersonId (project manager: approves its hours),
-//   internal (not billed or paid, e.g. Proposals & Pursuits),
+//   internal (a Pursuit: never billed; see rates.js), createdByPersonId,
 //   color, shortName (optional; see projectColor / projectShortName in util.js) }
 export const Projects = {
   listen: (cb) => listenCollection("projects", (list) => { setProjectColors(list); cb(list); }, "name"),
@@ -153,9 +156,11 @@ export const Projects = {
   remove: (id) => remove("projects", id),
 };
 
-// Task documents look like: { projectId, name, budget ($), startDate, endDate }
+// Task documents look like: { projectId, name, budget ($), startDate, endDate,
+//   closed, payable (Pursuits: hours paid at pay rate, after PM approval),
+//   createdByPersonId }
 export const Tasks = {
-  listen: (cb) => listenCollection("tasks", cb, "name"),
+  listen: (cb) => listenCollection("tasks", (list) => { setPayableTasks(list); cb(list); }, "name"),
   add: (data) => add("tasks", data),
   update: (id, data) => update("tasks", id, data),
   remove: (id) => remove("tasks", id),

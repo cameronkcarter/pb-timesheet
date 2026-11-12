@@ -123,12 +123,12 @@ export function markInvoicedTest(ids, invoiceId, billRates = {}, payRates = {}) 
   return Promise.resolve();
 }
 
-export function markPaidTest(ids) {
+export function markPaidTest(ids, payRates = {}) {
   const items = readData("timeEntries");
   const paidDate = new Date().toISOString();
   ids.forEach((id) => {
     const idx = items.findIndex((i) => i.id === id);
-    if (idx !== -1) items[idx] = { ...items[idx], paid: true, paidDate };
+    if (idx !== -1) items[idx] = { ...items[idx], paid: true, paidDate, ...(payRates[id] != null ? { rate: payRates[id] } : {}) };
   });
   writeData("timeEntries", items);
   notifyAll("timeEntries");

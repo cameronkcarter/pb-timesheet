@@ -30,6 +30,8 @@ let navChecked = false;
 // otherwise the first (newest) is selected until you pick one.
 const urlParams = new URLSearchParams(location.search);
 let selectedProjectId = urlParams.get("project");
+// Pursuits (internal projects) have their own tab.
+const clientProjects = () => projects.filter((p) => !isInternal(p));
 let projectPicked = !!selectedProjectId;
 // Admins: Edit Project Info swaps the panels below the picker for the
 // project's setup (?edit=1); + New Project fills it in blank (?new=1).
@@ -154,14 +156,14 @@ if (sessionPersonId) {
   Expenses.listen((data) => { expenses = data; renderBudget(); });
 }
 
-// Projects you're on: assigned to a task, or its project manager, plus
-// internal ones (open to everyone). Everything else is under "Other projects".
+// Projects you're on: assigned to a task, or its project manager.
+// Everything else is under "All projects".
 function myProjects() {
   const assignedProjectIds = new Set(
     assignments.filter((a) => a.personId === sessionPersonId).map((a) => a.projectId)
   );
-  return sortProjects(projects.filter((p) =>
-    assignedProjectIds.has(p.id) || p.pmPersonId === sessionPersonId || isInternal(p)));
+  return sortProjects(clientProjects().filter((p) =>
+    assignedProjectIds.has(p.id) || p.pmPersonId === sessionPersonId));
 }
 
 function renderAll() {
@@ -177,7 +179,7 @@ function renderAll() {
 // the open project (name, client, PM, a few numbers, Edit Project Info).
 const picker = createProjectPicker({
   root: document.getElementById("projectPicker"),
-  getData: () => ({ projects, mine: myProjects(), selectedId: creating ? null : selectedProjectId }),
+  getData: () => ({ projects: clientProjects(), mine: myProjects(), selectedId: creating ? null : selectedProjectId }),
   onPick: (id) => pickProject(id),
   action: '<button type="button" id="openAddProject" class="small" hidden>+ New Project</button>',
 });
@@ -226,10 +228,10 @@ function renderMode() {
   if (me && !me.isAdmin) { editing = false; creating = false; }
   const admin = isAdmin();
   const inSetup = admin && (editing || creating);
-  editInfoBtn.hidden = !admin || creating || !selectedProjectId || !projects.length;
+  editInfoBtn.hidden = !admin || creating || !selectedProjectId || !clientProjects().length;
   editInfoBtn.textContent = editing ? "‹ Back to Tasks" : "Edit Project Info";
   setupForm.hidden = !inSetup;
-  if (projects.length || creating) projectDetail.style.display = inSetup ? "none" : "block";
+  if (clientProjects().length || creating) projectDetail.style.display = inSetup ? "none" : "block";
   if (creating) {
     projectHead.hidden = false;
     projectCardsEmpty.style.display = "none";
@@ -267,7 +269,14 @@ window.addEventListener("beforeunload", (e) => {
 
 function renderProjectCards() {
   document.getElementById("openAddProject").hidden = !isAdmin();
-  if (projects.length === 0) {
+  // A link to a Pursuit (e.g. from the Message Board) opens it there.
+  const linked = projects.find((p) => p.id === selectedProjectId);
+  if (projectPicked && linked && isInternal(linked)) {
+    location.replace(`pursuits.html?project=${linked.id}`);
+    return;
+  }
+  const clients = clientProjects();
+  if (clients.length === 0) {
     picker.render();
     projectHead.hidden = true;
     projectCardsEmpty.style.display = "block";
@@ -279,8 +288,8 @@ function renderProjectCards() {
   projectDetail.style.display = "block";
 
   const mine = myProjects();
-  if (!projectPicked || !projects.some((p) => p.id === selectedProjectId)) {
-    selectedProjectId = (mine[0] || sortProjects(projects)[0]).id;
+  if (!projectPicked || !clients.some((p) => p.id === selectedProjectId)) {
+    selectedProjectId = (mine[0] || sortProjects(clients)[0]).id;
   }
   picker.render();
 }

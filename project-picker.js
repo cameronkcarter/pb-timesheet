@@ -5,11 +5,12 @@
 //   getData  — () => ({ projects, mine, selectedId })
 //   onPick   — (projectId) => void
 //   action   — optional HTML for a button beside the search (e.g. + New Project)
+//   label    — heading over the chips (default "Your Projects")
 import { esc, projectColor, projectShortName } from "./util.js";
 
 const SEARCH_ICON = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
 
-export function createProjectPicker({ root, getData, onPick, action = "" }) {
+export function createProjectPicker({ root, getData, onPick, action = "", label = "Your Projects" }) {
   root.classList.add("project-picker");
   root.innerHTML = `
     <div class="picker-top">
@@ -19,7 +20,7 @@ export function createProjectPicker({ root, getData, onPick, action = "" }) {
       ${action}
     </div>
     <div class="picker-results" hidden></div>
-    <div class="chip-label">Your Projects</div>
+    <div class="chip-label">${label}</div>
     <div class="project-chips"></div>
     <div class="other-projects" hidden></div>`;
   const search = root.querySelector(".project-search input");

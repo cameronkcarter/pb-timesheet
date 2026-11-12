@@ -4,7 +4,7 @@ import {
   todayISO, toISODate, getWeekStart, addDays, projectColor, projectShortName, sortProjects, subtaskActionsHtml,
   hoursBarHtml, hoursScale,
 } from "./util.js";
-import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
+import { paidAmount, billedAmount, assignedHours, isInternal, isPayableTask } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
 import { createExpenseEditor, expenseLabel, expenseStatus, expenseClientPaid } from "./expenses.js";
@@ -106,7 +106,7 @@ function render() {
 
   // Your pay that the client hasn't paid yet: not invoiced + invoiced.
   const payOf = (entries) => paidAmount(entries, { projects, people });
-  const notInvoiced = payOf(myEntries.filter((e) => !e.invoiced && !e.declined));
+  const notInvoiced = payOf(myEntries.filter((e) => !e.invoiced && !e.paid && !e.declined));
   const invoicedUnpaid = payOf(myEntries.filter((e) => e.invoiced && !e.paid));
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid);
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
@@ -245,20 +245,22 @@ function renderPay(myEntries) {
 
   const ctx = { projects, people };
   const projectOf = (id) => projects.find((p) => p.id === id);
-  const billable = myEntries.filter((e) => !isInternal(projectOf(e.projectId)));
+  // Client hours, plus Pursuit hours on payable tasks (paid without an invoice).
+  const pursuitOf = (e) => isInternal(projectOf(e.projectId));
+  const billable = myEntries.filter((e) => !pursuitOf(e) || isPayableTask(e.taskId));
   const hoursOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
   // Your expenses go on the same invoices as your hours.
   const mine = myExpenses().filter((e) => !e.declined);
 
   // Not invoiced yet: one row per project.
-  const open = billable.filter((e) => !e.invoiced && !e.declined);
+  const open = billable.filter((e) => !e.invoiced && !e.paid && !e.declined);
   const openExp = mine.filter((e) => !e.invoiced);
   const upcoming = [...new Set([...open, ...openExp].map((e) => e.projectId))].map((pid) => ({
     date: "", number: "", projectId: pid,
     entries: open.filter((e) => e.projectId === pid),
     exps: openExp.filter((e) => e.projectId === pid),
-    status: ["Not invoiced", "pending"],
+    status: projectOf(pid)?.internal ? ["Not paid yet", "pending"] : ["Not invoiced", "pending"],
   }));
 
   // Invoiced: one row per invoice.
@@ -272,6 +274,17 @@ function renderPay(myEntries) {
     if (!byInvoice.has(keyOf(e))) byInvoice.set(keyOf(e), { entries: [], exps: [] });
     byInvoice.get(keyOf(e)).exps.push(e);
   });
+  // Paid Pursuit hours: one row per project and payday.
+  const paidPursuits = new Map();
+  billable.filter((e) => pursuitOf(e) && e.paid).forEach((e) => {
+    const k = `${e.projectId}|${String(e.paidDate || "").slice(0, 10)}`;
+    if (!paidPursuits.has(k)) paidPursuits.set(k, []);
+    paidPursuits.get(k).push(e);
+  });
+  const pursuitRows = [...paidPursuits.values()].map((entries) => ({
+    date: entries[0].paidDate || "", number: "", projectId: entries[0].projectId, entries, exps: [], paid: true,
+    status: [entries[0].paidDate ? `Paid ${shortDate(entries[0].paidDate)}` : "Paid", "paid"],
+  }));
   const invoiced = [...byInvoice].map(([k, { entries, exps }]) => {
     const first = entries[0] || exps[0];
     const inv = invoices.find((i) => i.id === k);
@@ -287,7 +300,7 @@ function renderPay(myEntries) {
       paid,
       status: paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "paid"] : ["Outstanding", "invoiced"],
     };
-  }).sort((x, y) => (x.date < y.date ? 1 : -1));
+  }).concat(pursuitRows).sort((x, y) => (x.date < y.date ? 1 : -1));
 
   const paidCount = invoiced.filter((r) => r.paid).length;
   const rows = [...upcoming, ...invoiced.filter((r) => showClientPaid || !r.paid)];

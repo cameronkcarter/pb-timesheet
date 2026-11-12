@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Pursuits — Place Builders</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+<link rel="icon" type="image/png" href="brand/favicon.png" />
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<nav>
+  <a href="dashboard.html" id="navBrandLink" class="brand"><img src="brand/wordmark-white.png" alt="Place Builders" /></a>
+  <a href="dashboard.html">Dashboard</a>
+  <a href="timesheet.html">Timesheet</a>
+  <a href="projects.html">Projects</a>
+  <a href="pursuits.html" class="active">Pursuits</a>
+  <div class="nav-manage" data-nav="mgr" hidden>
+    <a href="approvals.html" data-nav="mgr" hidden>Approvals</a>
+    <a href="invoice.html" data-nav="admin" hidden>Invoices</a>
+    <a href="staff.html" data-nav="admin" hidden>Staff</a>
+    <a href="admin.html" data-nav="admin" hidden>Analytics</a>
+  </div>
+  <span id="navUserName" class="nav-user-name" style="margin-left:auto;"></span>
+  <a href="#" id="logoutLink">Log Out</a>
+</nav>
+
+<main>
+  <h1>Pursuits</h1>
+
+  <div class="card" id="moveCard" hidden></div>
+
+  <div class="card project-switch">
+    <div id="pursuitsEmpty" class="empty" style="display:none;">No Pursuits yet. Start one with + New Pursuit.</div>
+    <div id="projectPicker"></div>
+    <div class="project-head" id="projectHead">
+      <div class="project-head-top">
+        <div>
+          <h2 id="projectHeadName"></h2>
+          <div class="project-head-meta" id="projectHeadMeta"></div>
+        </div>
+        <button type="button" id="editPursuitBtn" class="small secondary">Edit</button>
+      </div>
+      <div class="project-stats" id="projectStats"></div>
+    </div>
+  </div>
+
+  <div id="pursuitDetail" style="display:none;">
+    <div class="card">
+      <div class="budget-header">
+        <div class="panel-title"><h2 style="margin:0;">Tasks</h2><span class="panel-project-tag"></span></div>
+        <div class="row-actions">
+          <button type="button" id="toggleClosedBtn" class="link-btn" hidden></button>
+          <button type="button" id="addTaskBtn" class="small secondary">+ Add Task</button>
+        </div>
+      </div>
+      <div id="addTaskForm" class="pursuit-add-task" hidden>
+        <input type="text" id="newTaskName" placeholder="Task name, e.g. Moab Active Transportation RFP" autocomplete="off" />
+        <label class="checkbox-label" id="newTaskPayableLabel"><input type="checkbox" id="newTaskPayable" /> Payable</label>
+        <button type="button" id="cancelTaskBtn" class="link-btn">Cancel</button>
+        <button type="button" id="saveTaskBtn" class="small">Add</button>
+      </div>
+      <table id="pursuitTable" class="pursuit-table">
+        <thead><tr><th>Task</th><th>Pay</th><th class="num">This month</th><th class="num">Total</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="tasksEmpty" class="empty" style="display:none;">No tasks yet.</div>
+    </div>
+
+    <div class="card">
+      <div class="panel-title panel-title-block"><h2 style="margin:0;">Hours by Person</h2><span class="panel-project-tag"></span></div>
+      <table class="pursuit-table" id="peopleTable">
+        <thead><tr><th>Person</th><th class="num">This month</th><th class="num">This year</th><th class="num">Total</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="peopleEmpty" class="empty" style="display:none;">No hours logged yet.</div>
+    </div>
+  </div>
+</main>
+
+<div id="pursuitModal" class="modal-overlay" style="display:none;">
+  <div class="modal sheet-modal pursuit-modal" role="dialog" aria-labelledby="pursuitModalTitle">
+    <div class="sheet-head">
+      <div><h2 id="pursuitModalTitle">Edit Pursuit</h2></div>
+      <button type="button" id="pursuitModalClose" class="icon-btn sheet-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="field-grid">
+        <div class="field field-wide">
+          <label for="pursuitName">Name</label>
+          <input type="text" id="pursuitName" placeholder="RFPs" />
+        </div>
+        <div class="field">
+          <label for="pursuitShortName">Short name <span class="field-optional">for lists</span></label>
+          <input type="text" id="pursuitShortName" maxlength="24" />
+        </div>
+        <div class="field" id="pursuitPmField">
+          <label for="pursuitPm">PM <span class="field-optional">approves payable hours</span></label>
+          <select id="pursuitPm"></select>
+        </div>
+        <div class="field field-wide">
+          <label>Color</label>
+          <div class="color-swatches" id="pursuitColor" role="radiogroup" aria-label="Color"></div>
+        </div>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button type="button" id="pursuitRemove" class="link-btn item-delete">Remove</button>
+      <button type="button" id="pursuitCancel" class="secondary">Cancel</button>
+      <button type="button" id="pursuitSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script type="module" src="pursuits.js"></script>
+</body>
+</html>
