@@ -113,6 +113,7 @@ picker = createProjectPicker({
 function renderHero() {
   const p = current();
   const hero = $("pursuitHero");
+  hero.hidden = !p;
   if (!p) { hero.innerHTML = ""; return; }
   const entries = timeEntries.filter((e) => e.projectId === p.id && !e.declined);
   const pm = people.find((x) => x.id === p.pmPersonId);

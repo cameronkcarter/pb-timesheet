@@ -4386,8 +4386,8 @@ button.pursuit-closed-toggle:hover { background: none; color: var(--text); }
 button.pursuit-closed-toggle[hidden] { display: none; }
 
 /* The open Pursuit: name, pay, and the hours, big. */
-.pursuit-hero { border-top: 5px solid var(--c); padding-top: 16px; padding-bottom: 16px; }
-.pursuit-hero.closed { border-top-color: #b9b1c0; background: #faf9fb; }
+/* Its header sits in the picker card, like a project's (.project-head). */
+.pursuit-hero.closed { border-left-color: #b9b1c0; background: #faf9fb; }
 .pursuit-hero-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pursuit-hero-top h2 { font-size: 22px; margin: 0; }
 .pursuit-hero-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
