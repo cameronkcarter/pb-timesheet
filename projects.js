@@ -13,6 +13,7 @@ import { createProjectEditor } from "./project-editor.js";
 import { createProjectPicker } from "./project-picker.js";
 import { notify, notifyEntries } from "./notifications.js";
 import { createExpenseEditor, expenseStatus, expenseQtyText, countsToward } from "./expenses.js";
+import { createSetupPanel } from "./setup-panel.js";
 
 const sessionPersonId = requireSession();
 
@@ -27,8 +28,13 @@ let expenses = [];
 let navChecked = false;
 // ?project=<id> (e.g. from a Message Board post) opens that project;
 // otherwise the first (newest) is selected until you pick one.
-let selectedProjectId = new URLSearchParams(location.search).get("project");
+const urlParams = new URLSearchParams(location.search);
+let selectedProjectId = urlParams.get("project");
 let projectPicked = !!selectedProjectId;
+// Admins: Edit Project Info swaps the panels below the picker for the
+// project's setup (?edit=1); + New Project fills it in blank (?new=1).
+let editing = urlParams.has("edit");
+let creating = urlParams.has("new");
 let expandedTaskId = null;
 let showCompleted = false; // completed subtasks and past events are hidden unless shown
 
@@ -44,7 +50,8 @@ const budgetTbody = document.querySelector("#budgetTable tbody");
 const budgetEmpty = document.getElementById("budgetEmpty");
 const barLegend = document.getElementById("barLegend");
 const editProjectBtn = document.getElementById("editProjectBtn");
-const editInfoLink = document.getElementById("editInfoLink");
+const editInfoBtn = document.getElementById("editInfoBtn");
+const setupForm = document.getElementById("setupForm");
 const editTimelineBtn = document.getElementById("editTimelineBtn");
 
 const ganttChart = document.getElementById("ganttChart");
@@ -162,6 +169,7 @@ function renderAll() {
   renderBudget();
   renderGantt();
   renderSchedule();
+  renderMode();
 }
 
 // ---------- Project picker ----------
@@ -169,9 +177,92 @@ function renderAll() {
 // the open project (name, client, PM, a few numbers, Edit Project Info).
 const picker = createProjectPicker({
   root: document.getElementById("projectPicker"),
-  getData: () => ({ projects, mine: myProjects(), selectedId: selectedProjectId }),
+  getData: () => ({ projects, mine: myProjects(), selectedId: creating ? null : selectedProjectId }),
   onPick: (id) => pickProject(id),
-  action: '<a id="openAddProject" class="btn-primary small" href="setup.html?new=1" hidden>+ New Project</a>',
+  action: '<button type="button" id="openAddProject" class="small" hidden>+ New Project</button>',
+});
+
+// ---------- Edit Project Info (admins) ----------
+const setupPanel = createSetupPanel({
+  getData: () => ({ people, projects, tasks, assignments, dueDates, timeEntries, invoices, expenses }),
+  onCreated: (id) => {
+    creating = false;
+    editing = false;
+    selectedProjectId = id;
+    projectPicked = true;
+    updateUrl();
+    renderAll();
+  },
+  onRemoved: () => {
+    editing = false;
+    projectPicked = false;
+    selectedProjectId = null;
+    updateUrl();
+    renderAll();
+  },
+  onCancelNew: () => {
+    creating = false;
+    updateUrl();
+    renderAll();
+  },
+  onSaved: () => renderAll(),
+});
+
+function updateUrl() {
+  const q = creating ? "?new=1"
+    : selectedProjectId ? `?project=${selectedProjectId}${editing ? "&edit=1" : ""}` : "";
+  history.replaceState(null, "", location.pathname + q);
+}
+
+// Unsaved setup changes: ask before leaving them.
+async function okToLeaveSetup() {
+  if (!(editing || creating) || !setupPanel.isDirty()) return true;
+  return confirmDialog("Your changes haven't been saved.", { title: "Discard changes?", confirmText: "Discard" });
+}
+
+// Tasks & Budgets and Timeline, or the project's setup in their place.
+function renderMode() {
+  const me = currentPerson();
+  if (me && !me.isAdmin) { editing = false; creating = false; }
+  const admin = isAdmin();
+  const inSetup = admin && (editing || creating);
+  editInfoBtn.hidden = !admin || creating || !selectedProjectId || !projects.length;
+  editInfoBtn.textContent = editing ? "‹ Back to Tasks" : "Edit Project Info";
+  setupForm.hidden = !inSetup;
+  if (projects.length || creating) projectDetail.style.display = inSetup ? "none" : "block";
+  if (creating) {
+    projectHead.hidden = false;
+    projectCardsEmpty.style.display = "none";
+    projectHead.style.setProperty("--c", "var(--accent)");
+    projectHeadName.textContent = "New Project";
+    projectHeadMeta.textContent = "Fill in the details below, then Create Project.";
+    projectStats.innerHTML = "";
+    document.querySelectorAll(".panel-project-tag").forEach((tag) => { tag.textContent = ""; });
+  }
+  if (inSetup) setupPanel.show(creating ? null : selectedProjectId);
+}
+
+editInfoBtn.addEventListener("click", async () => {
+  if (editing && !(await okToLeaveSetup())) return;
+  finishEditing();
+  editing = !editing;
+  setupPanel.reset();
+  updateUrl();
+  renderMode();
+  window.scrollTo({ top: 0 });
+});
+
+document.getElementById("openAddProject").addEventListener("click", async () => {
+  if (creating || !(await okToLeaveSetup())) return;
+  finishEditing();
+  creating = true;
+  setupPanel.reset();
+  updateUrl();
+  renderAll();
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if ((editing || creating) && setupPanel.isDirty()) e.preventDefault();
 });
 
 function renderProjectCards() {
@@ -194,10 +285,17 @@ function renderProjectCards() {
   picker.render();
 }
 
-function pickProject(id) {
-  if (id === selectedProjectId) return;
+async function pickProject(id) {
+  if (id === selectedProjectId && !creating) return;
+  if (!(await okToLeaveSetup())) {
+    picker.render();
+    return;
+  }
+  creating = false;
+  setupPanel.reset();
   selectedProjectId = id;
   projectPicked = true;
+  updateUrl();
   finishEditing();
   expandedTaskId = null;
   addingTaskId = null;
@@ -278,7 +376,7 @@ function unassignedRowHtml(use) {
 }
 
 function renderBudget() {
-  if (!selectedProjectId) return;
+  if (!selectedProjectId || creating) return;
   // Don't wipe an hours box someone is in the middle of editing.
   if (budgetTbody.contains(document.activeElement) && document.activeElement.matches(".assignHours")) {
     renderDeferred = true;
@@ -313,8 +411,6 @@ function renderBudget() {
   ].filter(Boolean).join(" · ");
   budgetHeading.textContent = internal ? "Tasks" : "Tasks & Budgets";
   editProjectBtn.style.display = admin ? "" : "none";
-  editInfoLink.style.display = admin ? "" : "none";
-  editInfoLink.href = `setup.html?project=${project.id}`;
   barLegend.style.display = internal ? "none" : "";
 
   // Column widths (the Spent heading row would otherwise set them).

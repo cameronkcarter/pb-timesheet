@@ -4079,7 +4079,6 @@ button.picker-result i { flex: 0 0 auto; width: 9px; height: 9px; border-radius:
 .project-picker .chip-label { margin: 14px 20px 8px; }
 
 /* ---------- Setup ---------- */
-#setupHead .head-info-link[hidden] { display: none; }
 .rates-summary { font-size: 14px; color: var(--text); line-height: 1.7; }
 .rates-default { color: var(--text-muted); }
 .rates-custom { margin-right: 8px; padding: 2px 8px; border-radius: 999px; background: #f3eaf7; color: var(--navy); font-size: 12px; font-weight: 700; }
@@ -4233,12 +4232,12 @@ table.appr-table.appr-no-money { min-width: 700px; }
 #budgetTable td.num .zero { color: #c9bfd0; }
 #budgetTable td.progressCell { padding-left: 14px; padding-right: 14px; }
 
-/* Assigned (not logged yet): gray slashes, so the bars only use color for
-   money actually spent (invoiced, logged). */
+/* Assigned (not logged yet): gray with light yellow slashes, so it reads
+   apart from the empty gray track and from money actually spent. */
 .budget-progress .fill.assigned,
 .bar-legend i.assigned,
 .hb-left {
-  background: repeating-linear-gradient(-45deg, #c9c3cf 0 2px, #ece8f0 2px 5px);
+  background: repeating-linear-gradient(-45deg, #ecbf82 0 2.5px, #d8d3dd 2.5px 5px);
 }
 .budget-progress .fill.assigned.over { background: repeating-linear-gradient(-45deg, #e6a39b 0 2px, #f8e1de 2px 5px); }
 
@@ -4315,3 +4314,17 @@ button.mb-dismiss:hover { background: var(--navy); color: #fff; border-color: va
 #budgetTable tr.budget-subtotal-row td { border-top: 1px solid #a99fb3; border-bottom: 1px solid #a99fb3; }
 #budgetTable tr:has(+ tr.budget-subtotal-row) > td { border-bottom: 1px solid #a99fb3; }
 #budgetTable thead tr:last-child > th { border-bottom: 1px solid #a99fb3; }
+
+/* Projects > Edit Project Info: titles tagged with the open project. */
+.panel-title.panel-title-block { margin-bottom: 12px; }
+#projectHead #editInfoBtn { flex: 0 0 auto; margin: 0; }
+#projectHead #editInfoBtn[hidden] { display: none; }
+#setupForm[hidden] { display: none; }
+
+/* Colors another project uses: faded and crossed out. */
+button.swatch.taken,
+button.swatch.taken:hover { background: var(--c); opacity: 0.3; transform: none; cursor: not-allowed; position: relative; }
+button.swatch.taken::after {
+  content: ""; position: absolute; left: 50%; top: 1px; bottom: 1px; width: 2px;
+  margin-left: -1px; background: #fff; transform: rotate(45deg); border-radius: 1px;
+}
