@@ -184,16 +184,9 @@ $("pursuitHero").addEventListener("click", async (e) => {
   const action = btn.dataset.action;
   try {
     if (action === "edit-pursuit") openPursuitModal(p);
-    if (action === "make-payable") {
-      if (!(await confirmDialog("Its hours will be paid at each person's pay rate once a PM approves them, including hours already logged. Next, pick the PM.",
-        { title: `Make ${p.name} payable?`, confirmText: "Continue" }))) return;
-      openPursuitModal(p, { payable: true });
-    }
-    if (action === "make-unpaid") {
-      if (!(await confirmDialog("Hours already paid stay paid. Other hours on it won't be paid, and they no longer need approval.",
-        { title: `Make ${p.name} unpaid?`, confirmText: "Continue" }))) return;
-      openPursuitModal(p, { payable: false });
-    }
+    // The pay tag opens Edit Pursuit switched the other way.
+    if (action === "make-payable") openPursuitModal(p, { payable: true });
+    if (action === "make-unpaid") openPursuitModal(p, { payable: false });
     if (action === "close-pursuit") {
       const open = tasks.filter((t) => t.projectId === p.id && !t.closed).length;
       if (!(await confirmDialog(`It comes off everyone's Timesheet${open ? `, with its ${open} open task${open === 1 ? "" : "s"}` : ""}. Its hours are kept, and you can reopen it anytime.`,
