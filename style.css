@@ -4395,6 +4395,7 @@ button.pursuit-closed-toggle[hidden] { display: none; }
 .pursuit-hero-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; margin-top: 12px; font-size: 14px; color: var(--text-muted); }
 .pursuit-hero-total > span:first-child { margin-right: 8px; }
 .pursuit-hero-total > span:first-child b { font-size: 30px; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; margin-right: 3px; }
+.pursuit-people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .pursuit-person { padding: 2px 9px; border-radius: var(--chip-radius); background: #f4f0f6; font-size: 12.5px; color: var(--text); }
 .pursuit-pay-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: #f1f8f3; font-size: 13px; color: #2f5a3e; }
 .pursuit-pay-line button { margin: 0 0 0 auto; }
@@ -4414,13 +4415,13 @@ button.close-btn:hover { background: var(--plum); color: #fff; border-color: var
 .pursuit-task:first-child { border-top: none; }
 .pursuit-task > button { flex: 0 0 auto; }
 button.pursuit-task-main {
-  flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 80px auto; gap: 10px; align-items: center;
+  flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: var(--task-cols); gap: 10px; align-items: center;
   margin: 0; padding: 10px 4px; background: none; border: none; box-shadow: none; text-align: left; color: var(--text); font-weight: 400;
 }
 button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
 .pursuit-task.open .task-chevron { transform: rotate(90deg); }
 .pursuit-task-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pursuit-task-who { font-size: 12.5px; color: var(--text-muted); white-space: nowrap; }
+.pursuit-task-who { font-size: 13px; color: var(--text-muted); text-align: right; }
 .pursuit-task-hrs { text-align: right; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
 .pursuit-task-hrs b { font-size: 15px; color: var(--text); }
 .pursuit-task.closed .pursuit-task-name { color: var(--text-muted); font-weight: 500; }
@@ -4459,8 +4460,6 @@ button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
 .pursuit-actions button { margin: 0; }
 
 @media (max-width: 800px) {
-  button.pursuit-task-main { grid-template-columns: 14px minmax(0, 1fr) 64px auto; }
-  .pursuit-task-who { display: none; }
   .move-list .tp-row { grid-template-columns: minmax(0, 1fr) 150px; }
   .move-list .tp-row > :nth-child(2) { display: none; }
 }
@@ -4481,15 +4480,37 @@ button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
 .pursuit-cost b { font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; margin-right: 2px; }
 .pursuit-cost.value { color: var(--text-muted); }
 .pursuit-cost.value b { color: #6f6874; }
-.pursuit-task-cost { width: 70px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.pursuit-task-cost { text-align: right; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.pursuit-task-cost.over { color: var(--red); font-weight: 700; }
+.pursuit-task-budget { text-align: right; font-size: 13.5px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.pursuit-task-budget small { display: block; font-size: 11px; color: var(--text-muted); }
+.pursuit-task-cost.over + .pursuit-task-budget small { color: var(--red); }
+.pursuit-cost.budget { color: var(--text-muted); }
+.pursuit-cost.budget b { color: var(--text); }
+button.pay-tag.tag-btn:hover { color: #6f6874; background: #f1eef3; border-color: #ddd6e2; }
+button.pay-tag.tag-btn:hover::after { content: " → Unpaid"; }
 .pursuit-target { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12.5px; color: var(--text-muted); }
 .pursuit-target-bar { flex: 0 0 180px; height: 6px; border-radius: 3px; background: #ece6ef; overflow: hidden; }
 .pursuit-target-bar > span { display: block; height: 100%; background: #3f8f5a; }
 .pursuit-target.over { color: var(--red); font-weight: 600; }
 .pursuit-target.over .pursuit-target-bar > span { background: var(--red); }
-.pursuit-target.task { margin: -4px 0 8px 28px; }
-.pursuit-target.task .pursuit-target-bar { flex-basis: 120px; height: 5px; }
 /* The Unpaid tag doubles as a "make payable" button for admins. */
 button.tag-btn { margin: 0; cursor: pointer; box-shadow: none; font-family: inherit; line-height: inherit; }
 button.unpaid-tag.tag-btn:hover { color: #1f6b3a; background: #e3f3e8; border-color: #a9d8b8; }
 button.unpaid-tag.tag-btn:hover::after { content: " → Payable"; }
+
+/* Open Tasks columns: the header row and each task line up. */
+.pursuit-tasks { --task-cols: 14px minmax(0, 1fr) 60px 60px; }
+.pursuit-tasks.with-cost { --task-cols: 14px minmax(0, 1fr) 60px 60px 80px 90px; }
+.pursuit-task > button.close-btn, .pursuit-task > button.small { width: 92px; }
+.pursuit-task-cols { display: flex; gap: 12px; padding: 0 0 6px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-muted); }
+.pursuit-task-cols[hidden] { display: none; }
+.pursuit-task-cols > div { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: var(--task-cols); gap: 10px; padding: 0 4px; }
+.pursuit-task-cols > span { flex: 0 0 92px; }
+.pursuit-task-cols .num { text-align: right; }
+.pursuit-tasks:not(.with-cost) .cost-col { display: none; }
+@media (max-width: 640px) {
+  .pursuit-tasks.with-cost { --task-cols: 14px minmax(0, 1fr) 44px 70px 80px; }
+  .pursuit-task-who, .pursuit-task-cols .num:nth-child(3) { display: none; }
+  .pursuit-tasks:not(.with-cost) { --task-cols: 14px minmax(0, 1fr) 50px; }
+}

@@ -42,7 +42,7 @@
   <div class="pursuits-layout" id="pursuitsLayout">
     <section class="pursuit-main" id="pursuitMain">
 
-      <div class="card pursuit-tasks">
+      <div class="card pursuit-tasks" id="pursuitTasksCard">
         <div class="pursuit-tasks-head">
           <h2>Open Tasks <span class="section-meta" id="openCount"></span></h2>
           <div class="pursuit-tasks-actions">
@@ -50,6 +50,7 @@
             <button type="button" class="small secondary" id="editTasksBtn">Edit Tasks</button>
           </div>
         </div>
+        <div class="pursuit-task-cols" id="taskCols"><div><span></span><span>Task</span><span class="num">People</span><span class="num">Hours</span><span class="num cost-col">Cost</span><span class="num cost-col">Budget</span></div><span></span></div>
         <div id="openTasks"></div>
         <button type="button" class="pursuit-closed-toggle" id="closedTasksToggle" hidden></button>
         <div id="closedTasks" hidden></div>
@@ -87,7 +88,7 @@
           <select id="pursuitPm"></select>
         </div>
         <div class="field" id="pursuitTargetField" style="grid-column:1;">
-          <label for="pursuitTarget">Target cost <span class="field-optional">at pay rates</span></label>
+          <label for="pursuitTarget">Budget <span class="field-optional">at pay rates</span></label>
           <input type="number" id="pursuitTarget" min="0" step="100" placeholder="None" />
         </div>
         <div class="field field-wide">
@@ -111,7 +112,7 @@
       <button type="button" id="tasksModalClose" class="icon-btn sheet-close" aria-label="Close">&times;</button>
     </div>
     <div class="sheet-body">
-      <div class="edit-tasks-head"><span>Task</span><span class="num">Hours</span><span class="num target-col">Target $</span><span>Closed</span><span></span></div>
+      <div class="edit-tasks-head"><span>Task</span><span class="num">Hours</span><span class="num target-col">Budget $</span><span>Closed</span><span></span></div>
       <div id="tasksModalRows"></div>
       <button type="button" id="tasksModalAdd" class="link-btn">+ Add Task</button>
     </div>
