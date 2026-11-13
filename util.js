@@ -26,12 +26,19 @@ const PROJECT_COLORS = [
   "#2f6db5", "#2e8b57", "#c0632a", "#8e44ad", "#b8860b",
   "#c0392b", "#16808a", "#6d4c41", "#d14d8a", "#4a5d23",
 ];
-// Swatches offered in Edit project / Edit Pursuit: the defaults, brand
-// tones, and lighter and deeper versions of the main hues.
+// Swatches offered in Edit project / Edit Pursuit, by color family (dark to
+// light within each): reds, oranges, golds, greens, teals, blues, purples,
+// pinks, then browns and gray.
 export const PROJECT_COLOR_CHOICES = [
-  ...PROJECT_COLORS, "#6e3073", "#4a5fa8", "#2a8a8a", "#6f6874",
-  "#1f3f73", "#5b8fd6", "#3fa66b", "#7a9a3a", "#d4a017", "#e08a3c",
-  "#e05a4f", "#8a2235", "#ef7fb1", "#a974c9", "#2bb0b8", "#9b6b4f",
+  "#8a2235", "#c0392b", "#e05a4f",
+  "#c0632a", "#e08a3c",
+  "#b8860b", "#d4a017",
+  "#4a5d23", "#7a9a3a", "#2e8b57", "#3fa66b",
+  "#16808a", "#2a8a8a", "#2bb0b8",
+  "#1f3f73", "#2f6db5", "#4a5fa8", "#5b8fd6",
+  "#6e3073", "#8e44ad", "#a974c9",
+  "#d14d8a", "#ef7fb1",
+  "#6d4c41", "#9b6b4f", "#6f6874",
 ];
 
 // Pursuits are marked with a diamond (projects with a dot), so a Pursuit can
