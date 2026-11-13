@@ -7,7 +7,7 @@ import {
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
-import { createExpenseEditor, expenseLabel, expenseStatus, expenseClientPaid } from "./expenses.js";
+import { createExpenseEditor, expenseLabel, expenseStatus, expenseClientPaid, trackedOnly } from "./expenses.js";
 import { createMessageBoard } from "./board.js";
 
 const selectedPersonId = requireSession();
@@ -111,7 +111,7 @@ function render() {
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid);
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedUnpaid);
-  const owedBack = myExpenses().filter((e) => !e.declined && !expenseClientPaid(e, invoices)).reduce((t, e) => t + Number(e.amount || 0), 0);
+  const owedBack = myExpenses().filter((e) => !e.declined && !expenseClientPaid(e, invoices) && !trackedOnly(e, projects)).reduce((t, e) => t + Number(e.amount || 0), 0);
   document.getElementById("statExpenses").textContent = formatCurrency(owedBack);
   document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid + owedBack);
   renderPay(myEntries);
@@ -124,7 +124,7 @@ function render() {
   const myOpenExpenses = myExpenses().filter((e) => !e.invoiced);
   // Only what's relevant to you: billable projects you're assigned to, have
   // logged on, have subtasks or open expenses on; internal projects (e.g.
-  // RFPs) only when you have subtasks there.
+  // RFPs) only when you have subtasks or expenses waiting to be paid there.
   const myProjectIds = [...new Set([
     ...assignments.filter((a) => a.personId === personId).map((a) => a.projectId),
     ...myEntries.map((e) => e.projectId),
@@ -132,7 +132,8 @@ function render() {
     ...myOpenExpenses.map((e) => e.projectId),
   ])].filter((id) => {
     const p = projects.find((x) => x.id === id);
-    return p && (!isInternal(p) || myItems.some((d) => d.projectId === id));
+    return p && (!isInternal(p) || myItems.some((d) => d.projectId === id)
+      || myOpenExpenses.some((e) => e.projectId === id && !e.paid && !e.declined && !trackedOnly(e, projects)));
   });
   // Same order as everywhere else: newest projects first.
   const order = sortProjects(projects).map((p) => p.id);
@@ -250,12 +251,13 @@ function renderPay(myEntries) {
   const billable = myEntries.filter((e) => !pursuitOf(e) || !!projectOf(e.projectId)?.payable);
   const hoursOf = (entries) => entries.reduce((s, e) => s + Number(e.hours || 0), 0);
 
-  // Your expenses go on the same invoices as your hours.
-  const mine = myExpenses().filter((e) => !e.declined);
+  // Your expenses go on the same invoices as your hours (Pursuits: paid
+  // with the hours; unpaid Pursuits' aren't paid back, so they're left out).
+  const mine = myExpenses().filter((e) => !e.declined && !trackedOnly(e, projects));
 
   // Not invoiced yet: one row per project.
   const open = billable.filter((e) => !e.invoiced && !e.paid && !e.declined);
-  const openExp = mine.filter((e) => !e.invoiced);
+  const openExp = mine.filter((e) => !e.invoiced && !e.paid);
   const upcoming = [...new Set([...open, ...openExp].map((e) => e.projectId))].map((pid) => ({
     date: "", number: "", projectId: pid,
     entries: open.filter((e) => e.projectId === pid),
@@ -281,10 +283,18 @@ function renderPay(myEntries) {
     if (!paidPursuits.has(k)) paidPursuits.set(k, []);
     paidPursuits.get(k).push(e);
   });
-  const pursuitRows = [...paidPursuits.values()].map((entries) => ({
-    date: entries[0].paidDate || "", number: "", projectId: entries[0].projectId, entries, exps: [], paid: true,
-    status: [entries[0].paidDate ? `Paid ${shortDate(entries[0].paidDate)}` : "Paid", "paid"],
-  }));
+  mine.filter((e) => e.paid && !e.invoiced).forEach((e) => {
+    const k = `${e.projectId}|${String(e.paidDate || "").slice(0, 10)}`;
+    if (!paidPursuits.has(k)) paidPursuits.set(k, []);
+    paidPursuits.get(k).push({ ...e, isExpense: true });
+  });
+  const pursuitRows = [...paidPursuits.values()].map((items) => {
+    const entries = items.filter((x) => !x.isExpense);
+    return {
+      date: items[0].paidDate || "", number: "", projectId: items[0].projectId, entries, exps: items.filter((x) => x.isExpense), paid: true,
+      status: [items[0].paidDate ? `Paid ${shortDate(items[0].paidDate)}` : "Paid", "paid"],
+    };
+  });
   const invoiced = [...byInvoice].map(([k, { entries, exps }]) => {
     const first = entries[0] || exps[0];
     const inv = invoices.find((i) => i.id === k);
@@ -361,28 +371,30 @@ function toggleCard(head) {
 const openExpenseLists = new Set(); // project ids with the expense list open
 function cardFooterHtml(project) {
   const internal = isInternal(project);
-  const all = internal ? [] : myExpenses().filter((e) => e.projectId === project.id);
+  const all = myExpenses().filter((e) => e.projectId === project.id);
   const sum = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
-  const open = all.filter((e) => !e.invoiced && !e.declined);
-  const shown = all.filter((e) => showCompleted || !e.invoiced)
-    .sort((a, b) => (!!a.invoiced - !!b.invoiced) || (a.date < b.date ? 1 : -1));
+  // Done: invoiced, or paid (Pursuits).
+  const done = (e) => !!e.invoiced || !!e.paid;
+  const open = all.filter((e) => !done(e) && !e.declined);
+  const shown = all.filter((e) => showCompleted || !done(e))
+    .sort((a, b) => (done(a) - done(b)) || (a.date < b.date ? 1 : -1));
   const listOpen = openExpenseLists.has(project.id) && shown.length > 0;
   const summary = shown.length
-    ? `<button type="button" class="link-btn pc-exp-toggle" data-action="toggle-expenses" data-project-id="${project.id}" aria-expanded="${listOpen}">${shown.length} expense${shown.length === 1 ? "" : "s"} · ${formatCurrency(sum(open))} not invoiced <span class="chev ${listOpen ? "up" : ""}" aria-hidden="true">&#9662;</span></button>`
+    ? `<button type="button" class="link-btn pc-exp-toggle" data-action="toggle-expenses" data-project-id="${project.id}" aria-expanded="${listOpen}">${shown.length} expense${shown.length === 1 ? "" : "s"} · ${formatCurrency(sum(open))} ${internal ? (project.payable ? "not paid" : "tracked") : "not invoiced"} <span class="chev ${listOpen ? "up" : ""}" aria-hidden="true">&#9662;</span></button>`
     : "";
   const shortDay = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `<div class="pc-foot">
       <button type="button" class="link-btn" data-action="add-subtask" data-project-id="${project.id}">+ Subtask</button>
-      ${internal ? "" : `<button type="button" class="link-btn" data-action="add-expense" data-project-id="${project.id}">+ Expense</button>`}
+      <button type="button" class="link-btn" data-action="add-expense" data-project-id="${project.id}">+ Expense</button>
       ${summary}
     </div>
     ${listOpen ? `<div class="pc-subs pc-expenses">${shown.map((e) => {
-      const [status, cls] = expenseStatus(e, invoices);
-      return `<div class="pc-exp-row ${e.invoiced ? "done" : ""}">
+      const [status, cls] = expenseStatus(e, invoices, project);
+      return `<div class="pc-exp-row ${done(e) ? "done" : ""}">
         <div class="pc-sub-name" title="${esc(expenseLabel(e, project))}"><span>${esc(expenseLabel(e, project))}${e.declined && e.declineReason ? ` <span class="declined-note inline">${esc(e.declineReason)}</span>` : ""}</span></div>
         <span class="pc-exp-when">${shortDay(e.date)} &middot; ${formatCurrency(e.amount)}</span>
         <span class="pay-status ${cls}">${status}</span>
-        <span class="pc-exp-edit">${!e.approved ? `<button type="button" class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}</span>
+        <span class="pc-exp-edit">${!e.approved || (trackedOnly(e, projects) && !e.paid) ? `<button type="button" class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}</span>
       </div>`;
     }).join("")}</div>` : ""}`;
 }
@@ -458,10 +470,10 @@ const itemEditor = createItemEditor({
 const expenseEditor = createExpenseEditor({
   getData: () => ({ people, projects }),
   sessionPersonId: selectedPersonId,
-  // Billable projects you're on.
-  projectChoices: () => sortProjects(projects.filter((p) => !isInternal(p) && (
+  // Billable projects you're on, and open Pursuits.
+  projectChoices: () => sortProjects(projects.filter((p) => (isInternal(p) ? !p.closed : (
     assignments.some((a) => a.projectId === p.id && a.personId === selectedPersonId)
-    || p.pmPersonId === selectedPersonId))),
+    || p.pmPersonId === selectedPersonId)))),
   canPickPayer: () => false,
 });
 

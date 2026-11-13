@@ -77,11 +77,11 @@ export function createApprovals({ getData, sessionPersonId }) {
     const { projects } = getData();
     const internalIds = new Set(projects.filter(isInternal).map((p) => p.id));
     const waiting = (e) => !!e.approved === approved && !e.invoiced && !e.declined && ids.has(e.projectId);
-    // Pursuit hours only on payable Pursuits, until they're paid.
+    // Pursuit hours and expenses only on payable Pursuits, until they're paid.
     const payableIds = new Set(projects.filter((p) => isInternal(p) && p.payable).map((p) => p.id));
     const counts = (e) => !internalIds.has(e.projectId) || (payableIds.has(e.projectId) && !e.paid);
     const hours = timeEntries.filter((e) => waiting(e) && counts(e));
-    const exps = expenses.filter((e) => e.kind !== "sub" && waiting(e))
+    const exps = expenses.filter((e) => e.kind !== "sub" && waiting(e) && counts(e))
       .map((e) => ({ ...e, isExpense: true, hours: 0, personId: e.personId || e.createdByPersonId }));
     return [...hours, ...exps].sort((a, b) => (a.date < b.date ? -1 : 1));
   }

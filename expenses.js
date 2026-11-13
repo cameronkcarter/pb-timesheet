@@ -4,6 +4,13 @@
 import { Expenses, Settings } from "./db.js";
 import { showToast, closeOnBackdropClick, esc, formatCurrency, todayISO, confirmDialog, projectShortName } from "./util.js";
 import { notifyEntries } from "./notifications.js";
+import { isInternal } from "./rates.js";
+
+// An expense on an unpaid Pursuit: tracked only, never paid back.
+export const trackedOnly = (e, projects) => {
+  const p = projects.find((x) => x.id === e.projectId);
+  return isInternal(p) && !p.payable;
+};
 
 // Expense categories are set by admins (Staff > Default Expense Rates, saved as
 // settings/app.expenseCategories). Each is { name, group, unit, rate, receipt }:
@@ -73,9 +80,14 @@ export function expenseLabel(e, project) {
 // (marked paid on Invoices), it shows "Client paid". `reimbursed` is from
 // before that, when expenses were marked reimbursed one by one.
 export const expenseClientPaid = (e, invoices = []) =>
-  !!e.reimbursed || (!!e.invoiceId && !!invoices.find((i) => i.id === e.invoiceId)?.paid);
+  !!e.reimbursed || !!e.paid || (!!e.invoiceId && !!invoices.find((i) => i.id === e.invoiceId)?.paid);
 
-export function expenseStatus(e, invoices = []) {
+// project (optional): Pursuit expenses have no invoice or client.
+export function expenseStatus(e, invoices = [], project = null) {
+  if (isInternal(project)) {
+    if (!project.payable && !e.paid) return ["Not paid back", "unsynced"];
+    if (e.paid) return [e.paidDate ? `Paid ${new Date(e.paidDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "Paid", "paid"];
+  }
   if (expenseClientPaid(e, invoices)) return ["Client paid", "paid"];
   if (e.invoiced) return ["Invoiced", "invoiced"];
   if (e.approved) return ["Approved", "paid"];
@@ -227,10 +239,12 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
   function updateReceipt() {
     const { projects } = getData();
     const project = projects.find((p) => p.id === projectSelect.value);
-    const on = kind === "project" && !!project && !!info(category.value)?.receipt;
+    const on = kind === "project" && !!project && (!!info(category.value)?.receipt || (isInternal(project) && !project.payable));
     receipt.style.display = on ? "" : "none";
     if (!on) return;
-    receipt.textContent = `Save the receipt in the ${projectShortName(project)} project folder.`;
+    receipt.textContent = isInternal(project) && !project.payable
+      ? "Unpaid Pursuit: this is tracked, not paid back."
+      : `Save the receipt in the ${projectShortName(project)} project folder.`;
   }
 
   function updateCost() {
@@ -355,6 +369,8 @@ export function createExpenseEditor({ getData, sessionPersonId, projectChoices, 
       };
       // Editing a declined expense resubmits it.
       if (editing && editing.declined) Object.assign(data, { declined: false, declineReason: null });
+      // Unpaid Pursuits: nothing to approve, it's only tracked.
+      if (!editing && trackedOnly(data, getData().projects)) Object.assign(data, { approved: true, approvedDate: new Date().toISOString() });
     }
     try {
       if (editing) await Expenses.update(editing.id, data);

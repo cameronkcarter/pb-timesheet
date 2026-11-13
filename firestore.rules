@@ -157,8 +157,17 @@ service cloud.firestore {
     }
 
     // Project expenses (staff add their own; admins/PMs approve, record
-    // subconsultant invoices, invoice them and mark them reimbursed).
+    // subconsultant invoices, invoice them and mark them reimbursed). On an
+    // unpaid Pursuit an expense is only tracked: approved when added, and its
+    // owner can edit or delete it until it's paid.
     match /expenses/{id} {
+      function myTrackedExpense(data) {
+        return data.personId == myPersonId()
+          && data.kind == "project"
+          && isInternal(data.projectId) && !isPayablePursuit(data.projectId)
+          && data.get("invoiced", false) == false
+          && data.get("paid", false) == false;
+      }
       function myOpenExpense(data) {
         return data.personId == myPersonId()
           && data.kind == "project"
@@ -168,16 +177,17 @@ service cloud.firestore {
       }
 
       allow read: if isStaff();
-      allow create: if isAdmin() || (isStaff() && myOpenExpense(request.resource.data));
+      allow create: if isAdmin() || (isStaff() && (myOpenExpense(request.resource.data) || myTrackedExpense(request.resource.data)));
       allow update: if isAdmin()
         || (isStaff() && myOpenExpense(resource.data) && myOpenExpense(request.resource.data))
+        || (isStaff() && myTrackedExpense(resource.data) && myTrackedExpense(request.resource.data))
         // The project's manager: approve, decline or fix it before it's invoiced.
         || (isPmOf(resource.data.projectId)
             && resource.data.get("invoiced", false) == false
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               "approved", "approvedDate", "declined", "declineReason", "description",
               "category", "date", "quantity", "rate", "unit", "amount", "personId"]));
-      allow delete: if isAdmin() || (isStaff() && myOpenExpense(resource.data));
+      allow delete: if isAdmin() || (isStaff() && (myOpenExpense(resource.data) || myTrackedExpense(resource.data)));
     }
 
     match /timeEntries/{id} {

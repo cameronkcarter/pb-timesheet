@@ -22,6 +22,7 @@ import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName 
 import { isInternal, payRateOf, personPayRate } from "./rates.js";
 import { removeProject } from "./project-editor.js";
 import { createProjectPicker } from "./project-picker.js";
+import { createExpenseEditor, expenseLabel, expenseStatus, trackedOnly } from "./expenses.js";
 
 const sessionPersonId = requireSession();
 const $ = (id) => document.getElementById(id);
@@ -58,7 +59,7 @@ if (sessionPersonId) {
   Assignments.listen((d) => { assignments = d; });
   DueDates.listen((d) => { dueDates = d; });
   Invoices.listen((d) => { invoices = d; });
-  Expenses.listen((d) => { expenses = d; });
+  Expenses.listen((d) => { expenses = d; render(); });
 }
 
 const me = () => people.find((p) => p.id === sessionPersonId);
@@ -67,6 +68,9 @@ const current = () => projects.find((p) => p.id === selectedId && isInternal(p))
 const sumHrs = (list) => list.reduce((s, e) => s + Number(e.hours || 0), 0);
 const personName = (id) => people.find((p) => p.id === id)?.name || "—";
 const hoursOn = (filter) => sumHrs(timeEntries.filter((e) => !e.declined && filter(e)));
+const sumAmt = (list) => list.reduce((s, e) => s + Number(e.amount || 0), 0);
+// A Pursuit's expenses (not declined).
+const pursuitExpenses = (p) => expenses.filter((e) => e.projectId === p.id && !e.declined);
 const money = (n) => "$" + Math.round(n || 0).toLocaleString("en-US");
 // What hours cost at pay rate: locked once paid, else the current rate.
 const costOf = (list) => list.reduce((s, e) => s + Number(e.hours || 0)
@@ -113,6 +117,7 @@ function render() {
   if (!any) return;
   renderHero();
   renderTasks();
+  renderExpenses();
 }
 
 // ---------- Picking one ----------
@@ -134,6 +139,7 @@ function renderHero() {
   hero.hidden = !p;
   if (!p) { hero.innerHTML = ""; return; }
   const entries = timeEntries.filter((e) => e.projectId === p.id && !e.declined);
+  const exps = pursuitExpenses(p);
   const pm = people.find((x) => x.id === p.pmPersonId);
   const byPerson = [...new Set(entries.map((e) => e.personId))]
     .map((id) => ({ id, hrs: sumHrs(entries.filter((e) => e.personId === id)) }))
@@ -144,12 +150,15 @@ function renderHero() {
     const waiting = entries.filter((e) => !e.approved);
     const toPay = entries.filter((e) => e.approved && !e.paid);
     const paid = entries.filter((e) => e.paid);
-    const owed = toPay.reduce((s, e) => s + Number(e.hours || 0) * payRateOf(e, { projects, people }), 0);
+    const expWaiting = exps.filter((e) => !e.approved);
+    const expToPay = exps.filter((e) => e.approved && !e.paid);
+    const owed = toPay.reduce((s, e) => s + Number(e.hours || 0) * payRateOf(e, { projects, people }), 0) + sumAmt(expToPay);
+    const withExp = (hrsText, list) => hrsText + (list.length ? ` + ${formatCurrency(sumAmt(list))} expenses` : "");
     payLine = `<div class="pursuit-pay-line">
-      <span>${fmtHrs(sumHrs(waiting))} hrs waiting for ${pm ? esc(pm.name) : "the PM"}</span>
-      <span>${fmtHrs(sumHrs(toPay))} hrs approved, not paid</span>
-      <span>${fmtHrs(sumHrs(paid))} hrs paid</span>
-      ${isAdmin() && toPay.length ? `<button type="button" class="small" data-action="mark-paid">Mark ${fmtHrs(sumHrs(toPay))} hrs paid (${formatCurrency(owed)})</button>` : ""}
+      <span>${withExp(`${fmtHrs(sumHrs(waiting))} hrs`, expWaiting)} waiting for ${pm ? esc(pm.name) : "the PM"}</span>
+      <span>${withExp(`${fmtHrs(sumHrs(toPay))} hrs`, expToPay)} approved, not paid</span>
+      <span>${withExp(`${fmtHrs(sumHrs(paid))} hrs`, exps.filter((e) => e.paid))} paid</span>
+      ${isAdmin() && (toPay.length || expToPay.length) ? `<button type="button" class="small" data-action="mark-paid">Mark paid (${formatCurrency(owed)})</button>` : ""}
     </div>`;
   }
   hero.style.setProperty("--c", projectColor(p.id));
@@ -170,9 +179,10 @@ function renderHero() {
     </div>
     <div class="pursuit-hero-total"><span><b>${fmtHrs(sumHrs(entries))}</b> hrs</span>
       ${isAdmin() ? `<span class="pursuit-cost ${p.payable ? "" : "value"}" title="${p.payable ? "Hours × each person's pay rate" : "What these hours would cost at each person's pay rate"}"><b>${money(costOf(entries))}</b> ${p.payable ? "cost" : "time value"}</span>` : ""}
+      ${exps.length ? `<span class="pursuit-cost budget" title="Expenses on this Pursuit"><b>${money(sumAmt(exps))}</b> expenses</span>` : ""}
       ${isAdmin() && p.targetCost ? `<span class="pursuit-cost budget"><b>${money(p.targetCost)}</b> budget</span>` : ""}
     </div>
-    ${isAdmin() ? budgetBarHtml(costOf(entries), Number(p.targetCost || 0)) : ""}
+    ${isAdmin() ? budgetBarHtml(costOf(entries) + sumAmt(exps), Number(p.targetCost || 0)) : ""}
     ${byPerson.length ? `<div class="pursuit-people">${byPerson.map((x) => `<span class="pursuit-person">${esc(personName(x.id))} <b>${fmtHrs(x.hrs)}</b></span>`).join("")}</div>` : ""}
     ${payLine}`;
 }
@@ -201,10 +211,12 @@ $("pursuitHero").addEventListener("click", async (e) => {
     if (action === "mark-paid") {
       const ctx = { projects, people };
       const toPay = timeEntries.filter((x) => x.projectId === p.id && x.approved && !x.paid && !x.declined);
+      const expToPay = pursuitExpenses(p).filter((x) => x.approved && !x.paid);
       const total = toPay.reduce((s, x) => s + Number(x.hours || 0) * payRateOf(x, ctx), 0);
-      if (!(await confirmDialog(`${fmtHrs(sumHrs(toPay))} hrs, ${formatCurrency(total)} at each person's current pay rate (locked in once paid).`,
-        { title: "Mark these hours paid?", confirmText: "Mark Paid" }))) return;
-      await TimeEntries.markPaid(toPay.map((x) => x.id), Object.fromEntries(toPay.map((x) => [x.id, payRateOf(x, ctx)])));
+      if (!(await confirmDialog(`${fmtHrs(sumHrs(toPay))} hrs, ${formatCurrency(total)} at each person's current pay rate (locked in once paid)${expToPay.length ? `, plus ${formatCurrency(sumAmt(expToPay))} in expenses paid back` : ""}.`,
+        { title: "Mark these paid?", confirmText: "Mark Paid" }))) return;
+      if (toPay.length) await TimeEntries.markPaid(toPay.map((x) => x.id), Object.fromEntries(toPay.map((x) => [x.id, payRateOf(x, ctx)])));
+      if (expToPay.length) await Expenses.markPaid(expToPay.map((x) => x.id));
       showToast("Marked paid.");
     }
   } catch (err) {
@@ -280,6 +292,50 @@ $("closedTasksToggle").addEventListener("click", () => { showClosedTasks = !show
     showToast("Error: " + err.message);
   }
 }));
+
+// ---------- Expenses ----------
+// Anyone can add one. Unpaid Pursuit: tracked, not paid back. Payable: its
+// PM approves it and it's paid back with the hours.
+const expenseEditor = createExpenseEditor({
+  getData: () => ({ people, projects }),
+  sessionPersonId,
+  projectChoices: () => [current(), ...openPursuits()].filter((p, i, a) => p && a.indexOf(p) === i),
+  canPickPayer: () => isAdmin() || current()?.pmPersonId === sessionPersonId,
+});
+
+function canEditExpense(e, p) {
+  if (e.paid) return false;
+  if (isAdmin() || p.pmPersonId === sessionPersonId) return true;
+  return e.personId === sessionPersonId && (!e.approved || trackedOnly(e, projects));
+}
+
+function renderExpenses() {
+  const p = current();
+  if (!p) return;
+  const list = expenses.filter((e) => e.projectId === p.id).sort((a, b) => (a.date < b.date ? 1 : -1));
+  $("expenseTotal").textContent = list.length ? formatCurrency(sumAmt(list.filter((e) => !e.declined))) : "";
+  const day = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  $("pursuitExpenses").innerHTML = list.length
+    ? list.map((e) => {
+      const [status, cls] = expenseStatus(e, invoices, p);
+      return `<div class="pursuit-expense ${e.declined ? "declined" : ""}">
+        <span class="when">${day(e.date)}</span>
+        <span class="what">${esc(expenseLabel(e, p))}</span>
+        <span class="who">${e.personId ? esc(personName(e.personId)) : "Company"}</span>
+        <span class="amt">${formatCurrency(e.amount)}</span>
+        <span><span class="pay-status ${cls}">${esc(status)}</span></span>
+        <span>${canEditExpense(e, p) ? `<button type="button" class="link-btn" data-action="edit-expense" data-id="${e.id}">Edit</button>` : ""}</span>
+      </div>`;
+    }).join("")
+    : '<div class="empty">No expenses yet.</div>';
+}
+
+$("addExpenseBtn").addEventListener("click", () => expenseEditor.open(null, { kind: "project", projectId: selectedId }));
+$("pursuitExpenses").addEventListener("click", (e) => {
+  const btn = e.target.closest('[data-action="edit-expense"]');
+  const rec = btn && expenses.find((x) => x.id === btn.dataset.id);
+  if (rec) expenseEditor.open(rec);
+});
 
 // ---------- Edit Tasks ----------
 // Rename, add, close/reopen, and remove tasks with no hours.
@@ -477,9 +533,11 @@ $("pursuitSave").addEventListener("click", async () => {
           : `Hours will be paid at each person's pay rate once ${personName(pmPersonId)} approves them.`,
         { title: `Make ${name} payable?`, confirmText: "Make Payable" }))) return;
         for (const x of open.filter((x) => x.approved)) await TimeEntries.update(x.id, { approved: false, approvedDate: null });
+        for (const x of pursuitExpenses(p).filter((x) => x.approved && !x.paid)) await Expenses.update(x.id, { approved: false, approvedDate: null });
       } else {
         if (!(await confirmDialog("Hours already paid stay paid. Other hours won't be paid.", { title: `Make ${name} unpaid?`, confirmText: "Make Unpaid" }))) return;
         for (const x of open.filter((x) => !x.approved)) await TimeEntries.update(x.id, { approved: true, approvedDate: new Date().toISOString() });
+        for (const x of pursuitExpenses(p).filter((x) => !x.approved && !x.paid)) await Expenses.update(x.id, { approved: true, approvedDate: new Date().toISOString() });
       }
     }
     if (isAdmin()) Object.assign(data, { targetCost: Number($("pursuitTarget").value) || null, payable, pmPersonId: payable ? pmPersonId : p.pmPersonId || null });

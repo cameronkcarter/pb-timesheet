@@ -196,6 +196,9 @@ export const TimeEntries = {
 // invoices (kind "sub": subId, description, amount). Approved like hours, then
 // invoiced, and paid back with the person's pay once the client pays (see
 // expenseClientPaid; `reimbursed` is from before that).
+// On Pursuits there's no invoice: on an unpaid Pursuit an expense is only
+// tracked (approved when added, never paid back); on a payable one its PM
+// approves it and an admin marks it paid with the hours (paid, paidDate).
 // { projectId, kind, personId, subId, category, description, date, quantity,
 //   rate, unit (e.g. "mile"; blank for amounts), amount, approved,
 //   approvedDate, declined, declineReason, invoiced,
@@ -218,6 +221,10 @@ export const Expenses = {
   markInvoiced: (ids, invoiceId) => {
     const invoicedDate = new Date().toISOString();
     return Promise.all(ids.map((id) => update("expenses", id, { invoiced: true, invoicedDate, invoiceId })));
+  },
+  markPaid: (ids) => {
+    const paidDate = new Date().toISOString();
+    return Promise.all(ids.map((id) => update("expenses", id, { paid: true, paidDate })));
   },
 };
 

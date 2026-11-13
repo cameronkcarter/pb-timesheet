@@ -4530,3 +4530,16 @@ button.unpaid-tag.tag-btn:hover::after { content: "Make payable"; }
 }
 
 @media (max-width: 640px) { .pursuit-hero-top { flex-wrap: wrap; } }
+
+/* Pursuit expenses */
+.pursuit-expense { display: grid; grid-template-columns: 56px minmax(0, 1fr) 130px 90px 120px 44px; gap: 10px; align-items: center; padding: 9px 4px; border-top: 1px solid var(--border); font-size: 13.5px; }
+.pursuit-expense:first-child { border-top: none; }
+.pursuit-expense .when, .pursuit-expense .who { color: var(--text-muted); font-size: 13px; }
+.pursuit-expense .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pursuit-expense .amt { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pursuit-expense.declined { opacity: 0.55; }
+.pursuit-expense .link-btn { margin: 0; }
+@media (max-width: 640px) {
+  .pursuit-expense { grid-template-columns: 50px minmax(0, 1fr) 80px 44px; }
+  .pursuit-expense .who, .pursuit-expense > span:nth-child(5) { display: none; }
+}
