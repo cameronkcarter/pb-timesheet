@@ -7,13 +7,18 @@
 // tasks and Pursuits. A Pursuit is Unpaid (hours approve themselves) or
 // Payable (admins only): hours are paid at each person's pay rate once its
 // PM approves them, then an admin marks them paid. See rates.js.
+//
+// Admins also see what the hours cost at each person's pay rate: the real
+// cost on a payable Pursuit, and on an unpaid one what the time would have
+// cost (its "time value"). A Pursuit and each task can have a target cost
+// (targetCost). Pay rates are private, so other staff see only hours.
 import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, Expenses } from "./db.js";
 import {
   esc, fmtHrs, showToast, projectColor, projectShortName, formatCurrency,
   closeOnBackdropClick, confirmDialog, alertDialog, PROJECT_COLOR_CHOICES,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
-import { isInternal, payRateOf } from "./rates.js";
+import { isInternal, payRateOf, personPayRate } from "./rates.js";
 import { removeProject } from "./project-editor.js";
 import { createProjectPicker } from "./project-picker.js";
 
@@ -61,6 +66,18 @@ const current = () => projects.find((p) => p.id === selectedId && isInternal(p))
 const sumHrs = (list) => list.reduce((s, e) => s + Number(e.hours || 0), 0);
 const personName = (id) => people.find((p) => p.id === id)?.name || "—";
 const hoursOn = (filter) => sumHrs(timeEntries.filter((e) => !e.declined && filter(e)));
+const money = (n) => "$" + Math.round(n || 0).toLocaleString("en-US");
+// What hours cost at pay rate: locked once paid, else the current rate.
+const costOf = (list) => list.reduce((s, e) => s + Number(e.hours || 0)
+  * (e.paid && e.rate != null ? Number(e.rate) : personPayRate(people.find((x) => x.id === e.personId))), 0);
+// "$1,200 of $2,000" with a bar; over target turns red.
+function targetHtml(cost, target, cls = "") {
+  if (!target) return "";
+  const pct = Math.min(100, (cost / target) * 100);
+  const over = cost > target;
+  return `<div class="pursuit-target ${cls} ${over ? "over" : ""}"><span class="pursuit-target-bar"><span style="width:${pct}%"></span></span>
+    <span>${over ? `${money(cost - target)} over` : `${money(target - cost)} left`} of ${money(target)} target</span></div>`;
+}
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
 
 // The standing categories first (RFPs at the top), then the rest A–Z.
@@ -139,7 +156,9 @@ function renderHero() {
   hero.innerHTML = `
     <div class="pursuit-hero-top">
       <h2>${esc(p.name)}</h2>
-      ${p.payable ? '<span class="pay-tag big">Payable</span>' : '<span class="unpaid-tag big">Unpaid</span>'}
+      ${p.payable ? '<span class="pay-tag big">Payable</span>'
+        : isAdmin() ? '<button type="button" class="unpaid-tag big tag-btn" data-action="make-payable" title="Make it payable">Unpaid</button>'
+        : '<span class="unpaid-tag big">Unpaid</span>'}
       ${p.closed ? '<span class="closed-tag">Closed</span>' : ""}
       <div class="pursuit-hero-actions">
         <button type="button" class="small secondary" data-action="edit-pursuit">Edit Pursuit</button>
@@ -149,7 +168,9 @@ function renderHero() {
       </div>
     </div>
     <div class="pursuit-hero-total"><span><b>${fmtHrs(sumHrs(entries))}</b> hrs</span>
+      ${isAdmin() ? `<span class="pursuit-cost ${p.payable ? "" : "value"}" title="${p.payable ? "Hours × each person's pay rate" : "What these hours would cost at each person's pay rate"}"><b>${money(costOf(entries))}</b> ${p.payable ? "cost" : "time value"}</span>` : ""}
       ${byPerson.map((x) => `<span class="pursuit-person">${esc(personName(x.id))} <b>${fmtHrs(x.hrs)}</b></span>`).join("")}</div>
+    ${isAdmin() ? targetHtml(costOf(entries), Number(p.targetCost || 0)) : ""}
     ${payLine}`;
 }
 
@@ -160,6 +181,11 @@ $("pursuitHero").addEventListener("click", async (e) => {
   const action = btn.dataset.action;
   try {
     if (action === "edit-pursuit") openPursuitModal(p);
+    if (action === "make-payable") {
+      if (!(await confirmDialog("Its hours will be paid at each person's pay rate once a PM approves them, including hours already logged. Next, pick the PM.",
+        { title: `Make ${p.name} payable?`, confirmText: "Continue" }))) return;
+      openPursuitModal(p, { payable: true });
+    }
     if (action === "close-pursuit") {
       const open = tasks.filter((t) => t.projectId === p.id && !t.closed).length;
       if (!(await confirmDialog(`It comes off everyone's Timesheet${open ? `, with its ${open} open task${open === 1 ? "" : "s"}` : ""}. Its hours are kept, and you can reopen it anytime.`,
@@ -194,7 +220,7 @@ function taskRow(t) {
   const detail = open ? `<div class="pursuit-task-detail">${ppl.length
     ? ppl.map((id) => ({ id, hrs: sumHrs(entries.filter((e) => e.personId === id)) }))
       .sort((a, b) => b.hrs - a.hrs)
-      .map((x) => `<div><span>${esc(personName(x.id))}</span><b>${fmtHrs(x.hrs)} hrs</b></div>`).join("")
+      .map((x) => `<div><span>${esc(personName(x.id))}</span><b>${fmtHrs(x.hrs)} hrs${isAdmin() ? ` · ${money(costOf(entries.filter((e) => e.personId === x.id)))}` : ""}</b></div>`).join("")
     : '<div class="appr-muted">No hours yet.</div>'}</div>` : "";
   return `<div class="pursuit-task ${t.closed ? "closed" : ""} ${open ? "open" : ""}" data-task-id="${t.id}">
       <button type="button" class="pursuit-task-main" data-action="expand" aria-expanded="${open}">
@@ -202,11 +228,12 @@ function taskRow(t) {
         <span class="pursuit-task-name">${esc(t.name)}</span>
         <span class="pursuit-task-who">${ppl.length ? `${ppl.length} ${ppl.length === 1 ? "person" : "people"}` : ""}</span>
         <span class="pursuit-task-hrs"><b>${fmtHrs(sumHrs(entries))}</b> hrs</span>
+        ${isAdmin() ? `<span class="pursuit-task-cost">${money(costOf(entries))}</span>` : ""}
       </button>
       ${t.closed
         ? `<button type="button" class="small secondary" data-action="reopen-task">Reopen</button>`
         : `<button type="button" class="close-btn" data-action="close-task" title="Done with it: it comes off the Timesheet, hours are kept">&#10003; Close</button>`}
-    </div>${detail}`;
+    </div>${isAdmin() ? targetHtml(costOf(entries), Number(t.targetCost || 0), "task") : ""}${detail}`;
 }
 
 function renderTasks() {
@@ -260,6 +287,7 @@ function editRow(t = null) {
   return `<div class="edit-task-row" data-task-id="${t?.id || ""}">
     <input type="text" class="edit-task-name" value="${esc(t?.name || "")}" placeholder="Task name, e.g. Moab ATP RFP" aria-label="Task name" />
     <span class="num appr-muted">${t ? fmtHrs(hrs) : ""}</span>
+    ${isAdmin() ? `<input type="number" class="edit-task-target" min="0" step="100" value="${t?.targetCost || ""}" placeholder="—" aria-label="Target cost" />` : ""}
     <label class="edit-task-closed"><input type="checkbox" ${t?.closed ? "checked" : ""} aria-label="Closed" /></label>
     <button type="button" class="icon-btn" data-action="remove-row" ${removable ? "" : `disabled title="${isAdmin() ? "It has hours or subtasks; close it instead" : "Close it instead"}"`} aria-label="Remove task">&times;</button>
   </div>`;
@@ -268,6 +296,7 @@ function editRow(t = null) {
 function openTasksModal(addRow = false) {
   const p = current();
   $("tasksModalName").textContent = p.name;
+  tasksModal.classList.toggle("with-target", isAdmin());
   const list = tasks.filter((t) => t.projectId === p.id).sort((a, b) => (!!a.closed - !!b.closed) || byName(a, b));
   rowsEl.innerHTML = list.map(editRow).join("") + (addRow || !list.length ? editRow() : "");
   tasksModal.style.display = "flex";
@@ -296,6 +325,7 @@ $("tasksModalSave").addEventListener("click", async () => {
   const p = current();
   const rows = [...rowsEl.querySelectorAll(".edit-task-row")].map((r) => ({
     id: r.dataset.taskId, name: r.querySelector(".edit-task-name").value.trim(), closed: r.querySelector(".edit-task-closed input").checked,
+    target: r.querySelector(".edit-task-target") ? Number(r.querySelector(".edit-task-target").value) || null : undefined,
   }));
   const names = rows.filter((r) => r.name).map((r) => r.name.toLowerCase());
   if (new Set(names).size !== names.length) return showToast("Two tasks have the same name.");
@@ -309,9 +339,11 @@ $("tasksModalSave").addEventListener("click", async () => {
         const changes = {};
         if (r.name && r.name !== t.name) changes.name = r.name;
         if (r.closed !== !!t.closed) changes.closed = r.closed;
+        if (r.target !== undefined && r.target !== (t.targetCost || null)) changes.targetCost = r.target;
         if (Object.keys(changes).length) await Tasks.update(t.id, changes);
       } else if (r.name) {
-        await Tasks.add({ projectId: p.id, name: r.name, budget: 0, startDate: null, endDate: null, closed: r.closed, createdByPersonId: sessionPersonId });
+        await Tasks.add({ projectId: p.id, name: r.name, budget: 0, startDate: null, endDate: null, closed: r.closed, createdByPersonId: sessionPersonId,
+          ...(r.target ? { targetCost: r.target } : {}) });
       }
     }
     // Removed rows (only ones with no hours or subtasks could be).
@@ -368,7 +400,7 @@ function renderPay() {
   $("pursuitPm").disabled = !isAdmin();
 }
 
-function openPursuitModal(p) {
+function openPursuitModal(p, { payable: makePayable = false } = {}) {
   editingId = p ? p.id : null;
   $("pursuitModalTitle").textContent = p ? "Edit Pursuit" : "New Pursuit";
   $("pursuitName").value = p ? p.name : "";
@@ -377,14 +409,16 @@ function openPursuitModal(p) {
   const choices = people.filter((x) => !x.inactive || x.id === p?.pmPersonId).sort((a, b) => a.name.localeCompare(b.name));
   $("pursuitPm").innerHTML = '<option value="">Pick a PM</option>' + choices.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
   $("pursuitPm").value = p?.pmPersonId || "";
-  payable = !!p?.payable;
+  payable = !!p?.payable || makePayable;
   renderPay();
+  $("pursuitTargetField").hidden = !isAdmin();
+  $("pursuitTarget").value = p?.targetCost || "";
   pickedColor = p ? projectColor(p.id) : firstFreeColor(null);
   renderSwatches();
   $("pursuitSave").textContent = p ? "Save" : "Create Pursuit";
   $("pursuitRemove").hidden = !p || !isAdmin();
   modal.style.display = "flex";
-  $("pursuitName").focus();
+  (makePayable ? $("pursuitPm") : $("pursuitName")).focus();
 }
 const closeModal = () => { modal.style.display = "none"; };
 
@@ -416,6 +450,7 @@ $("pursuitSave").addEventListener("click", async () => {
       const ref = await Projects.add({
         ...data, internal: true, closed: false, createdByPersonId: sessionPersonId,
         payable: isAdmin() && payable, pmPersonId: isAdmin() && payable ? pmPersonId : null,
+        ...(isAdmin() && Number($("pursuitTarget").value) ? { targetCost: Number($("pursuitTarget").value) } : {}),
       });
       closeModal();
       select(ref.id);
@@ -437,7 +472,7 @@ $("pursuitSave").addEventListener("click", async () => {
         for (const x of open.filter((x) => !x.approved)) await TimeEntries.update(x.id, { approved: true, approvedDate: new Date().toISOString() });
       }
     }
-    if (isAdmin()) Object.assign(data, { payable, pmPersonId: payable ? pmPersonId : p.pmPersonId || null });
+    if (isAdmin()) Object.assign(data, { targetCost: Number($("pursuitTarget").value) || null, payable, pmPersonId: payable ? pmPersonId : p.pmPersonId || null });
     await Projects.update(editingId, data);
     closeModal();
     showToast("Saved.");

@@ -4414,7 +4414,7 @@ button.close-btn:hover { background: var(--plum); color: #fff; border-color: var
 .pursuit-task:first-child { border-top: none; }
 .pursuit-task > button { flex: 0 0 auto; }
 button.pursuit-task-main {
-  flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 80px; gap: 10px; align-items: center;
+  flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 80px auto; gap: 10px; align-items: center;
   margin: 0; padding: 10px 4px; background: none; border: none; box-shadow: none; text-align: left; color: var(--text); font-weight: 400;
 }
 button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
@@ -4430,18 +4430,22 @@ button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
 
 /* Edit Tasks */
 .edit-tasks-head, .edit-task-row { display: grid; grid-template-columns: minmax(0, 1fr) 60px 56px 28px; gap: 10px; align-items: center; }
+.with-target .edit-tasks-head, .with-target .edit-task-row { grid-template-columns: minmax(0, 1fr) 50px 90px 56px 28px; }
+.edit-tasks-head .target-col { display: none; }
+.with-target .edit-tasks-head .target-col { display: block; }
+.edit-task-row input.edit-task-target { margin: 0; text-align: right; }
 .edit-tasks-head { font-size: 12px; color: var(--text-muted); padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
 .edit-task-row { padding: 4px 0; }
 .edit-task-row input[type="text"] { margin: 0; }
 .edit-task-row .num, .edit-tasks-head .num { text-align: right; }
 .edit-task-closed { display: flex; justify-content: center; margin: 0; }
-.edit-tasks-head span:nth-child(3) { text-align: center; }
+.edit-tasks-head span:nth-child(4) { text-align: center; }
 .edit-task-row .icon-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
 /* Edit Pursuit */
 .pursuit-modal { max-width: 560px; }
 .sheet-foot .item-delete { margin-right: auto; }
-.sheet-foot .item-delete[hidden], #pursuitPmField[hidden], #moveCard[hidden] { display: none; }
+.sheet-foot .item-delete[hidden], #pursuitPmField[hidden], #pursuitTargetField[hidden], #moveCard[hidden] { display: none; }
 .pay-choice button[data-value="payable"].on { background: #e3f3e8; color: #1f6b3a; }
 .pay-choice button:disabled { opacity: 0.45; cursor: not-allowed; }
 
@@ -4455,7 +4459,7 @@ button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
 .pursuit-actions button { margin: 0; }
 
 @media (max-width: 800px) {
-  button.pursuit-task-main { grid-template-columns: 14px minmax(0, 1fr) 64px; }
+  button.pursuit-task-main { grid-template-columns: 14px minmax(0, 1fr) 64px auto; }
   .pursuit-task-who { display: none; }
   .move-list .tp-row { grid-template-columns: minmax(0, 1fr) 150px; }
   .move-list .tp-row > :nth-child(2) { display: none; }
@@ -4471,3 +4475,21 @@ button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
 #pursuitColor button.swatch { border-radius: 3px; transform: rotate(45deg) scale(0.8); }
 #pursuitColor button.swatch:hover { transform: rotate(45deg) scale(0.9); }
 #pursuitColor button.swatch.taken { transform: rotate(45deg) scale(0.8); }
+
+/* Cost at pay rates (admins): real on payable Pursuits, "time value" on unpaid. */
+.pursuit-cost { margin-right: 8px; color: #2f5a3e; }
+.pursuit-cost b { font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; margin-right: 2px; }
+.pursuit-cost.value { color: var(--text-muted); }
+.pursuit-cost.value b { color: #6f6874; }
+.pursuit-task-cost { width: 70px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.pursuit-target { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12.5px; color: var(--text-muted); }
+.pursuit-target-bar { flex: 0 0 180px; height: 6px; border-radius: 3px; background: #ece6ef; overflow: hidden; }
+.pursuit-target-bar > span { display: block; height: 100%; background: #3f8f5a; }
+.pursuit-target.over { color: var(--red); font-weight: 600; }
+.pursuit-target.over .pursuit-target-bar > span { background: var(--red); }
+.pursuit-target.task { margin: -4px 0 8px 28px; }
+.pursuit-target.task .pursuit-target-bar { flex-basis: 120px; height: 5px; }
+/* The Unpaid tag doubles as a "make payable" button for admins. */
+button.tag-btn { margin: 0; cursor: pointer; box-shadow: none; font-family: inherit; line-height: inherit; }
+button.unpaid-tag.tag-btn:hover { color: #1f6b3a; background: #e3f3e8; border-color: #a9d8b8; }
+button.unpaid-tag.tag-btn:hover::after { content: " → Payable"; }

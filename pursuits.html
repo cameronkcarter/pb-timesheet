@@ -86,6 +86,10 @@
           <label for="pursuitPm">PM <span class="field-optional">approves the hours</span></label>
           <select id="pursuitPm"></select>
         </div>
+        <div class="field" id="pursuitTargetField" style="grid-column:1;">
+          <label for="pursuitTarget">Target cost <span class="field-optional">at pay rates</span></label>
+          <input type="number" id="pursuitTarget" min="0" step="100" placeholder="None" />
+        </div>
         <div class="field field-wide">
           <label>Color</label>
           <div class="color-swatches" id="pursuitColor" role="radiogroup" aria-label="Color"></div>
@@ -107,7 +111,7 @@
       <button type="button" id="tasksModalClose" class="icon-btn sheet-close" aria-label="Close">&times;</button>
     </div>
     <div class="sheet-body">
-      <div class="edit-tasks-head"><span>Task</span><span class="num">Hours</span><span>Closed</span><span></span></div>
+      <div class="edit-tasks-head"><span>Task</span><span class="num">Hours</span><span class="num target-col">Target $</span><span>Closed</span><span></span></div>
       <div id="tasksModalRows"></div>
       <button type="button" id="tasksModalAdd" class="link-btn">+ Add Task</button>
     </div>
