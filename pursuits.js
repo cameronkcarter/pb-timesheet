@@ -17,6 +17,7 @@ import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, 
 import {
   esc, fmtHrs, showToast, projectColor, projectShortName, formatCurrency,
   closeOnBackdropClick, confirmDialog, alertDialog, PROJECT_COLOR_CHOICES,
+  pinHeader,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { isInternal, payRateOf, personPayRate } from "./rates.js";
@@ -650,3 +651,6 @@ async function moveTasks(src) {
     showToast("Error: " + err.message);
   }
 }
+
+// The Pursuit header stays in view while scrolling.
+pinHeader(document.querySelector(".card.project-switch"), $("pursuitHero"));

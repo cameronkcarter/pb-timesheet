@@ -4543,3 +4543,9 @@ button.unpaid-tag.tag-btn:hover::after { content: "Make payable"; }
   .pursuit-expense { grid-template-columns: 50px minmax(0, 1fr) 80px 44px; }
   .pursuit-expense .who, .pursuit-expense > span:nth-child(5) { display: none; }
 }
+
+/* Projects and Pursuits: the header stays pinned at the top while scrolling
+   (util.js pinHeader sets top so only the picker scrolls away). clip, not
+   hidden, so the card can still stick. */
+.card.project-switch.pin-head { position: sticky; z-index: 30; overflow: clip; }
+.card.project-switch.pin-head.stuck { border-radius: 0 0 10px 10px; box-shadow: 0 6px 16px rgba(60, 30, 70, 0.14); }

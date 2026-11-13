@@ -338,3 +338,15 @@ export const alertDialog = (message, title = "") => showDialog({ title, message 
 
 export const confirmDialog = (message, { title = "", confirmText = "OK", danger = false } = {}) =>
   showDialog({ title, message, confirmText, cancelText: "Cancel", danger });
+
+// Keeps a card's header in view while the page scrolls (Projects and
+// Pursuits): the card sticks with everything above the header (the picker)
+// scrolled off the top. "stuck" adds a shadow while it's pinned.
+export function pinHeader(card, head) {
+  card.classList.add("pin-head");
+  const place = () => { card.style.top = `${-head.offsetTop}px`; mark(); };
+  const mark = () => card.classList.toggle("stuck", !head.hidden && card.getBoundingClientRect().top <= -head.offsetTop + 0.5 && window.scrollY > 0);
+  new ResizeObserver(place).observe(card);
+  window.addEventListener("scroll", mark, { passive: true });
+  place();
+}
