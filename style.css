@@ -4388,9 +4388,10 @@ button.pursuit-closed-toggle[hidden] { display: none; }
 /* The open Pursuit: name, pay, and the hours, big. */
 /* Its header sits in the picker card, like a project's (.project-head). */
 .pursuit-hero.closed { border-left-color: #b9b1c0; background: #faf9fb; }
-.pursuit-hero-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pursuit-hero-top h2 { font-size: 22px; margin: 0; }
-.pursuit-hero-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.pursuit-hero-top { display: flex; align-items: center; gap: 10px; }
+.pursuit-hero-top h2 { font-size: 22px; margin: 0; min-width: 0; }
+.pursuit-hero-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 0 auto; }
+.pursuit-hero-top > .pay-tag, .pursuit-hero-top > .unpaid-tag, .pursuit-hero-top > .closed-tag { flex: 0 0 auto; }
 .pursuit-hero-actions button { margin: 0; }
 .pursuit-hero-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; margin-top: 12px; font-size: 14px; color: var(--text-muted); }
 .pursuit-hero-total > span:first-child { margin-right: 8px; }
@@ -4488,7 +4489,7 @@ button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
 .pursuit-cost.budget { color: var(--text-muted); }
 .pursuit-cost.budget b { color: var(--text); }
 button.pay-tag.tag-btn:hover { color: #6f6874; background: #f1eef3; border-color: #ddd6e2; }
-button.pay-tag.tag-btn:hover::after { content: " → Unpaid"; }
+button.pay-tag.tag-btn:hover::after { content: "Make unpaid"; }
 .pursuit-target { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12.5px; color: var(--text-muted); }
 .pursuit-target-bar { flex: 0 0 180px; height: 6px; border-radius: 3px; background: #ece6ef; overflow: hidden; }
 .pursuit-target-bar > span { display: block; height: 100%; background: #3f8f5a; }
@@ -4497,7 +4498,14 @@ button.pay-tag.tag-btn:hover::after { content: " → Unpaid"; }
 /* The Unpaid tag doubles as a "make payable" button for admins. */
 button.tag-btn { margin: 0; cursor: pointer; box-shadow: none; font-family: inherit; line-height: inherit; }
 button.unpaid-tag.tag-btn:hover { color: #1f6b3a; background: #e3f3e8; border-color: #a9d8b8; }
-button.unpaid-tag.tag-btn:hover::after { content: " → Payable"; }
+button.tag-btn { position: relative; }
+/* The hint floats under the tag so the header doesn't shift. */
+button.tag-btn:hover::after {
+  position: absolute; left: 50%; top: calc(100% + 5px); transform: translateX(-50%); z-index: 5;
+  padding: 3px 8px; border-radius: 6px; white-space: nowrap; font-size: 11.5px; font-weight: 600;
+  background: var(--plum); color: #fff; pointer-events: none;
+}
+button.unpaid-tag.tag-btn:hover::after { content: "Make payable"; }
 
 /* Open Tasks columns: the header row and each task line up. */
 .pursuit-tasks { --task-cols: 14px minmax(0, 1fr) 60px 60px; }
@@ -4514,3 +4522,5 @@ button.unpaid-tag.tag-btn:hover::after { content: " → Payable"; }
   .pursuit-task-who, .pursuit-task-cols .num:nth-child(3) { display: none; }
   .pursuit-tasks:not(.with-cost) { --task-cols: 14px minmax(0, 1fr) 50px; }
 }
+
+@media (max-width: 640px) { .pursuit-hero-top { flex-wrap: wrap; } }

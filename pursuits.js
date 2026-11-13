@@ -157,8 +157,8 @@ function renderHero() {
   hero.innerHTML = `
     <div class="pursuit-hero-top">
       <h2>${esc(p.name)}</h2>
-      ${p.payable ? (isAdmin() ? '<button type="button" class="pay-tag big tag-btn" data-action="make-unpaid" title="Make it unpaid">Payable</button>' : '<span class="pay-tag big">Payable</span>')
-        : isAdmin() ? '<button type="button" class="unpaid-tag big tag-btn" data-action="make-payable" title="Make it payable">Unpaid</button>'
+      ${p.payable ? (isAdmin() && !p.closed ? '<button type="button" class="pay-tag big tag-btn" data-action="make-unpaid" title="Make it unpaid">Payable</button>' : '<span class="pay-tag big">Payable</span>')
+        : isAdmin() && !p.closed ? '<button type="button" class="unpaid-tag big tag-btn" data-action="make-payable" title="Make it payable">Unpaid</button>'
         : '<span class="unpaid-tag big">Unpaid</span>'}
       ${p.closed ? '<span class="closed-tag">Closed</span>' : ""}
       <div class="pursuit-hero-actions">
@@ -375,6 +375,7 @@ const modal = $("pursuitModal");
 let editingId = null; // null = new
 let pickedColor = null;
 let payable = false;
+let editingClosed = false;
 
 // Colors other Pursuits use are crossed out (projects don't count: they're
 // dots, Pursuits are diamonds). All open again if every one is taken.
@@ -403,11 +404,12 @@ function renderPay() {
     const on = (b.dataset.value === "payable") === payable;
     b.classList.toggle("on", on);
     b.setAttribute("aria-checked", on);
-    b.disabled = !isAdmin() && b.dataset.value === "payable" && !payable;
+    // Closed Pursuits keep their pay setting until reopened.
+    b.disabled = (!isAdmin() || editingClosed) && (b.dataset.value === "payable") !== payable;
   });
   $("pursuitPayHint").textContent = payable
     ? "Hours are paid at each person's pay rate once the PM approves them."
-    : `Hours are tracked, not paid.${isAdmin() ? "" : " Only admins can make a Pursuit payable."}`;
+    : `Hours are tracked, not paid.${editingClosed ? " Reopen it to make it payable." : isAdmin() ? "" : " Only admins can make a Pursuit payable."}`;
   $("pursuitPmField").hidden = !payable;
   $("pursuitPm").disabled = !isAdmin();
 }
@@ -423,6 +425,7 @@ function openPursuitModal(p, { payable: pay = null } = {}) {
   $("pursuitPm").innerHTML = '<option value="">Pick a PM</option>' + choices.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
   $("pursuitPm").value = p?.pmPersonId || "";
   payable = pay ?? !!p?.payable;
+  editingClosed = !!p?.closed;
   renderPay();
   $("pursuitTargetField").hidden = !isAdmin();
   $("pursuitTarget").value = p?.targetCost || "";
