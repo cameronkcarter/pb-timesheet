@@ -3,7 +3,7 @@ import {
   formatCurrency, formatDate, showToast,
   todayISO, toISODate, addDays, daysBetween, projectColor, fmtHrs, closeOnBackdropClick, budgetBarHtml, sortProjects, subtaskActionsHtml, esc, confirmDialog,
   projectShortName, hoursBarHtml, hoursScale,
-  pinHeader,
+  compactHeader,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, isSubtask, setItemCompleted, deleteItem } from "./subtasks.js";
@@ -1098,5 +1098,14 @@ document.getElementById("modalSaveTimeline").addEventListener("click", async () 
   }
 });
 
-// The project header stays in view while scrolling.
-pinHeader(document.querySelector(".card.project-switch"), document.getElementById("projectHead"));
+// A slim copy of the project header stays at the top while scrolling.
+compactHeader({
+  head: projectHead,
+  build: () => projectHead.hidden || !projectHeadName.textContent ? null : {
+    color: projectHead.style.getPropertyValue("--c"),
+    name: projectHeadName.textContent,
+    stats: [...projectStats.querySelectorAll(".project-stat-row > div")].map((d) => d.innerHTML),
+    edit: editInfoBtn.hidden ? "" : editInfoBtn.textContent,
+  },
+  onEdit: () => { editInfoBtn.click(); window.scrollTo({ top: 0, behavior: "smooth" }); },
+});

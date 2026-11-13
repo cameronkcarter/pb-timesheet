@@ -17,7 +17,7 @@ import { People, Projects, Tasks, Assignments, TimeEntries, DueDates, Invoices, 
 import {
   esc, fmtHrs, showToast, projectColor, projectShortName, formatCurrency,
   closeOnBackdropClick, confirmDialog, alertDialog, PROJECT_COLOR_CHOICES,
-  pinHeader,
+  compactHeader,
 } from "./util.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { isInternal, payRateOf, personPayRate } from "./rates.js";
@@ -652,5 +652,19 @@ async function moveTasks(src) {
   }
 }
 
-// The Pursuit header stays in view while scrolling.
-pinHeader(document.querySelector(".card.project-switch"), $("pursuitHero"));
+// A slim copy of the Pursuit header stays at the top while scrolling.
+compactHeader({
+  head: $("pursuitHero"),
+  build: () => {
+    const p = current();
+    if (!p) return null;
+    const tag = p.closed ? '<span class="closed-tag">Closed</span>'
+      : p.payable ? '<span class="pay-tag">Payable</span>' : '<span class="unpaid-tag">Unpaid</span>';
+    return {
+      color: projectColor(p.id), name: p.name, tag,
+      stats: [...$("pursuitHero").querySelectorAll(".pursuit-hero-total > span")].map((s) => s.innerHTML),
+      edit: "Edit Pursuit",
+    };
+  },
+  onEdit: () => openPursuitModal(current()),
+});

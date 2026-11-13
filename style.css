@@ -4544,8 +4544,20 @@ button.unpaid-tag.tag-btn:hover::after { content: "Make payable"; }
   .pursuit-expense .who, .pursuit-expense > span:nth-child(5) { display: none; }
 }
 
-/* Projects and Pursuits: the header stays pinned at the top while scrolling
-   (util.js pinHeader sets top so only the picker scrolls away). clip, not
-   hidden, so the card can still stick. */
-.card.project-switch.pin-head { position: sticky; z-index: 30; overflow: clip; }
-.card.project-switch.pin-head.stuck { border-radius: 0 0 10px 10px; box-shadow: 0 6px 16px rgba(60, 30, 70, 0.14); }
+/* Projects and Pursuits: the slim header that slides in at the top once the
+   full one scrolls away (util.js compactHeader). */
+.compact-head {
+  position: fixed; top: 0; z-index: 40; box-sizing: border-box;
+  display: flex; align-items: center; gap: 14px; padding: 9px 16px 9px 14px;
+  background: #fff; border-left: 5px solid var(--c, var(--navy)); border-radius: 0 0 10px 10px;
+  box-shadow: 0 6px 18px rgba(60, 30, 70, 0.16); animation: compact-in 0.15s ease-out;
+}
+.compact-head[hidden] { display: none; }
+@keyframes compact-in { from { transform: translateY(-100%); } to { transform: none; } }
+.compact-head-name { font-weight: 700; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compact-head > .pay-tag, .compact-head > .unpaid-tag, .compact-head > .closed-tag { flex: 0 0 auto; font-size: 11px; padding: 1px 7px; }
+.compact-head-stats { display: flex; align-items: baseline; gap: 16px; margin-left: auto; flex: 0 0 auto; font-size: 12.5px; color: var(--text-muted); white-space: nowrap; }
+.compact-head-stats b { font-size: 14px; color: var(--text); margin-right: 3px; }
+.compact-head-stats .pursuit-cost:not(.value):not(.budget) b { color: #2f5a3e; }
+.compact-head > button { margin: 0; flex: 0 0 auto; }
+@media (max-width: 760px) { .compact-head { display: none !important; } }

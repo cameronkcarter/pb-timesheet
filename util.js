@@ -339,14 +339,39 @@ export const alertDialog = (message, title = "") => showDialog({ title, message 
 export const confirmDialog = (message, { title = "", confirmText = "OK", danger = false } = {}) =>
   showDialog({ title, message, confirmText, cancelText: "Cancel", danger });
 
-// Keeps a card's header in view while the page scrolls (Projects and
-// Pursuits): the card sticks with everything above the header (the picker)
-// scrolled off the top. "stuck" adds a shadow while it's pinned.
-export function pinHeader(card, head) {
-  card.classList.add("pin-head");
-  const place = () => { card.style.top = `${-head.offsetTop}px`; mark(); };
-  const mark = () => card.classList.toggle("stuck", !head.hidden && card.getBoundingClientRect().top <= -head.offsetTop + 0.5 && window.scrollY > 0);
-  new ResizeObserver(place).observe(card);
-  window.addEventListener("scroll", mark, { passive: true });
-  place();
+// Projects and Pursuits: once the page header scrolls out of view, a slim
+// copy (name, a few numbers, Edit) slides in pinned to the top, so you
+// always know what you're looking at. The page doesn't move; the bar floats
+// over it. Not on phones (no room).
+//   head  — the full header; the bar refreshes whenever it changes
+//   build — () => ({ color, name, tag, stats: [html], edit }) from the page
+//   onEdit — what the bar's Edit button does
+export function compactHeader({ head, build, onEdit }) {
+  const bar = document.createElement("div");
+  bar.className = "compact-head";
+  bar.hidden = true;
+  document.body.appendChild(bar);
+  const fill = () => {
+    const d = build();
+    if (!d) { bar.innerHTML = ""; return; }
+    bar.style.setProperty("--c", d.color);
+    bar.innerHTML = `<div class="compact-head-name">${esc(d.name)}</div>${d.tag || ""}
+      <div class="compact-head-stats">${d.stats.map((s) => `<span>${s}</span>`).join("")}</div>
+      ${d.edit ? `<button type="button" class="small secondary">${esc(d.edit)}</button>` : ""}`;
+  };
+  const place = () => {
+    const r = head.getBoundingClientRect();
+    const show = !head.hidden && r.height > 0 && r.bottom < 0;
+    if (show) {
+      const box = head.parentElement.getBoundingClientRect();
+      bar.style.left = `${box.left}px`;
+      bar.style.width = `${box.width}px`;
+      if (bar.hidden) fill();
+    }
+    bar.hidden = !show;
+  };
+  new MutationObserver(() => { if (!bar.hidden) fill(); }).observe(head, { subtree: true, childList: true, characterData: true, attributes: true });
+  bar.addEventListener("click", (e) => { if (e.target.closest("button")) onEdit(); });
+  window.addEventListener("scroll", place, { passive: true });
+  window.addEventListener("resize", place);
 }
