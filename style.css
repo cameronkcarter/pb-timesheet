@@ -4426,8 +4426,13 @@ button.pursuit-task-main:hover { background: #faf7fb; color: var(--text); }
 .pursuit-task-hrs { text-align: right; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
 .pursuit-task-hrs b { font-size: 15px; color: var(--text); }
 .pursuit-task.closed .pursuit-task-name { color: var(--text-muted); font-weight: 500; }
-.pursuit-task-detail { margin: 0 0 10px 28px; padding: 8px 12px; border-radius: 8px; background: #f8f5f9; font-size: 13px; }
-.pursuit-task-detail > div { display: flex; justify-content: space-between; padding: 3px 0; max-width: 360px; }
+.pursuit-task-detail { margin: 0 0 10px; padding: 6px 0; border-radius: 8px; background: #f8f5f9; font-size: 13px; }
+.pursuit-detail-row { display: flex; gap: 12px; padding: 3px 0; }
+.pursuit-detail-row > div { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: var(--task-cols); gap: 10px; padding: 0 4px; }
+.pursuit-detail-row > span { flex: 0 0 92px; }
+.pursuit-detail-row .name { grid-column: 2 / 4; }
+.pursuit-detail-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+.pursuit-tasks:not(.with-cost) .pursuit-detail-row .name { grid-column: 2 / 4; }
 #closedTasks[hidden] { display: none; }
 
 /* Edit Tasks */
@@ -4520,6 +4525,7 @@ button.unpaid-tag.tag-btn:hover::after { content: "Make payable"; }
 @media (max-width: 640px) {
   .pursuit-tasks.with-cost { --task-cols: 14px minmax(0, 1fr) 44px 70px 80px; }
   .pursuit-task-who, .pursuit-task-cols .num:nth-child(3) { display: none; }
+  .pursuit-detail-row .name, .pursuit-tasks:not(.with-cost) .pursuit-detail-row .name { grid-column: 2 / 3; }
   .pursuit-tasks:not(.with-cost) { --task-cols: 14px minmax(0, 1fr) 50px; }
 }
 

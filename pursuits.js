@@ -221,7 +221,8 @@ function taskRow(t) {
   const detail = open ? `<div class="pursuit-task-detail">${ppl.length
     ? ppl.map((id) => ({ id, hrs: sumHrs(entries.filter((e) => e.personId === id)) }))
       .sort((a, b) => b.hrs - a.hrs)
-      .map((x) => `<div><span>${esc(personName(x.id))}</span><b>${fmtHrs(x.hrs)} hrs${isAdmin() ? ` · ${money(costOf(entries.filter((e) => e.personId === x.id)))}` : ""}</b></div>`).join("")
+      // Same columns as the task row: name, hours, cost.
+      .map((x) => `<div class="pursuit-detail-row"><div><span></span><span class="name">${esc(personName(x.id))}</span><span class="num">${fmtHrs(x.hrs)}</span>${isAdmin() ? `<span class="num">${money(costOf(entries.filter((e) => e.personId === x.id)))}</span><span></span>` : ""}</div><span></span></div>`).join("")
     : '<div class="appr-muted">No hours yet.</div>'}</div>` : "";
   return `<div class="pursuit-task ${t.closed ? "closed" : ""} ${open ? "open" : ""}" data-task-id="${t.id}">
       <button type="button" class="pursuit-task-main" data-action="expand" aria-expanded="${open}">
