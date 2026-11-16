@@ -31,47 +31,61 @@
 <main>
   <h1>Invoices</h1>
 
-  <!-- The steps every invoice goes through, left to right; click one to jump to its list. -->
-  <div id="invSteps" class="inv-steps"></div>
-
+  <!-- Invoices move down the page, panel to panel. Each arrow names the
+       step that moves an invoice to the next panel. -->
   <div id="invoiceBody">
     <div class="card inv-card" data-step="ready" id="readyCard">
       <div class="inv-head">
-        <h2>Ready to Invoice</h2>
+        <h2><span class="inv-num">1</span>Ready to Invoice</h2>
       </div>
       <div id="nextBody"></div>
     </div>
 
+    <div class="inv-flow" data-step="outstanding"><span>Generate Invoice</span></div>
+
     <div class="card inv-card" data-step="outstanding" id="sentCard">
       <div class="inv-head">
-        <h2>Sent Invoices</h2>
+        <h2><span class="inv-num">2</span>Sent Invoices</h2>
       </div>
       <div id="pastBody"></div>
     </div>
 
+    <div class="inv-flow" data-step="clientpaid"><span>Client Pays</span></div>
+
     <div class="card inv-card" data-step="clientpaid" id="paid">
       <div class="inv-head">
-        <h2>Paid Invoices</h2>
+        <h2><span class="inv-num">3</span>Client Paid</h2>
         <button type="button" id="markAllStaffPaid" class="small secondary" hidden>Mark All Staff Paid</button>
       </div>
       <div id="paidBody"></div>
-      <button type="button" id="togglePaid" class="link-btn pay-more" style="display:none;"></button>
     </div>
 
-    <div class="card inv-card inv-compact" data-step="sub">
+    <div class="inv-flow" data-step="staffpaid"><span>Staff Paid</span></div>
+
+    <div class="card inv-card" data-step="staffpaid" id="staffPaidCard">
       <div class="inv-head">
-        <h2>Subconsultant Expenses <span class="inv-total" id="subTotal"></span></h2>
-        <button type="button" id="recordSubInvoice" class="small secondary">+ Add Sub Expense</button>
+        <h2><span class="inv-num">4</span>Staff Paid</h2>
+        <button type="button" id="togglePaid" class="link-btn" hidden></button>
       </div>
-      <div id="subBody"></div>
+      <div id="staffPaidBody"></div>
     </div>
 
-    <div class="card inv-card inv-compact inv-void-card" data-step="void" id="voidCard" hidden>
-      <div class="inv-head">
-        <h2>Void Invoices</h2>
-        <button type="button" id="toggleVoid" class="link-btn"></button>
+    <div class="inv-side">
+      <div class="card inv-card inv-compact" data-step="sub">
+        <div class="inv-head">
+          <h2>Subconsultant Expenses</h2>
+          <button type="button" id="recordSubInvoice" class="small secondary">+ Add Sub Expense</button>
+        </div>
+        <div id="subBody"></div>
       </div>
-      <div id="voidBody"></div>
+
+      <div class="card inv-card inv-compact" data-step="void" id="voidCard" hidden>
+        <div class="inv-head">
+          <h2>Void Invoices</h2>
+          <button type="button" id="toggleVoid" class="link-btn"></button>
+        </div>
+        <div id="voidBody"></div>
+      </div>
     </div>
   </div>
 </main>

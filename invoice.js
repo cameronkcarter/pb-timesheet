@@ -36,10 +36,9 @@ const invoiceBody = document.getElementById("invoiceBody");
 const nextBody = document.getElementById("nextBody");
 const pastBody = document.getElementById("pastBody");
 const subBody = document.getElementById("subBody");
-const subTotal = document.getElementById("subTotal");
-const stepsEl = document.getElementById("invSteps");
 const togglePaidBtn = document.getElementById("togglePaid");
 const paidBody = document.getElementById("paidBody");
+const staffPaidBody = document.getElementById("staffPaidBody");
 const voidCard = document.getElementById("voidCard");
 const voidBody = document.getElementById("voidBody");
 const toggleVoidBtn = document.getElementById("toggleVoid");
@@ -420,190 +419,153 @@ function render() {
   renderSubInvoices();
   const next = nextRows();
   const past = invoiceRows();
-  // Sent (waiting on the client), Paid (client paid; staff paid or not), Void.
+  // 2 Sent (waiting on the client) → 3 Client Paid (pay staff) → 4 Staff Paid.
   const sent = past.filter((r) => !r.inv.void && !r.inv.paid);
   const voided = past.filter((r) => r.inv.void);
-  // Paid: ones still needing staff paid first (oldest client payment first),
-  // then staff-paid ones (newest first), hidden unless asked for.
   const toPay = past.filter((r) => !r.inv.void && r.inv.paid && !r.inv.staffPaid)
     .sort((a, b) => (String(a.inv.paidDate || "") < String(b.inv.paidDate || "") ? -1 : 1));
   const staffPaid = past.filter((r) => !r.inv.void && r.inv.paid && r.inv.staffPaid)
     .sort((a, b) => (String(a.inv.staffPaidDate || "") < String(b.inv.staffPaidDate || "") ? 1 : -1));
-  const shownPaid = [...toPay, ...(showPaid ? staffPaid : [])];
 
-  const outstanding = sent.reduce((s, r) => s + r.amount, 0);
   markAllStaffPaidBtn.hidden = toPay.length < 2;
-  togglePaidBtn.style.display = staffPaid.length ? "" : "none";
-  togglePaidBtn.textContent = showPaid ? "Hide staff paid" : `Show staff paid (${staffPaid.length})`;
+  togglePaidBtn.hidden = !staffPaid.length;
+  togglePaidBtn.textContent = showPaid ? "Hide" : `Show (${staffPaid.length})`;
   voidCard.hidden = !voided.length;
   toggleVoidBtn.textContent = showVoid ? "Hide" : `Show (${voided.length})`;
 
-  renderSteps(next, sent, toPay, staffPaid);
-
-  const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
-  // Ready to invoice: a clear button to open each project.
-  const reviewCell = (open) => `<td class="num"><span class="inv-review ${open ? "open" : ""}">${open ? "Close" : "Review"}</span></td>`;
-  const totalRow = (cells) => `<tr class="inv-total-row">${cells}</tr>`;
-  const projectCell = (row) => {
-    const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
-    return `<td class="proj"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(name)}</td>`;
-  };
-
-  nextBody.innerHTML = next.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
-    <thead><tr><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${next.map((row) => {
-      const open = openRow === row.key;
-      // Projects with only unapproved hours show those hours, and no amount yet.
-      const waiting = !row.entries.length;
-      return `<tr class="inv-row next ${open ? "open" : ""}" data-row="${esc(row.key)}">
-        ${projectCell(row)}
-        <td class="num">${fmtHrs(sumHours(waiting ? row.pending : row.entries))}</td>
-        <td class="num ${waiting ? "blank" : ""}">${waiting ? "—" : `<strong>${formatCurrency(row.amount)}</strong>`}</td>
-        <td>${statusHtml(row)}</td>
-        ${reviewCell(open)}
-      </tr>
-      ${open ? `<tr class="inv-detail"><td colspan="5">${detailHtml(row)}</td></tr>` : ""}`;
-    }).join("")}
-    ${totalRow(`<td>Total ready</td>
-      <td class="num">${fmtHrs(next.reduce((s, r) => s + sumHours(r.entries), 0))}</td>
-      <td class="num">${formatCurrency(next.reduce((s, r) => s + r.amount, 0))}</td><td colspan="2"></td>`)}</tbody>
-  </table></div>` : '<div class="empty">Nothing to invoice.</div>';
-
-  const invRow = (row, cells, cols) => {
-    const open = openRow === row.key;
-    return `<tr class="inv-row ${open ? "open" : ""} ${row.inv.void ? "void-row" : ""}" data-row="${esc(row.key)}">
-        <td>${shortDate(row.inv.date)}</td>
-        <td>${esc(row.inv.invoiceNumber)}</td>
-        ${projectCell(row)}
-        ${cells}
-        ${chevCell(open)}
-      </tr>
-      ${open ? `<tr class="inv-detail"><td colspan="${cols}">${detailHtml(row)}</td></tr>` : ""}`;
-  };
   const money = (v) => (v == null ? "—" : formatCurrency(v));
+  const btn = (action, id, label) => `<button type="button" class="small inv-act-btn" data-action="${action}" data-id="${esc(id)}">${label}</button>`;
 
-  // Sent, Paid and Void share the same columns. Paid adds Mark Staff Paid.
-  const COLS = 9;
-  const invTable = (rows, { total = true, action = () => "" } = {}) => `<div class="pay-scroll"><table class="pay-table inv-table">
-    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th class="num">Staff Pay</th><th>Status</th><th></th><th></th></tr></thead>
-    <tbody>${rows.map((row) => invRow(row, `
-        <td class="num">${fmtHrs(row.hours)}</td>
-        <td class="num"><strong>${formatCurrency(row.amount)}</strong></td>
-        <td class="num">${money(staffPayOf(row))}</td>
-        <td>${statusHtml(row)}</td>
-        <td class="num">${action(row)}</td>`, COLS)).join("")}
-    ${total ? totalRow(`<td colspan="3">Total</td>
-        <td class="num">${fmtHrs(rows.reduce((s, r) => s + r.hours, 0))}</td>
-        <td class="num">${formatCurrency(rows.reduce((s, r) => s + r.amount, 0))}</td>
-        <td class="num">${formatCurrency(rows.reduce((s, r) => s + (staffPayOf(r) || 0), 0))}</td><td colspan="3"></td>`) : ""}</tbody>
-  </table></div>`;
+  // Ready to Invoice: no date or # yet. Review opens the project.
+  nextBody.innerHTML = next.length ? gridTable(next.map((row) => {
+    const open = openRow === row.key;
+    // Projects with only unapproved hours show those hours, and no amounts yet.
+    const waiting = !row.entries.length && !row.exps.length;
+    return {
+      cls: `inv-row next ${open ? "open" : ""}`, key: row.key, open, detail: open ? detailHtml(row) : "",
+      cells: [blank(), blank(), projectCell(row),
+        num(fmtHrs(sumHours(waiting ? row.pending : row.entries))),
+        waiting ? blank("num") : num(`<strong>${formatCurrency(row.amount)}</strong>`),
+        waiting ? blank("num") : num(money(staffPayOf(row))),
+        `<td>${statusHtml(row)}</td>`,
+        num(`<span class="inv-review ${open ? "open" : ""}">${open ? "Close" : "Review"}</span>`),
+        "<td></td>"],
+    };
+  }), totalCells(next.filter((r) => r.entries.length || r.exps.length).map((r) => ({ hours: sumHours(r.entries), amount: r.amount, pay: staffPayOf(r) }))))
+    : '<div class="empty">Nothing to invoice.</div>';
 
-  pastBody.innerHTML = sent.length ? invTable(sent)
+  pastBody.innerHTML = sent.length ? invTable(sent, (row) => btn("mark-paid", row.inv.id, "Mark Client Paid"))
     : `<div class="empty">${past.length ? "Nothing outstanding." : "No invoices yet."}</div>`;
 
-  // Paid: client paid ones need staff paid (button right on the row).
-  paidBody.innerHTML = shownPaid.length ? invTable(shownPaid, {
-    action: (row) => (row.inv.staffPaid ? ""
-      : `<button type="button" class="small inv-staff-btn" data-action="staff-paid" data-id="${esc(row.inv.id)}">Mark Staff Paid</button>`),
-  }) : `<div class="empty">${staffPaid.length ? "Staff are paid for every paid invoice." : "No paid invoices yet."}</div>`;
+  paidBody.innerHTML = toPay.length ? invTable(toPay, (row) => btn("staff-paid", row.inv.id, "Mark Staff Paid"))
+    : `<div class="empty">${staffPaid.length ? "Staff are paid for every paid invoice." : "No paid invoices yet."}</div>`;
 
-  voidBody.innerHTML = showVoid && voided.length ? invTable(voided, { total: false }) : "";
+  // Staff Paid only grows, so it stays closed unless asked for.
+  staffPaidBody.innerHTML = !staffPaid.length ? '<div class="empty">None yet.</div>'
+    : showPaid ? invTable(staffPaid) : "";
+
+  voidBody.innerHTML = showVoid && voided.length ? invTable(voided, null, false) : "";
 }
 
-// ---------- Steps ----------
-// Every invoice's path, left to right, each in its own color (matching the
-// status chips and the panels below). Click one to jump to its list.
-const STEPS = [
-  { key: "waiting", label: "Waiting on Approval", target: "readyCard" },
-  { key: "ready", label: "Ready to Invoice", target: "readyCard" },
-  { key: "outstanding", label: "Outstanding", target: "sentCard" },
-  { key: "clientpaid", label: "Client Paid", target: "paid" },
-  { key: "staffpaid", label: "Staff Paid", target: "paid" },
-];
-
-function renderSteps(next, sent, toPay, staffPaid) {
-  const waiting = next.filter((r) => r.pending.length || r.pendingExps.length);
-  const ready = next.filter((r) => r.entries.length || r.exps.length);
-  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  const amt = (rows) => rows.reduce((s, r) => s + r.amount, 0);
-  const vals = {
-    waiting: [fmtHrs(waiting.reduce((s, r) => s + sumHours(r.pending), 0)) + " hrs", plural(waiting.length, "project")],
-    ready: [formatCurrency(amt(ready)), plural(ready.length, "project")],
-    outstanding: [formatCurrency(amt(sent)), plural(sent.length, "invoice")],
-    clientpaid: [formatCurrency(amt(toPay)), `${plural(toPay.length, "invoice")}${toPay.length ? ` · ${formatCurrency(toPay.reduce((s, r) => s + (staffPayOf(r) || 0), 0))} staff pay due` : ""}`],
-    staffpaid: [formatCurrency(amt(staffPaid)), plural(staffPaid.length, "invoice")],
-  };
-  stepsEl.innerHTML = STEPS.map((s) => `<button type="button" class="inv-step" data-step="${s.key}" data-target="${s.target}">
-      <span class="inv-step-label">${s.label}</span>
-      <span class="inv-step-value">${vals[s.key][0]}</span>
-      <span class="inv-step-sub">${vals[s.key][1]}</span>
-    </button>`).join("");
+// ---------- Shared table grid ----------
+// Every panel uses the same nine columns at the same widths, so Date,
+// Invoice #, Project, Hours, Amount, Staff Pay, Status and the action button
+// line up all the way down the page.
+const GRID = `<colgroup><col class="g-date" /><col class="g-num" /><col class="g-proj" /><col class="g-hrs" /><col class="g-amt" /><col class="g-pay" /><col class="g-status" /><col class="g-act" /><col class="g-chev" /></colgroup>`;
+const GRID_HEAD = `<thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th class="num">Staff Pay</th><th>Status</th><th></th><th></th></tr></thead>`;
+const blank = (cls = "") => `<td class="blank ${cls}">—</td>`;
+const num = (html) => `<td class="num">${html}</td>`;
+const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
+function projectCell(row, extra = "") {
+  const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
+  return `<td class="proj"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(name)}${extra}</td>`;
+}
+// Total row from [{ hours, amount, pay }]; Hours/Staff Pay left blank when
+// none of the rows have them.
+function totalCells(items) {
+  if (!items.length) return "";
+  const sum = (k) => items.reduce((s, i) => s + (i[k] || 0), 0);
+  const has = (k) => items.some((i) => i[k] != null);
+  return `<td colspan="3">Total</td>
+    <td class="num">${has("hours") ? fmtHrs(sum("hours")) : ""}</td>
+    <td class="num">${formatCurrency(sum("amount"))}</td>
+    <td class="num">${has("pay") ? formatCurrency(sum("pay")) : ""}</td><td colspan="3"></td>`;
 }
 
-stepsEl.addEventListener("click", (e) => {
-  const btn = e.target.closest(".inv-step");
-  if (!btn) return;
-  if (btn.dataset.step === "staffpaid" && !showPaid) {
-    showPaid = true;
-    render();
-  }
-  document.getElementById(btn.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-});
+// rows: [{ cls, key, open, cells: [9 <td>s], detail }]
+function gridTable(rows, total = "") {
+  return `<div class="pay-scroll"><table class="pay-table inv-table inv-grid">${GRID}${GRID_HEAD}
+    <tbody>${rows.map((r) => `<tr class="${r.cls}" ${r.key ? `data-row="${esc(r.key)}"` : ""}>${r.cells.join("")}</tr>
+      ${r.detail ? `<tr class="inv-detail"><td colspan="9">${r.detail}</td></tr>` : ""}`).join("")}
+    ${total ? `<tr class="inv-total-row">${total}</tr>` : ""}</tbody>
+  </table></div>`;
+}
 
-// What staff are paid for an invoice: everyone's hours on it (no-charge
-// hours too) plus staff expenses paid back with it. null for old imported
-// invoices with no hours on record.
+// Sent, Client Paid, Staff Paid and Void. action(row) → the row's button.
+function invTable(rows, action = null, withTotal = true) {
+  return gridTable(rows.map((row) => {
+    const open = openRow === row.key;
+    return {
+      cls: `inv-row ${open ? "open" : ""} ${row.inv.void ? "void-row" : ""}`, key: row.key, open,
+      detail: open ? detailHtml(row) : "",
+      cells: [`<td>${shortDate(row.inv.date)}</td>`, `<td>${esc(row.inv.invoiceNumber)}</td>`, projectCell(row),
+        num(fmtHrs(row.hours)),
+        num(`<strong>${formatCurrency(row.amount)}</strong>`),
+        num(staffPayOf(row) == null ? "—" : formatCurrency(staffPayOf(row))),
+        `<td>${statusHtml(row)}</td>`,
+        num(action ? action(row) : ""),
+        chevCell(open)],
+    };
+  }), withTotal ? totalCells(rows.map((r) => ({ hours: r.hours, amount: r.amount, pay: staffPayOf(r) }))) : "");
+}
+
+// What staff are paid for an invoice (or the next one): everyone's hours on
+// it (no-charge hours too) plus staff expenses paid back with it. null for old
+// imported invoices with no hours on record.
 function staffPayOf(row) {
   const linked = [...row.entries, ...row.unbilled];
-  const exps = expenses.filter((e) => e.invoiceId === row.inv.id && e.kind !== "sub" && e.personId);
+  const exps = (row.kind === "next" ? row.exps : expenses.filter((e) => e.invoiceId === row.inv.id))
+    .filter((e) => e.kind !== "sub" && e.personId);
   if (!linked.length && !exps.length) return null;
   return paidAmount(linked, { projects, people }) + exps.reduce((s, e) => s + Number(e.amount || 0), 0);
 }
 
 // ---------- Subconsultant expenses ----------
 // Sub expenses (bills received from subconsultants): added here (or on the Projects
-// tab), then billed to the client on that project's next invoice.
+// tab), then billed to the client on that project's next invoice, then paid to
+// the sub. Same grid as the invoices: the sub and description sit under the
+// project; Hours and Staff Pay don't apply.
 function renderSubInvoices() {
   const subs = expenses.filter((e) => e.kind === "sub").sort((a, b) => (a.date < b.date ? 1 : -1));
-  const sum = (list) => list.reduce((t, e) => t + Number(e.amount || 0), 0);
-  const notInvoiced = sum(subs.filter((e) => !e.invoiced));
-  const owed = sum(subs.filter((e) => !e.subPaid));
-  subTotal.textContent = [notInvoiced ? `${formatCurrency(notInvoiced)} not invoiced` : "", owed ? `${formatCurrency(owed)} owed to subs` : ""]
-    .filter(Boolean).join(" · ");
   if (!subs.length) {
     subBody.innerHTML = '<div class="empty">No sub expenses yet.</div>';
     return;
   }
-  subBody.innerHTML = `<div class="pay-scroll"><table class="pay-table inv-table">
-    <thead><tr><th>Date</th><th>Project</th><th>Subconsultant</th><th>Description</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${subs.map((e) => {
-      const project = projects.find((p) => p.id === e.projectId);
-      const sub = (project?.subconsultants || []).find((x) => x.id === e.subId);
-      const inv = e.invoiceId && invoices.find((i) => i.id === e.invoiceId);
-      // Two steps: billed to the client (and the client pays us), and paid to the sub.
-      const status = e.subPaid
-        ? `<span class="pay-status paid">Paid to sub${e.subPaidDate ? " " + shortDate(e.subPaidDate) : ""}</span>`
-        : inv && inv.paid
-          ? '<span class="pay-status pending">Client paid · pay sub</span>'
-          : e.invoiced
-            ? `<span class="pay-status invoiced">${inv ? "On invoice " + esc(inv.invoiceNumber) : "Invoiced"}</span>`
-            : '<span class="pay-status pending">Not invoiced</span>';
-      return `<tr class="inv-row">
-        <td>${shortDate(e.date)}</td>
-        <td class="proj"><span class="pay-dot" style="--c:${project ? projectColor(project.id) : "#c9c2cf"};"></span>${esc(project ? project.name : "Project")}</td>
-        <td>${esc(sub ? sub.name : "—")}</td>
-        <td>${esc(e.description || "—")}</td>
-        <td class="num"><strong>${formatCurrency(e.amount)}</strong></td>
-        <td>${status}</td>
-        <td class="num sub-actions">
-          ${e.subPaid
-            ? `<button type="button" class="link-btn" data-action="sub-unpaid" data-id="${e.id}">Undo</button>`
-            : `<button type="button" class="link-btn" data-action="sub-paid" data-id="${e.id}">Mark paid</button>`}
-          ${e.invoiced ? "" : `<button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`}
-        </td>
-      </tr>`;
-    }).join("")}</tbody>
-  </table></div>`;
+  subBody.innerHTML = gridTable(subs.map((e) => {
+    const project = projects.find((p) => p.id === e.projectId);
+    const sub = (project?.subconsultants || []).find((x) => x.id === e.subId);
+    const inv = e.invoiceId && invoices.find((i) => i.id === e.invoiceId);
+    // Same colors as the invoice steps.
+    const status = e.subPaid
+      ? `<span class="pay-status paid">Sub paid${e.subPaidDate ? " " + shortDate(e.subPaidDate) : ""}</span>`
+      : inv && inv.paid
+        ? '<span class="pay-status due">Client paid</span>'
+        : e.invoiced
+          ? '<span class="pay-status invoiced">Outstanding</span>'
+          : '<span class="pay-status ready">Not invoiced</span>';
+    const what = [sub ? sub.name : "", e.description].filter(Boolean).map(esc).join(" · ");
+    return {
+      cls: "inv-row inv-subrow",
+      cells: [`<td>${shortDate(e.date)}</td>`, inv ? `<td>${esc(inv.invoiceNumber)}</td>` : blank(),
+        projectCell({ project, inv: { projectName: "Project" } }, what ? `<span class="inv-sub-what">${what}</span>` : ""),
+        "<td></td>", num(`<strong>${formatCurrency(e.amount)}</strong>`), "<td></td>",
+        `<td>${status}</td>`,
+        num(e.subPaid
+          ? `<button type="button" class="link-btn" data-action="sub-unpaid" data-id="${e.id}">Undo</button>`
+          : `<button type="button" class="small inv-act-btn" data-action="sub-paid" data-id="${e.id}">Mark Sub Paid</button>`),
+        num(e.invoiced ? "" : `<button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`)],
+    };
+  }), totalCells(subs.map((e) => ({ amount: Number(e.amount || 0) }))));
 }
 
 const subEditor = createExpenseEditor({
@@ -674,10 +636,12 @@ invoiceBody.addEventListener("click", async (e) => {
     render();
     return;
   }
-  // The row's own Mark Staff Paid button (works without opening the row).
-  if (action === "staff-paid" && btn.dataset.id) {
+  // A row's own Mark Client Paid / Mark Staff Paid button (works without
+  // opening the row).
+  if ((action === "staff-paid" || action === "mark-paid") && btn.dataset.id) {
     const inv = invoices.find((i) => i.id === btn.dataset.id);
-    return inv && markStaffPaid(inv);
+    if (!inv) return;
+    return action === "staff-paid" ? markStaffPaid(inv) : markPaid(inv);
   }
   if (!row) return;
   if (action === "preview" || action === "generate") return generate(row, action === "preview");
