@@ -332,9 +332,10 @@ function peopleHtml(rowKey, entries, fallbackRows, { unbilled = [], staffExps = 
   const totalBilled = rows.reduce((s, r) => s + r.total, 0);
   const totalHours = rows.reduce((s, r) => s + r.hours, 0);
   const dash = '<span class="appr-muted">—</span>';
-  // "$739.97" with "incl. $57.47 expenses" under it when there are any.
+  // "$739.97*" when it includes expenses; the * hangs outside the number so
+  // amounts still line up, and a footnote under the table explains it.
   const payCell = (hoursPay, exp) => (hoursPay == null && !exp ? "—"
-    : `${formatCurrency((hoursPay || 0) + exp)}${exp ? `<span class="inv-pay-note">incl. ${formatCurrency(exp)} expenses</span>` : ""}`);
+    : `${formatCurrency((hoursPay || 0) + exp)}${exp ? '<span class="inv-ast" aria-hidden="true">*</span>' : ""}`);
   return `<table class="inv-people inv-labor">
     <colgroup><col /><col class="c-hours" /><col class="c-rate" /><col class="c-amt" /><col class="c-rate" /><col class="c-amt" /><col class="c-notes" /></colgroup>
     <thead>
@@ -348,7 +349,7 @@ function peopleHtml(rowKey, entries, fallbackRows, { unbilled = [], staffExps = 
       const billedPay = known && r.hours ? paidAmount(mine(entries, r.personId), ctx) : null;
       const hoursPay = known ? paidAmount([...mine(entries, r.personId), ...mine(unbilled, r.personId)], ctx) : null;
       const exp = sumExp(mine(staffExps, r.personId));
-      return `<tr class="${exp ? "has-exp" : ""}">
+      return `<tr>
         <td>${esc(r.name)}</td>
         <td class="num">${r.hours ? fmtHrs(r.hours) : dash}</td>
         <td class="num g-bill">${r.rate == null || !r.hours ? dash : formatCurrency(r.rate)}</td>
@@ -360,7 +361,7 @@ function peopleHtml(rowKey, entries, fallbackRows, { unbilled = [], staffExps = 
       ${open && notes.length ? `<tr class="inv-notes"><td colspan="7">${notes.map((e) =>
         `<div><span>${shortDate(e.date)} · ${fmtHrs(Number(e.hours))} hrs</span>${esc(e.note)}</div>`).join("")}</td></tr>` : ""}`;
     }).join("")}
-    <tr class="inv-people-total ${totalExp ? "has-exp" : ""}">
+    <tr class="inv-people-total">
       <td>Total</td><td class="num">${fmtHrs(totalHours)}</td><td class="g-bill"></td>
       <td class="num g-bill">${formatCurrency(totalBilled)}</td><td class="g-pay"></td>
       <td class="num g-pay">${payCell(totalHoursPay, totalExp)}</td><td></td>
@@ -368,7 +369,8 @@ function peopleHtml(rowKey, entries, fallbackRows, { unbilled = [], staffExps = 
     ${totalHoursPay != null ? `<tr class="inv-overhead">
       <td colspan="3" title="Amount billed for hours minus staff pay for hours (expenses are passed through)">Left for Overhead</td>
       <td class="num">${formatCurrency(totalBilled - totalHoursPay)}</td><td colspan="3"></td>
-    </tr>` : ""}</tbody>
+    </tr>` : ""}
+    ${totalExp ? `<tr class="inv-footnote"><td colspan="7">* Includes ${formatCurrency(totalExp)} in expenses paid back to staff, listed below.</td></tr>` : ""}</tbody>
   </table>`;
 }
 
