@@ -164,6 +164,7 @@ function expenseRowsFor(project, exps) {
   const byDate = (a, b) => (a.date < b.date ? -1 : 1);
   const projectLines = exps.filter((e) => e.kind !== "sub").sort(byDate).map((e) => ({
     kind: "project", group: categoryGroup(e.category), date: e.date, label: expenseLabel(e, project), qtyText: expenseQtyText(e),
+    personId: e.personId || null,
     category: e.category || "", detail: e.description || "",
     description: expenseLabel(e, project),
     quantity: e.quantity == null ? null : Number(e.quantity),
@@ -207,6 +208,27 @@ function expenseParts(r) {
   return { category, detail: rest.join(" · ") };
 }
 
+// Staff expenses on an invoice (or the next one): paid back to whoever paid
+// them, along with their hours. Sub expenses are paid to the sub instead.
+function staffExpsOf(row) {
+  return (row.kind === "next" ? row.exps : expenses.filter((e) => e.invoiceId === row.inv.id))
+    .filter((e) => e.kind !== "sub" && e.personId);
+}
+
+// An invoice's expense lines, with who paid each one: from the expenses
+// themselves when they're still on record, else the lines saved with it.
+function invoiceExpenseRows(row) {
+  const linked = expenses.filter((e) => e.invoiceId === row.inv.id);
+  return linked.length ? expenseRowsFor(row.project, linked) : (row.inv.expenseRows || []);
+}
+
+// Who's paid back for an expense line: the staff member, or the sub.
+function paidByOf(r) {
+  if (isSubLine(r)) return '<span class="appr-muted">Sub</span>';
+  const p = r.personId && people.find((x) => x.id === r.personId);
+  return p ? esc(p.name) : '<span class="appr-muted">—</span>';
+}
+
 // Expenses on an invoice: project expenses, then subconsultant invoices —
 // same columns as the expense list on the Projects tab.
 function expenseTableHtml(rows) {
@@ -214,16 +236,17 @@ function expenseTableHtml(rows) {
   const ordered = [...rows.filter((r) => !isSubLine(r)), ...rows.filter(isSubLine)];
   const total = rows.reduce((t, r) => t + Number(r.amount || 0), 0);
   return `<table class="inv-people inv-expenses">
-    <thead><tr><th class="c-date">Date</th><th class="c-cat">Category</th><th>Description</th><th class="num">Quantity</th><th class="num">Amount</th></tr></thead>
+    <thead><tr><th class="c-date">Date</th><th class="c-cat">Category</th><th>Description</th><th class="c-paidby">Paid By</th><th class="num">Quantity</th><th class="num">Amount</th></tr></thead>
     <tbody>
       ${ordered.map((r) => `<tr>
         <td>${r.date ? shortDate(r.date) : ""}</td>
         <td>${esc(expenseParts(r).category)}</td>
         <td>${esc(expenseParts(r).detail) || '<span class="appr-muted">—</span>'}</td>
+        <td>${paidByOf(r)}</td>
         <td class="num">${r.qtyText || (r.quantity != null && r.rate != null ? `${fmtHrs(r.quantity)} × ${formatCurrency(r.rate)}` : "—")}</td>
         <td class="num">${formatCurrency(r.amount)}</td>
       </tr>`).join("")}
-      <tr class="inv-exp-total"><td colspan="4">Expenses Total</td><td class="num">${formatCurrency(total)}</td></tr>
+      <tr class="inv-exp-total"><td colspan="5">Expenses Total</td><td class="num">${formatCurrency(total)}</td></tr>
     </tbody>
   </table>`;
 }
@@ -282,51 +305,70 @@ function statusHtml(row) {
 }
 
 // Each person's hours, then what the client is billed (rate, amount) and
-// what the person is paid (rate, amount) under their own shaded headings,
-// a Total row, and what's left for overhead (billed minus pay). Each
-// person's notes on request.
-function peopleHtml(rowKey, entries, fallbackRows) {
-  const rows = (entries.length ? groupByPerson(entries) : (fallbackRows || []))
-    .sort((a, b) => a.name.localeCompare(b.name));
+// what the person is paid under their own shaded headings: pay for their
+// hours, expenses they paid that are paid back to them, and the Total they
+// get — the amount to pay them, which adds up to the invoice's Staff Pay.
+// A Total row, and what's left for overhead (billed minus hours pay).
+// Each person's notes on request.
+// unbilled: "No charge" hours on the invoice (paid, not billed).
+// staffExps: staff expenses on the invoice (paid back to whoever paid them).
+function peopleHtml(rowKey, entries, fallbackRows, { unbilled = [], staffExps = [] } = {}) {
+  const rows = entries.length ? groupByPerson(entries) : [...(fallbackRows || [])];
+  // People with only no-charge hours or only expenses still get a row.
+  [...unbilled, ...staffExps].forEach((e) => {
+    if (rows.some((r) => r.personId === e.personId)) return;
+    rows.push({ personId: e.personId, name: people.find((p) => p.id === e.personId)?.name || "—", hours: 0, rate: null, total: 0 });
+  });
+  rows.sort((a, b) => a.name.localeCompare(b.name));
   if (!rows.length) return '<div class="empty">No hours.</div>';
   const ctx = { projects, people };
-  const payOf = (personId) => entries.length
-    ? paidAmount(entries.filter((e) => e.personId === personId), ctx) : null;
-  const totalPay = entries.length ? paidAmount(entries, ctx) : null;
+  const known = entries.length > 0 || unbilled.length > 0;
+  const mine = (list, personId) => list.filter((e) => e.personId === personId);
+  const hoursPayOf = (personId) => (known ? paidAmount([...mine(entries, personId), ...mine(unbilled, personId)], ctx) : null);
+  const expOf = (personId) => mine(staffExps, personId).reduce((s, e) => s + Number(e.amount || 0), 0);
+  const totalHoursPay = known ? paidAmount([...entries, ...unbilled], ctx) : null;
+  const totalExp = staffExps.reduce((s, e) => s + Number(e.amount || 0), 0);
   const totalBilled = rows.reduce((s, r) => s + r.total, 0);
   const totalHours = rows.reduce((s, r) => s + r.hours, 0);
   const money = (v) => (v == null ? "—" : formatCurrency(v));
+  const dash = '<span class="appr-muted">—</span>';
   return `<table class="inv-people inv-labor">
-    <colgroup><col /><col class="c-hours" /><col class="c-rate" /><col class="c-amt" /><col class="c-rate" /><col class="c-amt" /><col class="c-notes" /></colgroup>
+    <colgroup><col /><col class="c-hours" /><col class="c-rate" /><col class="c-amt" /><col class="c-rate" /><col class="c-amt" /><col class="c-amt" /><col class="c-amt" /><col class="c-notes" /></colgroup>
     <thead>
-      <tr class="inv-col-groups"><th></th><th></th><th colspan="2" class="g-bill">Billed to Client</th><th colspan="2" class="g-pay">Staff Pay</th><th></th></tr>
-      <tr><th>Person</th><th class="num">Hours</th><th class="num g-bill">Rate</th><th class="num g-bill">Amount</th><th class="num g-pay">Rate</th><th class="num g-pay">Amount</th><th></th></tr>
+      <tr class="inv-col-groups"><th></th><th></th><th colspan="2" class="g-bill">Billed to Client</th><th colspan="4" class="g-pay">Staff Pay</th><th></th></tr>
+      <tr><th>Person</th><th class="num">Hours</th><th class="num g-bill">Rate</th><th class="num g-bill">Amount</th><th class="num g-pay">Rate</th><th class="num g-pay">Hours</th><th class="num g-pay">Expenses</th><th class="num g-pay">Total</th><th></th></tr>
     </thead>
     <tbody>${rows.map((r) => {
       const notes = entries.filter((e) => e.personId === r.personId && e.note)
         .sort((a, b) => (a.date < b.date ? -1 : 1));
       const open = openNotes === r.personId;
-      const pay = payOf(r.personId);
+      const billedPay = known && r.hours ? paidAmount(mine(entries, r.personId), ctx) : null;
+      const hoursPay = hoursPayOf(r.personId);
+      const exp = expOf(r.personId);
       return `<tr>
         <td>${esc(r.name)}</td>
-        <td class="num">${fmtHrs(r.hours)}</td>
-        <td class="num g-bill">${formatCurrency(r.rate)}</td>
-        <td class="num g-bill">${formatCurrency(r.total)}</td>
-        <td class="num g-pay">${pay == null || !r.hours ? "—" : formatCurrency(pay / r.hours)}</td>
-        <td class="num g-pay">${money(pay)}</td>
+        <td class="num">${r.hours ? fmtHrs(r.hours) : dash}</td>
+        <td class="num g-bill">${r.rate == null || !r.hours ? dash : formatCurrency(r.rate)}</td>
+        <td class="num g-bill">${r.hours ? formatCurrency(r.total) : dash}</td>
+        <td class="num g-pay">${billedPay == null ? dash : formatCurrency(billedPay / r.hours)}</td>
+        <td class="num g-pay">${hoursPay == null ? "—" : hoursPay ? formatCurrency(hoursPay) : dash}</td>
+        <td class="num g-pay">${exp ? formatCurrency(exp) : dash}</td>
+        <td class="num g-pay g-total"><strong>${hoursPay == null && !exp ? "—" : formatCurrency((hoursPay || 0) + exp)}</strong></td>
         <td class="num">${notes.length ? `<button type="button" class="link-btn" data-action="notes" data-person="${r.personId}">Notes (${notes.length}) <span class="chev ${open ? "up" : ""}">&#9662;</span></button>` : ""}</td>
       </tr>
-      ${open && notes.length ? `<tr class="inv-notes"><td colspan="7">${notes.map((e) =>
+      ${open && notes.length ? `<tr class="inv-notes"><td colspan="9">${notes.map((e) =>
         `<div><span>${shortDate(e.date)} · ${fmtHrs(Number(e.hours))} hrs</span>${esc(e.note)}</div>`).join("")}</td></tr>` : ""}`;
     }).join("")}
     <tr class="inv-people-total">
       <td>Total</td><td class="num">${fmtHrs(totalHours)}</td><td class="g-bill"></td>
       <td class="num g-bill">${formatCurrency(totalBilled)}</td><td class="g-pay"></td>
-      <td class="num g-pay">${money(totalPay)}</td><td></td>
+      <td class="num g-pay">${money(totalHoursPay)}</td>
+      <td class="num g-pay">${totalExp ? formatCurrency(totalExp) : dash}</td>
+      <td class="num g-pay g-total">${totalHoursPay == null && !totalExp ? "—" : formatCurrency((totalHoursPay || 0) + totalExp)}</td><td></td>
     </tr>
-    ${totalPay != null ? `<tr class="inv-overhead">
-      <td colspan="3" title="Amount billed minus staff pay">Left for Overhead</td>
-      <td class="num">${formatCurrency(totalBilled - totalPay)}</td><td colspan="3"></td>
+    ${totalHoursPay != null ? `<tr class="inv-overhead">
+      <td colspan="3" title="Amount billed for hours minus staff pay for hours (expenses are passed through)">Left for Overhead</td>
+      <td class="num">${formatCurrency(totalBilled - totalHoursPay)}</td><td colspan="5"></td>
     </tr>` : ""}</tbody>
   </table>`;
 }
@@ -368,7 +410,8 @@ function detailHtml(row) {
     ].filter(Boolean).join(" and ");
     const canCreate = row.entries.length || row.exps.length;
     return `${fieldsHtml(row)}
-      ${row.entries.length ? peopleHtml(row.key, row.entries) : ""}
+      ${row.entries.length || row.unbilled.length || staffExpsOf(row).length
+        ? peopleHtml(row.key, row.entries, null, { unbilled: row.unbilled, staffExps: staffExpsOf(row) }) : ""}
       ${unbilledNoteHtml(row.unbilled, "Also closes out")}
       ${expenseTableHtml(expenseRowsFor(row.project, row.exps))}
       ${missingSubsHtml(row)}
@@ -382,7 +425,7 @@ function detailHtml(row) {
   const canPdf = !inv.historical && inv.taskRows && inv.laborRows;
   if (inv.void) {
     return `<div class="inv-note">${esc(inv.periodLabel || "")} &middot; Voided${inv.voidedDate ? " " + shortDate(inv.voidedDate) : ""} — its hours and expenses went back to Ready to Invoice.</div>
-      ${expenseTableHtml(inv.expenseRows || [])}
+      ${expenseTableHtml(invoiceExpenseRows(row))}
       <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}</div>`;
   }
   // Paid: client paid us, then staff are paid for it (Mark Staff Paid).
@@ -402,9 +445,9 @@ function detailHtml(row) {
   ] : [];
   const note = [inv.periodLabel ? esc(inv.periodLabel) : "", ...steps].filter(Boolean).join(" &middot; ");
   return `${note ? `<div class="inv-note">${note}</div>` : ""}
-    ${peopleHtml(row.key, row.entries, inv.laborRows)}
+    ${peopleHtml(row.key, row.entries, inv.laborRows, { unbilled: row.unbilled, staffExps: staffExpsOf(row) })}
     ${unbilledNoteHtml(row.unbilled, "Closed out")}
-    ${expenseTableHtml(inv.expenseRows || [])}
+    ${expenseTableHtml(invoiceExpenseRows(row))}
     <div class="inv-actions">
       ${back}
       ${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}
@@ -528,8 +571,7 @@ function invTable(rows, withTotal = true) {
 // imported invoices with no hours on record.
 function staffPayOf(row) {
   const linked = [...row.entries, ...row.unbilled];
-  const exps = (row.kind === "next" ? row.exps : expenses.filter((e) => e.invoiceId === row.inv.id))
-    .filter((e) => e.kind !== "sub" && e.personId);
+  const exps = staffExpsOf(row);
   if (!linked.length && !exps.length) return null;
   return paidAmount(linked, { projects, people }) + exps.reduce((s, e) => s + Number(e.amount || 0), 0);
 }
