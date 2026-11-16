@@ -448,8 +448,7 @@ function render() {
         waiting ? blank("num") : num(`<strong>${formatCurrency(row.amount)}</strong>`),
         waiting ? blank("num") : num(money(staffPayOf(row))),
         `<td>${statusHtml(row)}</td>`,
-        num(`<span class="inv-review ${open ? "open" : ""}">${open ? "Close" : "Review"}</span>`),
-        "<td></td>"],
+        num(`<span class="inv-review ${open ? "open" : ""}">${open ? "Close" : "Review"}</span>`)],
     };
   }), totalCells(next.filter((r) => r.entries.length || r.exps.length).map((r) => ({ hours: sumHours(r.entries), amount: r.amount, pay: staffPayOf(r) }))))
     : '<div class="empty">Nothing to invoice.</div>';
@@ -468,14 +467,13 @@ function render() {
 }
 
 // ---------- Shared table grid ----------
-// Every panel uses the same nine columns at the same widths, so Date,
+// Every panel uses the same eight columns at the same widths, so Date,
 // Invoice #, Project, Hours, Amount, Staff Pay, Status and the action button
 // line up all the way down the page.
-const GRID = `<colgroup><col class="g-date" /><col class="g-num" /><col class="g-proj" /><col class="g-hrs" /><col class="g-amt" /><col class="g-pay" /><col class="g-status" /><col class="g-act" /><col class="g-chev" /></colgroup>`;
-const GRID_HEAD = `<thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th class="num">Staff Pay</th><th>Status</th><th></th><th></th></tr></thead>`;
+const GRID = `<colgroup><col class="g-date" /><col class="g-num" /><col class="g-proj" /><col class="g-hrs" /><col class="g-amt" /><col class="g-pay" /><col class="g-status" /><col class="g-act" /></colgroup>`;
+const GRID_HEAD = `<thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th class="num">Staff Pay</th><th>Status</th><th></th></tr></thead>`;
 const blank = (cls = "") => `<td class="blank ${cls}">—</td>`;
 const num = (html) => `<td class="num">${html}</td>`;
-const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
 function projectCell(row, extra = "") {
   const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
   return `<td class="proj"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(name)}${extra}</td>`;
@@ -489,14 +487,14 @@ function totalCells(items) {
   return `<td colspan="3">Total</td>
     <td class="num">${has("hours") ? fmtHrs(sum("hours")) : ""}</td>
     <td class="num">${formatCurrency(sum("amount"))}</td>
-    <td class="num">${has("pay") ? formatCurrency(sum("pay")) : ""}</td><td colspan="3"></td>`;
+    <td class="num">${has("pay") ? formatCurrency(sum("pay")) : ""}</td><td colspan="2"></td>`;
 }
 
-// rows: [{ cls, key, open, cells: [9 <td>s], detail }]
+// rows: [{ cls, key, open, cells: [8 <td>s], detail }]
 function gridTable(rows, total = "") {
   return `<div class="pay-scroll"><table class="pay-table inv-table inv-grid">${GRID}${GRID_HEAD}
     <tbody>${rows.map((r) => `<tr class="${r.cls}" ${r.key ? `data-row="${esc(r.key)}"` : ""}>${r.cells.join("")}</tr>
-      ${r.detail ? `<tr class="inv-detail"><td colspan="9">${r.detail}</td></tr>` : ""}`).join("")}
+      ${r.detail ? `<tr class="inv-detail"><td colspan="8">${r.detail}</td></tr>` : ""}`).join("")}
     ${total ? `<tr class="inv-total-row">${total}</tr>` : ""}</tbody>
   </table></div>`;
 }
@@ -513,8 +511,7 @@ function invTable(rows, action = null, withTotal = true) {
         num(`<strong>${formatCurrency(row.amount)}</strong>`),
         num(staffPayOf(row) == null ? "—" : formatCurrency(staffPayOf(row))),
         `<td>${statusHtml(row)}</td>`,
-        num(action ? action(row) : ""),
-        chevCell(open)],
+        num(action ? action(row) : "")],
     };
   }), withTotal ? totalCells(rows.map((r) => ({ hours: r.hours, amount: r.amount, pay: staffPayOf(r) }))) : "");
 }
@@ -553,7 +550,8 @@ function renderSubInvoices() {
         : e.invoiced
           ? '<span class="pay-status invoiced">Outstanding</span>'
           : '<span class="pay-status ready">Not invoiced</span>';
-    const what = [sub ? sub.name : "", e.description].filter(Boolean).map(esc).join(" · ");
+    const what = [sub ? sub.name : "", e.description].filter(Boolean).map(esc).join(" · ")
+      + (e.invoiced ? "" : ` · <button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`);
     return {
       cls: "inv-row inv-subrow",
       cells: [`<td>${shortDate(e.date)}</td>`, inv ? `<td>${esc(inv.invoiceNumber)}</td>` : blank(),
@@ -562,8 +560,7 @@ function renderSubInvoices() {
         `<td>${status}</td>`,
         num(e.subPaid
           ? `<button type="button" class="link-btn" data-action="sub-unpaid" data-id="${e.id}">Undo</button>`
-          : `<button type="button" class="small inv-act-btn" data-action="sub-paid" data-id="${e.id}">Mark Sub Paid</button>`),
-        num(e.invoiced ? "" : `<button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`)],
+          : `<button type="button" class="small inv-act-btn" data-action="sub-paid" data-id="${e.id}">Mark Sub Paid</button>`)],
     };
   }), totalCells(subs.map((e) => ({ amount: Number(e.amount || 0) }))));
 }

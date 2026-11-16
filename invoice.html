@@ -31,8 +31,7 @@
 <main>
   <h1>Invoices</h1>
 
-  <!-- Invoices move down the page, panel to panel. Each arrow names the
-       step that moves an invoice to the next panel. -->
+  <!-- Invoices move down the page, panel to panel. -->
   <div id="invoiceBody">
     <div class="card inv-card" data-step="ready" id="readyCard">
       <div class="inv-head">
@@ -41,7 +40,7 @@
       <div id="nextBody"></div>
     </div>
 
-    <div class="inv-flow" data-step="outstanding"><span>Generate Invoice</span></div>
+    <div class="inv-flow" data-step="outstanding"></div>
 
     <div class="card inv-card" data-step="outstanding" id="sentCard">
       <div class="inv-head">
@@ -50,7 +49,7 @@
       <div id="pastBody"></div>
     </div>
 
-    <div class="inv-flow" data-step="clientpaid"><span>Client Pays</span></div>
+    <div class="inv-flow" data-step="clientpaid"></div>
 
     <div class="card inv-card" data-step="clientpaid" id="paid">
       <div class="inv-head">
@@ -60,7 +59,7 @@
       <div id="paidBody"></div>
     </div>
 
-    <div class="inv-flow" data-step="staffpaid"><span>Staff Paid</span></div>
+    <div class="inv-flow" data-step="staffpaid"></div>
 
     <div class="card inv-card" data-step="staffpaid" id="staffPaidCard">
       <div class="inv-head">

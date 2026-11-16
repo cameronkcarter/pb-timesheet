@@ -1831,9 +1831,9 @@ table.pay-table {
 /* Each panel: a tinted header band with its step number. */
 .inv-card[data-step] { padding-top: 0; overflow: hidden; }
 .inv-card[data-step] > .inv-head {
-  margin: 0 -20px 14px;
-  padding: 12px 20px;
-  min-height: 52px;
+  margin: 0 -20px 10px;
+  padding: 7px 20px;
+  min-height: 42px;
   background: var(--step-bg);
   border-bottom: 1px solid color-mix(in srgb, var(--step) 30%, transparent);
   box-shadow: inset 4px 0 0 var(--step);
@@ -1841,18 +1841,19 @@ table.pay-table {
 .inv-card[data-step] > .inv-head h2 {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
+  font-size: 16px;
   color: var(--step-ink);
 }
 .inv-num {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
   background: var(--step);
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 .inv-card[data-step] .inv-table tr.inv-total-row td {
@@ -1860,21 +1861,20 @@ table.pay-table {
   border-top-color: color-mix(in srgb, var(--step) 45%, #fff);
 }
 
-/* The arrow between two panels, naming the step that moves an invoice on.
-   Colored for the panel it leads to. */
+/* The arrow between two panels, colored for the panel it leads to. */
 .inv-card:has(+ .inv-flow) { margin-bottom: 0; }
 .inv-flow {
   position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 58px;
+  height: 30px;
 }
 .inv-flow::before {
   content: "";
   position: absolute;
   top: 0;
-  bottom: 7px;
+  bottom: 6px;
   left: 50%;
   width: 2px;
   margin-left: -1px;
@@ -1885,27 +1885,15 @@ table.pay-table {
   position: absolute;
   bottom: 0;
   left: 50%;
-  margin-left: -7px;
-  border: 7px solid transparent;
+  margin-left: -6px;
+  border: 6px solid transparent;
   border-bottom: none;
-  border-top: 8px solid var(--step);
-}
-.inv-flow span {
-  position: relative;
-  padding: 3px 12px;
-  border-radius: 999px;
-  background: var(--step-bg);
-  border: 1px solid color-mix(in srgb, var(--step) 40%, transparent);
-  color: var(--step-ink);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
+  border-top: 7px solid var(--step);
 }
 
 /* Subconsultant expenses and Void: set apart below the four steps, quieter. */
 .inv-side { margin-top: 36px; padding-top: 24px; border-top: 1px dashed #d9d1de; }
-.inv-card.inv-compact > .inv-head { min-height: 44px; padding: 8px 20px; }
+.inv-card.inv-compact > .inv-head { min-height: 38px; padding: 5px 20px; }
 .inv-card.inv-compact > .inv-head h2 { font-size: 15px; }
 #voidCard[hidden] { display: none; }
 .inv-card:has(#voidBody:empty) > .inv-head,
@@ -1915,23 +1903,25 @@ table.pay-table {
 
 /* One grid for every Invoices table: same columns, same widths, with
    light column lines, so everything lines up down the page. */
-main:has(#invoiceBody) { max-width: 1200px; }
-.inv-table.inv-grid { table-layout: fixed; width: 100%; min-width: 860px; }
+main:has(#invoiceBody) > h1 { margin-bottom: 22px; }
+.inv-table.inv-grid { table-layout: fixed; width: 100%; min-width: 820px; }
 .inv-grid col.g-date { width: 64px; }
 .inv-grid col.g-num { width: 104px; }
 .inv-grid col.g-hrs { width: 66px; }
 .inv-grid col.g-amt { width: 100px; }
 .inv-grid col.g-pay { width: 96px; }
-.inv-grid col.g-status { width: 160px; }
-.inv-grid col.g-act { width: 136px; }
-.inv-grid col.g-chev { width: 40px; }
+.inv-grid col.g-status { width: 132px; }
+.inv-grid col.g-act { width: 122px; }
 .inv-grid th, .inv-grid td { padding: 8px 10px; overflow: hidden; text-overflow: ellipsis; }
 .inv-grid > thead > tr > th + th,
 .inv-grid > tbody > tr:not(.inv-detail) > td + td { border-left: 1px solid #efeaf2; }
 .inv-grid > tbody > tr > td:nth-child(7) { white-space: normal; }
 .inv-grid td.proj { width: auto; }
 .inv-grid .inv-sub-what { display: block; margin-left: 15px; font-size: 12px; color: var(--text-muted); }
-.inv-table button.inv-act-btn { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+.inv-table button.inv-act-btn { padding: 4px 8px; font-size: 11.5px; white-space: nowrap; }
+.inv-grid > tbody > tr > td:nth-child(7), .inv-grid > tbody > tr > td:nth-child(8) { padding-left: 6px; padding-right: 6px; }
+.inv-grid > tbody > tr > td:nth-child(8) { text-align: center; }
+.inv-grid .pay-status { display: inline-block; white-space: normal; line-height: 1.3; }
 
 /* Dashboard (admins): client paid, staff not paid yet. */
 .staff-pay-strip {
