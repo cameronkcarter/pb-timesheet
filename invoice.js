@@ -370,7 +370,7 @@ function peopleHtml(rowKey, entries, fallbackRows, { unbilled = [], staffExps = 
       <td colspan="3" title="Amount billed for hours minus staff pay for hours (expenses are passed through)">Left for Overhead</td>
       <td class="num">${formatCurrency(totalBilled - totalHoursPay)}</td><td colspan="3"></td>
     </tr>` : ""}
-    ${totalExp ? `<tr class="inv-footnote"><td colspan="7">* Includes ${formatCurrency(totalExp)} in expenses paid back to staff, listed below.</td></tr>` : ""}</tbody>
+    ${totalExp ? `<tr class="inv-footnote"><td colspan="7">* Includes ${formatCurrency(totalExp)} in expenses, listed below.</td></tr>` : ""}</tbody>
   </table>`;
 }
 
