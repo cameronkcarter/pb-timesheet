@@ -39,6 +39,13 @@ const subBody = document.getElementById("subBody");
 const subTotal = document.getElementById("subTotal");
 const pastTotal = document.getElementById("pastTotal");
 const togglePaidBtn = document.getElementById("togglePaid");
+const paidBody = document.getElementById("paidBody");
+const paidTotal = document.getElementById("paidTotal");
+const voidCard = document.getElementById("voidCard");
+const voidBody = document.getElementById("voidBody");
+const voidCountEl = document.getElementById("voidCount");
+const toggleVoidBtn = document.getElementById("toggleVoid");
+const markAllStaffPaidBtn = document.getElementById("markAllStaffPaid");
 
 wireLogout("logoutLink");
 
@@ -86,7 +93,8 @@ function nextInvoiceNumber() {
 const drafts = {};        // projectId -> { number, label } typed over
 let openRow = null;       // "next:<projectId>" or "inv:<invoiceId>"
 let openNotes = null;     // personId whose notes show in the open row
-let showPaid = false;
+let showPaid = false;    // staff-paid invoices
+let showVoid = false;
 let renderDeferred = false;
 
 // Internal projects (e.g. Proposals & Pursuits) are never invoiced.
@@ -268,9 +276,11 @@ function statusHtml(row) {
   }
   const inv = row.inv;
   if (inv.void) return '<span class="pay-status void">Void</span>';
-  return (inv.paid
-    ? `<span class="pay-status paid">Paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}</span>`
-    : '<span class="pay-status invoiced">Outstanding</span>') +
+  return (!inv.paid
+    ? '<span class="pay-status invoiced">Outstanding</span>'
+    : inv.staffPaid
+      ? `<span class="pay-status paid">Staff paid${inv.staffPaidDate ? " " + shortDate(inv.staffPaidDate) : ""}</span>`
+      : '<span class="pay-status due">Pay staff</span>') +
     (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — Sync is on Admin">Not in sheet</span>' : "");
 }
 
@@ -378,10 +388,19 @@ function detailHtml(row) {
       ${expenseTableHtml(inv.expenseRows || [])}
       <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}</div>`;
   }
-  const next = inv.paid
-    ? '<button type="button" class="secondary" data-action="mark-unpaid">Undo Paid</button>'
-    : '<button type="button" data-action="mark-paid">Mark Paid</button>';
-  return `${inv.periodLabel ? `<div class="inv-note">${esc(inv.periodLabel)}</div>` : ""}
+  // Paid: client paid us, then staff are paid for it (Mark Staff Paid).
+  const next = !inv.paid
+    ? '<button type="button" data-action="mark-paid">Mark Client Paid</button>'
+    : inv.staffPaid
+      ? '<button type="button" class="secondary" data-action="staff-unpaid">Undo Staff Paid</button>'
+      : `<button type="button" class="secondary" data-action="mark-unpaid">Undo Client Paid</button>
+         <button type="button" data-action="staff-paid">Mark Staff Paid</button>`;
+  const steps = inv.paid ? [
+    `Client paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}`,
+    inv.staffPaid ? `Staff paid${inv.staffPaidDate ? " " + shortDate(inv.staffPaidDate) : ""}` : "Staff not paid yet",
+  ] : [];
+  const note = [inv.periodLabel ? esc(inv.periodLabel) : "", ...steps].filter(Boolean).join(" &middot; ");
+  return `${note ? `<div class="inv-note">${note}</div>` : ""}
     ${peopleHtml(row.key, row.entries, inv.laborRows)}
     ${unbilledNoteHtml(row.unbilled, "Closed out")}
     ${expenseTableHtml(inv.expenseRows || [])}
@@ -403,17 +422,27 @@ function render() {
   renderSubInvoices();
   const next = nextRows();
   const past = invoiceRows();
-  const done = (r) => r.inv.paid || r.inv.void;
-  const paidCount = past.filter(done).length;
-  const voidCount = past.filter((r) => r.inv.void).length;
-  const shownPast = past.filter((r) => showPaid || !done(r));
+  // Sent (waiting on the client), Paid (client paid; staff paid or not), Void.
+  const sent = past.filter((r) => !r.inv.void && !r.inv.paid);
+  const voided = past.filter((r) => r.inv.void);
+  // Paid: ones still needing staff paid first (oldest client payment first),
+  // then staff-paid ones (newest first), hidden unless asked for.
+  const toPay = past.filter((r) => !r.inv.void && r.inv.paid && !r.inv.staffPaid)
+    .sort((a, b) => (String(a.inv.paidDate || "") < String(b.inv.paidDate || "") ? -1 : 1));
+  const staffPaid = past.filter((r) => !r.inv.void && r.inv.paid && r.inv.staffPaid)
+    .sort((a, b) => (String(a.inv.staffPaidDate || "") < String(b.inv.staffPaidDate || "") ? 1 : -1));
+  const shownPaid = [...toPay, ...(showPaid ? staffPaid : [])];
 
-  const outstanding = past.filter((r) => !done(r)).reduce((s, r) => s + r.amount, 0);
+  const outstanding = sent.reduce((s, r) => s + r.amount, 0);
   pastTotal.textContent = outstanding ? `${formatCurrency(outstanding)} outstanding` : "";
-  togglePaidBtn.style.display = paidCount ? "" : "none";
-  togglePaidBtn.textContent = showPaid
-    ? (voidCount ? "Hide paid & void" : "Hide paid")
-    : `Show paid${voidCount ? " & void" : ""} (${paidCount})`;
+  const due = toPay.reduce((s, r) => s + (staffPayOf(r) || 0), 0);
+  paidTotal.textContent = toPay.length ? `${formatCurrency(due)} staff pay due` : "";
+  markAllStaffPaidBtn.hidden = toPay.length < 2;
+  togglePaidBtn.style.display = staffPaid.length ? "" : "none";
+  togglePaidBtn.textContent = showPaid ? "Hide staff paid" : `Show staff paid (${staffPaid.length})`;
+  voidCard.hidden = !voided.length;
+  voidCountEl.textContent = voided.length ? `${voided.length} · not counted` : "";
+  toggleVoidBtn.textContent = showVoid ? "Hide" : "Show";
 
   const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
   // Ready to invoice: a clear button to open each project.
@@ -444,28 +473,59 @@ function render() {
       <td class="num">${formatCurrency(next.reduce((s, r) => s + r.amount, 0))}</td><td colspan="2"></td>`)}</tbody>
   </table></div>` : '<div class="empty">Nothing to invoice.</div>';
 
-  pastBody.innerHTML = shownPast.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
-    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${shownPast.map((row) => {
-      const open = openRow === row.key;
-      return `<tr class="inv-row ${open ? "open" : ""} ${row.inv.void ? "void-row" : ""}" data-row="${esc(row.key)}">
+  const invRow = (row, cells, cols) => {
+    const open = openRow === row.key;
+    return `<tr class="inv-row ${open ? "open" : ""} ${row.inv.void ? "void-row" : ""}" data-row="${esc(row.key)}">
         <td>${shortDate(row.inv.date)}</td>
         <td>${esc(row.inv.invoiceNumber)}</td>
         ${projectCell(row)}
-        <td class="num">${fmtHrs(row.hours)}</td>
-        <td class="num"><strong>${formatCurrency(row.amount)}</strong></td>
-        <td>${statusHtml(row)}</td>
+        ${cells}
         ${chevCell(open)}
       </tr>
-      ${open ? `<tr class="inv-detail"><td colspan="7">${detailHtml(row)}</td></tr>` : ""}`;
-    }).join("")}
-    ${(() => {
-      const counted = shownPast.filter((r) => !r.inv.void);
-      return totalRow(`<td colspan="3">Total${counted.length < shownPast.length ? " (not counting void)" : ""}</td>
-        <td class="num">${fmtHrs(counted.reduce((s, r) => s + r.hours, 0))}</td>
-        <td class="num">${formatCurrency(counted.reduce((s, r) => s + r.amount, 0))}</td><td colspan="2"></td>`);
-    })()}</tbody>
-  </table></div>` : `<div class="empty">${paidCount ? "Nothing outstanding." : "No invoices yet."}</div>`;
+      ${open ? `<tr class="inv-detail"><td colspan="${cols}">${detailHtml(row)}</td></tr>` : ""}`;
+  };
+  const money = (v) => (v == null ? "—" : formatCurrency(v));
+
+  pastBody.innerHTML = sent.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
+    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>${sent.map((row) => invRow(row, `
+        <td class="num">${fmtHrs(row.hours)}</td>
+        <td class="num"><strong>${formatCurrency(row.amount)}</strong></td>
+        <td>${statusHtml(row)}</td>`, 7)).join("")}
+    ${totalRow(`<td colspan="3">Total</td>
+        <td class="num">${fmtHrs(sent.reduce((s, r) => s + r.hours, 0))}</td>
+        <td class="num">${formatCurrency(outstanding)}</td><td colspan="2"></td>`)}</tbody>
+  </table></div>` : `<div class="empty">${past.length ? "Nothing outstanding." : "No invoices yet."}</div>`;
+
+  // Paid: what the client paid, what staff are owed for it, and a quick
+  // Mark Staff Paid once payroll's done.
+  paidBody.innerHTML = shownPaid.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
+    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Amount</th><th>Client Paid</th><th class="num">Staff Pay</th><th>Staff</th><th></th></tr></thead>
+    <tbody>${shownPaid.map((row) => invRow(row, `
+        <td class="num">${formatCurrency(row.amount)}</td>
+        <td>${row.inv.paidDate ? shortDate(row.inv.paidDate) : "—"}</td>
+        <td class="num"><strong>${money(staffPayOf(row))}</strong></td>
+        <td>${row.inv.staffPaid ? statusHtml(row)
+          : `<button type="button" class="small inv-staff-btn" data-action="staff-paid" data-id="${esc(row.inv.id)}">Mark Staff Paid</button>`}</td>`, 8)).join("")}
+    </tbody>
+  </table></div>` : `<div class="empty">${staffPaid.length ? "Staff are paid for every paid invoice." : "No paid invoices yet."}</div>`;
+
+  voidBody.innerHTML = showVoid && voided.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
+    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+    <tbody>${voided.map((row) => invRow(row, `
+        <td class="num">${formatCurrency(row.amount)}</td>
+        <td>${statusHtml(row)}</td>`, 6)).join("")}</tbody>
+  </table></div>` : "";
+}
+
+// What staff are paid for an invoice: everyone's hours on it (no-charge
+// hours too) plus staff expenses paid back with it. null for old imported
+// invoices with no hours on record.
+function staffPayOf(row) {
+  const linked = [...row.entries, ...row.unbilled];
+  const exps = expenses.filter((e) => e.invoiceId === row.inv.id && e.kind !== "sub" && e.personId);
+  if (!linked.length && !exps.length) return null;
+  return paidAmount(linked, { projects, people }) + exps.reduce((s, e) => s + Number(e.amount || 0), 0);
 }
 
 // ---------- Subconsultant expenses ----------
@@ -582,6 +642,11 @@ invoiceBody.addEventListener("click", async (e) => {
     render();
     return;
   }
+  // The row's own Mark Staff Paid button (works without opening the row).
+  if (action === "staff-paid" && btn.dataset.id) {
+    const inv = invoices.find((i) => i.id === btn.dataset.id);
+    return inv && markStaffPaid(inv);
+  }
   if (!row) return;
   if (action === "preview" || action === "generate") return generate(row, action === "preview");
   if (action === "record-sub") return subEditor.open(null, { kind: "sub", projectId: row.project.id, subId: btn.dataset.sub });
@@ -589,10 +654,30 @@ invoiceBody.addEventListener("click", async (e) => {
   if (action === "mark-paid") return markPaid(row.inv);
   if (action === "mark-unpaid") return markUnpaid(row.inv);
   if (action === "void") return voidInvoice(row.inv);
+  if (action === "staff-paid") return markStaffPaid(row.inv);
+  if (action === "staff-unpaid") return markStaffUnpaid(row.inv);
 });
 
 togglePaidBtn.addEventListener("click", () => {
   showPaid = !showPaid;
+  render();
+});
+
+markAllStaffPaidBtn.addEventListener("click", async () => {
+  const due = invoices.filter((i) => i.paid && !i.void && !i.staffPaid);
+  if (!due.length) return;
+  if (!(await confirmDialog(`All ${due.length} paid invoices will show staff as paid.`, { title: "Mark all staff paid?", confirmText: "Mark All Staff Paid" }))) return;
+  try {
+    const now = new Date().toISOString();
+    await Promise.all(due.map((i) => Invoices.update(i.id, { staffPaid: true, staffPaidDate: now })));
+    showToast(`Staff paid for ${due.length} invoices.`);
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+});
+
+toggleVoidBtn.addEventListener("click", () => {
+  showVoid = !showVoid;
   render();
 });
 
@@ -1161,7 +1246,7 @@ async function voidInvoice(inv) {
 }
 
 async function markUnpaid(inv) {
-  if (!(await confirmDialog("This invoice and its hours go back to outstanding.", { title: "Undo paid?", confirmText: "Undo Paid" }))) return;
+  if (!(await confirmDialog("This invoice and its hours go back to outstanding.", { title: "Undo client paid?", confirmText: "Undo Client Paid" }))) return;
   try {
     const linked = timeEntries.filter((entry) => entry.invoiceId === inv.id);
     await Promise.all(linked.map((entry) => TimeEntries.update(entry.id, { paid: false, paidDate: null })));
@@ -1174,13 +1259,34 @@ async function markUnpaid(inv) {
 }
 
 async function markPaid(inv) {
-  if (!(await confirmDialog("Its hours will show as client-paid.", { title: "Mark this invoice paid?", confirmText: "Mark Paid" }))) return;
+  if (!(await confirmDialog("Its hours will show as client-paid.", { title: "Client paid this invoice?", confirmText: "Mark Client Paid" }))) return;
   try {
     const linkedEntries = timeEntries.filter((entry) => entry.invoiceId === inv.id);
     await TimeEntries.markPaid(linkedEntries.map((entry) => entry.id));
     await Invoices.update(inv.id, { paid: true, paidDate: new Date().toISOString(), sheetSynced: false });
-    showToast("Invoice marked as paid.");
+    showToast("Marked client paid. It's in Paid Invoices until staff are paid.");
     sheet.sync();
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
+// The step after the client pays: staff paid for this invoice's hours and
+// expenses. Staff see it on their Dashboard. Easy to undo, so no confirm.
+async function markStaffPaid(inv) {
+  try {
+    await Invoices.update(inv.id, { staffPaid: true, staffPaidDate: new Date().toISOString() });
+    showToast(`Staff paid for invoice ${inv.invoiceNumber}.`);
+  } catch (err) {
+    showToast("Error: " + err.message);
+  }
+}
+
+async function markStaffUnpaid(inv) {
+  if (!(await confirmDialog("It goes back to needing staff paid.", { title: "Undo staff paid?", confirmText: "Undo Staff Paid" }))) return;
+  try {
+    await Invoices.update(inv.id, { staffPaid: false, staffPaidDate: null });
+    showToast("Back to staff not paid.");
   } catch (err) {
     showToast("Error: " + err.message);
   }

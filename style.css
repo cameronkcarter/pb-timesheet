@@ -1811,6 +1811,43 @@ table.pay-table {
 .pay-status.pending { background: #fdf1e3; color: #9a5a17; }
 .pay-status.invoiced { background: #e7eefa; color: #2a5fb0; }
 .pay-status.paid { background: #e6f2e7; color: var(--green); }
+/* Client paid, staff not paid yet. */
+.pay-status.due { background: #e0f1ee; color: #1f6f63; }
+.stat-split .dot.due { background: #3a9a8b; }
+
+/* Invoices > Paid: the row's own Mark Staff Paid button. */
+.inv-table button.inv-staff-btn { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+.inv-void-card[hidden] { display: none; }
+
+/* Dashboard (admins): client paid, staff not paid yet. */
+.staff-pay-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid #ecd78f;
+  background: #fdf8e6;
+  border-radius: 10px;
+  color: #6b520a;
+  font-size: 14px;
+  text-decoration: none;
+}
+.staff-pay-strip[hidden] { display: none; }
+.staff-pay-strip:hover { background: #fbf2d2; }
+.staff-pay-strip .sps-icon {
+  flex: 0 0 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #d9b23a;
+  color: #fff;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.staff-pay-strip .sps-text { flex: 1; min-width: 0; }
+.staff-pay-strip .sps-text strong { display: block; color: #4f3c06; }
+.staff-pay-strip .sps-go { font-weight: 700; white-space: nowrap; }
 
 button.link-btn.pay-more {
   display: block;

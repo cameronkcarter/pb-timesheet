@@ -7,7 +7,7 @@ import {
 import { paidAmount, billedAmount, assignedHours, isInternal } from "./rates.js";
 import { requireSession, wireLogout, applyAdminNavVisibility, renderNavUserName } from "./session.js";
 import { createItemEditor, setItemCompleted, deleteItem } from "./subtasks.js";
-import { createExpenseEditor, expenseLabel, expenseStatus, expenseClientPaid, trackedOnly } from "./expenses.js";
+import { createExpenseEditor, expenseLabel, expenseStatus, expenseStaffPaid, trackedOnly } from "./expenses.js";
 import { createMessageBoard } from "./board.js";
 
 const selectedPersonId = requireSession();
@@ -104,17 +104,21 @@ function render() {
     });
   document.getElementById("statRemaining").textContent = fmtHrs(remainingTotal);
 
-  // Your pay that the client hasn't paid yet: not invoiced + invoiced.
+  // Your pay not in your hands yet: not invoiced, invoiced (waiting on the
+  // client), and client paid but staff not paid yet (pay coming).
   const payOf = (entries) => paidAmount(entries, { projects, people });
   const notInvoiced = payOf(myEntries.filter((e) => !e.invoiced && !e.paid && !e.declined));
   const invoicedUnpaid = payOf(myEntries.filter((e) => e.invoiced && !e.paid));
-  document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid);
+  const coming = payOf(myEntries.filter((e) => e.invoiced && e.paid && !entryStaffPaid(e)));
   document.getElementById("statNotInvoiced").textContent = formatCurrency(notInvoiced);
   document.getElementById("statInvoiced").textContent = formatCurrency(invoicedUnpaid);
-  const owedBack = myExpenses().filter((e) => !e.declined && !expenseClientPaid(e, invoices) && !trackedOnly(e, projects)).reduce((t, e) => t + Number(e.amount || 0), 0);
+  document.getElementById("statComing").textContent = formatCurrency(coming);
+  document.getElementById("statComingWrap").hidden = !coming;
+  const owedBack = myExpenses().filter((e) => !e.declined && !expenseStaffPaid(e, invoices) && !trackedOnly(e, projects)).reduce((t, e) => t + Number(e.amount || 0), 0);
   document.getElementById("statExpenses").textContent = formatCurrency(owedBack);
-  document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid + owedBack);
+  document.getElementById("statOwed").textContent = formatCurrency(notInvoiced + invoicedUnpaid + coming + owedBack);
   renderPay(myEntries);
+  renderStaffPayStrip(person);
 
   renderDeclined(myEntries);
 
@@ -300,6 +304,8 @@ function renderPay(myEntries) {
     const inv = invoices.find((i) => i.id === k);
     const paid = (inv && inv.paid) || (entries.length > 0 && entries.every((e) => e.paid));
     const paidDate = (inv && inv.paidDate) || entries.find((e) => e.paidDate)?.paidDate;
+    // Old invoices with no record here count as paid out.
+    const staffPaid = paid && (!inv || !!inv.staffPaid);
     return {
       date: (inv && inv.date) || first.invoicedDate || "",
       number: (inv && inv.invoiceNumber) || "",
@@ -307,8 +313,10 @@ function renderPay(myEntries) {
       projectName: inv && inv.projectName,
       entries,
       exps,
-      paid,
-      status: paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "paid"] : ["Outstanding", "invoiced"],
+      paid: staffPaid,
+      status: staffPaid ? [inv && inv.staffPaidDate ? `Paid ${shortDate(inv.staffPaidDate)}` : "Paid", "paid"]
+        : paid ? [paidDate ? `Client paid ${shortDate(paidDate)} · pay coming` : "Client paid · pay coming", "due"]
+        : ["Waiting on client", "invoiced"],
     };
   }).concat(pursuitRows).sort((x, y) => (x.date < y.date ? 1 : -1));
 
@@ -316,7 +324,7 @@ function renderPay(myEntries) {
   const rows = [...upcoming, ...invoiced.filter((r) => showClientPaid || !r.paid)];
   const head = `<div class="pay-card-head">
     <h2>Your Invoices</h2>
-    ${paidCount ? `<button type="button" class="link-btn" data-action="toggle-paid">${showClientPaid ? "Hide client-paid" : `Show client-paid (${paidCount})`}</button>` : ""}
+    ${paidCount ? `<button type="button" class="link-btn" data-action="toggle-paid">${showClientPaid ? "Hide paid" : `Show paid (${paidCount})`}</button>` : ""}
     <button type="button" class="icon-btn" data-action="close-pay" aria-label="Close">&times;</button>
   </div>`;
   if (!rows.length) {
@@ -343,6 +351,32 @@ function renderPay(myEntries) {
       </tr>`;
     }).join("")}</tbody>
   </table></div>`;
+}
+
+// Hours the client paid for are paid out once their invoice is marked Staff
+// Paid. Paid hours with no invoice (Pursuits, older records) are paid out.
+function entryStaffPaid(e) {
+  if (!e.paid) return false;
+  const inv = e.invoiceId && invoices.find((i) => i.id === e.invoiceId);
+  return !inv || !!inv.staffPaid;
+}
+
+// Admins: invoices the client has paid but staff haven't been paid for yet,
+// with what that payroll comes to. Links to Paid Invoices.
+function renderStaffPayStrip(person) {
+  const strip = document.getElementById("staffPayStrip");
+  const due = person.isAdmin ? invoices.filter((i) => i.paid && !i.void && !i.staffPaid) : [];
+  strip.hidden = !due.length;
+  if (!due.length) return;
+  const ids = new Set(due.map((i) => i.id));
+  const pay = paidAmount(timeEntries.filter((e) => ids.has(e.invoiceId)), { projects, people })
+    + expenses.filter((e) => ids.has(e.invoiceId) && e.kind !== "sub" && e.personId).reduce((t, e) => t + Number(e.amount || 0), 0);
+  // Who's waiting on pay, so it's clear at a glance.
+  const names = [...new Set(timeEntries.filter((e) => ids.has(e.invoiceId)).map((e) => people.find((p) => p.id === e.personId)?.name).filter(Boolean))].sort();
+  strip.innerHTML = `<span class="sps-icon" aria-hidden="true">$</span>
+    <span class="sps-text"><strong>Pay staff: ${formatCurrency(pay)}</strong>
+      ${due.length} invoice${due.length === 1 ? "" : "s"} client paid, staff not paid yet${names.length ? ` · ${esc(names.join(", "))}` : ""}</span>
+    <span class="sps-go">Review &rsaquo;</span>`;
 }
 
 function myExpenses() {

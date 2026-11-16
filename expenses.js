@@ -82,13 +82,25 @@ export function expenseLabel(e, project) {
 export const expenseClientPaid = (e, invoices = []) =>
   !!e.reimbursed || !!e.paid || (!!e.invoiceId && !!invoices.find((i) => i.id === e.invoiceId)?.paid);
 
+// Paid back to the person: the invoice it's on was marked Staff Paid (the
+// step after the client pays), or it was paid directly (Pursuits, or the old
+// one-by-one `reimbursed`).
+export function expenseStaffPaid(e, invoices = []) {
+  if (e.reimbursed) return true;
+  if (!e.invoiceId) return !!e.paid;
+  const inv = invoices.find((i) => i.id === e.invoiceId);
+  if (!inv) return !!e.paid;
+  return !!inv.paid && !!inv.staffPaid;
+}
+
 // project (optional): Pursuit expenses have no invoice or client.
 export function expenseStatus(e, invoices = [], project = null) {
   if (isInternal(project)) {
     if (!project.payable && !e.paid) return ["Not paid back", "unsynced"];
     if (e.paid) return [e.paidDate ? `Paid ${new Date(e.paidDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "Paid", "paid"];
   }
-  if (expenseClientPaid(e, invoices)) return ["Client paid", "paid"];
+  if (e.kind !== "sub" && expenseStaffPaid(e, invoices)) return ["Paid back", "paid"];
+  if (expenseClientPaid(e, invoices)) return e.kind === "sub" ? ["Client paid", "paid"] : ["Client paid · pay coming", "due"];
   if (e.invoiced) return ["Invoiced", "invoiced"];
   if (e.approved) return ["Approved", "paid"];
   if (e.declined) return ["Declined", "unsynced"];

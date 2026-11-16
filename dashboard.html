@@ -51,6 +51,7 @@
       <div class="stat-split stat-lines">
         <span><i class="dot pending"></i>Not invoiced <strong id="statNotInvoiced">$0</strong></span>
         <span><i class="dot invoiced"></i>Invoiced <strong id="statInvoiced">$0</strong></span>
+        <span id="statComingWrap" hidden><i class="dot due"></i>Client paid, pay coming <strong id="statComing">$0</strong></span>
         <span id="statExpensesWrap"><i class="dot expense"></i>Expenses owed <strong id="statExpenses">$0</strong></span>
       </div>
       <button type="button" class="stat-more" id="payToggle" aria-expanded="false" aria-controls="payPanel">Your invoices <span class="chev" aria-hidden="true">&#9662;</span></button>
@@ -58,6 +59,8 @@
   </div>
 
   <div id="payPanel" class="card pay-card" hidden></div>
+
+  <a id="staffPayStrip" class="staff-pay-strip" href="invoice.html#paid" hidden></a>
 
   <div id="messageBoard" class="card mb-card" hidden></div>
 

@@ -44,6 +44,14 @@
         <h2>Sent Invoices <span class="inv-total" id="pastTotal"></span></h2>
       </div>
       <div id="pastBody"></div>
+    </div>
+
+    <div class="card inv-card" id="paid">
+      <div class="inv-head">
+        <h2>Paid Invoices <span class="inv-total" id="paidTotal"></span></h2>
+        <button type="button" id="markAllStaffPaid" class="small secondary" hidden>Mark All Staff Paid</button>
+      </div>
+      <div id="paidBody"></div>
       <button type="button" id="togglePaid" class="link-btn pay-more" style="display:none;"></button>
     </div>
 
@@ -53,6 +61,14 @@
         <button type="button" id="recordSubInvoice" class="small secondary">+ Add Sub Expense</button>
       </div>
       <div id="subBody"></div>
+    </div>
+
+    <div class="card inv-card inv-void-card" id="voidCard" hidden>
+      <div class="inv-head">
+        <h2>Void Invoices <span class="inv-total" id="voidCount"></span></h2>
+        <button type="button" id="toggleVoid" class="link-btn"></button>
+      </div>
+      <div id="voidBody"></div>
     </div>
   </div>
 </main>
