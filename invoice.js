@@ -164,6 +164,7 @@ function expenseRowsFor(project, exps) {
   const byDate = (a, b) => (a.date < b.date ? -1 : 1);
   const projectLines = exps.filter((e) => e.kind !== "sub").sort(byDate).map((e) => ({
     kind: "project", group: categoryGroup(e.category), date: e.date, label: expenseLabel(e, project), qtyText: expenseQtyText(e),
+    personId: e.personId || null,
     category: e.category || "", detail: e.description || "",
     description: expenseLabel(e, project),
     quantity: e.quantity == null ? null : Number(e.quantity),
@@ -214,6 +215,21 @@ function staffExpsOf(row) {
     .filter((e) => e.kind !== "sub" && e.personId);
 }
 
+// An invoice's expense lines, with who paid each one: from the expenses
+// themselves when they're still on record, else the lines saved with it.
+function invoiceExpenseRows(row) {
+  const linked = expenses.filter((e) => e.invoiceId === row.inv.id);
+  return linked.length ? expenseRowsFor(row.project, linked) : (row.inv.expenseRows || []);
+}
+
+// Who paid an expense line: the staff member (paid back with their hours),
+// or the sub.
+function paidByOf(r) {
+  if (isSubLine(r)) return '<span class="appr-muted">Sub</span>';
+  const p = r.personId && people.find((x) => x.id === r.personId);
+  return p ? esc(p.name) : '<span class="appr-muted">—</span>';
+}
+
 // Expenses on an invoice: project expenses, then subconsultant invoices —
 // same columns as the expense list on the Projects tab.
 function expenseTableHtml(rows) {
@@ -221,16 +237,17 @@ function expenseTableHtml(rows) {
   const ordered = [...rows.filter((r) => !isSubLine(r)), ...rows.filter(isSubLine)];
   const total = rows.reduce((t, r) => t + Number(r.amount || 0), 0);
   return `<table class="inv-people inv-expenses">
-    <thead><tr><th class="c-date">Date</th><th class="c-cat">Category</th><th>Description</th><th class="num">Quantity</th><th class="num">Amount</th></tr></thead>
+    <thead><tr><th class="c-date">Date</th><th class="c-cat">Category</th><th>Description</th><th class="c-paidby">Paid By</th><th class="num">Quantity</th><th class="num">Amount</th></tr></thead>
     <tbody>
       ${ordered.map((r) => `<tr>
         <td>${r.date ? shortDate(r.date) : ""}</td>
         <td>${esc(expenseParts(r).category)}</td>
         <td>${esc(expenseParts(r).detail) || '<span class="appr-muted">—</span>'}</td>
+        <td>${paidByOf(r)}</td>
         <td class="num">${r.qtyText || (r.quantity != null && r.rate != null ? `${fmtHrs(r.quantity)} × ${formatCurrency(r.rate)}` : "—")}</td>
         <td class="num">${formatCurrency(r.amount)}</td>
       </tr>`).join("")}
-      <tr class="inv-exp-total"><td colspan="4">Expenses Total</td><td class="num">${formatCurrency(total)}</td></tr>
+      <tr class="inv-exp-total"><td colspan="5">Expenses Total</td><td class="num">${formatCurrency(total)}</td></tr>
     </tbody>
   </table>`;
 }
@@ -407,7 +424,7 @@ function detailHtml(row) {
   const canPdf = !inv.historical && inv.taskRows && inv.laborRows;
   if (inv.void) {
     return `<div class="inv-note">${esc(inv.periodLabel || "")} &middot; Voided${inv.voidedDate ? " " + shortDate(inv.voidedDate) : ""} — its hours and expenses went back to Ready to Invoice.</div>
-      ${expenseTableHtml(inv.expenseRows || [])}
+      ${expenseTableHtml(invoiceExpenseRows(row))}
       <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}</div>`;
   }
   // Paid: client paid us, then staff are paid for it (Mark Staff Paid).
@@ -429,7 +446,7 @@ function detailHtml(row) {
   return `${note ? `<div class="inv-note">${note}</div>` : ""}
     ${peopleHtml(row.key, row.entries, inv.laborRows, { unbilled: row.unbilled, staffExps: staffExpsOf(row) })}
     ${unbilledNoteHtml(row.unbilled, "Closed out")}
-    ${expenseTableHtml(inv.expenseRows || [])}
+    ${expenseTableHtml(invoiceExpenseRows(row))}
     <div class="inv-actions">
       ${back}
       ${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}
