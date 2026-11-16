@@ -2,7 +2,7 @@ import { People, Projects, Tasks, TimeEntries, Invoices, Expenses } from "./db.j
 import { requireSession, wireLogout, enforceAdmin, renderNavUserName } from "./session.js";
 import {
   formatCurrency, showToast, fmtHrs, confirmDialog,
-  lastDayOfMonth, formatShortMDY, toISODate, sortProjects, esc, projectColor,
+  lastDayOfMonth, formatShortMDY, toISODate, sortProjects, esc, projectColor, projectShortName,
 } from "./util.js";
 import { sheetSyncEnabled } from "./sheets.js";
 import { createSheetSync } from "./sheet-sync.js";
@@ -386,12 +386,16 @@ function detailHtml(row) {
       <div class="inv-actions">${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}</div>`;
   }
   // Paid: client paid us, then staff are paid for it (Mark Staff Paid).
+  // Going back a step (Void, Undo) sits on the left; the next step on the right.
+  const back = !inv.paid
+    ? '<button type="button" class="btn-void" data-action="void">Void Invoice</button>'
+    : inv.staffPaid
+      ? '<button type="button" class="btn-undo" data-action="staff-unpaid">Undo Staff Paid</button>'
+      : '<button type="button" class="btn-undo" data-action="mark-unpaid">Undo Client Paid</button>';
   const next = !inv.paid
     ? '<button type="button" data-action="mark-paid">Mark Client Paid</button>'
-    : inv.staffPaid
-      ? '<button type="button" class="secondary" data-action="staff-unpaid">Undo Staff Paid</button>'
-      : `<button type="button" class="secondary" data-action="mark-unpaid">Undo Client Paid</button>
-         <button type="button" data-action="staff-paid">Mark Staff Paid</button>`;
+    : inv.staffPaid ? ""
+      : '<button type="button" data-action="staff-paid">Mark Staff Paid</button>';
   const steps = inv.paid ? [
     `Client paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}`,
     inv.staffPaid ? `Staff paid${inv.staffPaidDate ? " " + shortDate(inv.staffPaidDate) : ""}` : "Staff not paid yet",
@@ -402,7 +406,7 @@ function detailHtml(row) {
     ${unbilledNoteHtml(row.unbilled, "Closed out")}
     ${expenseTableHtml(inv.expenseRows || [])}
     <div class="inv-actions">
-      ${!inv.paid ? '<button type="button" class="btn-void" data-action="void">Void Invoice</button>' : ""}
+      ${back}
       ${canPdf ? '<button type="button" class="secondary" data-action="pdf">View PDF</button>' : ""}
       ${next}
     </div>`;
@@ -434,7 +438,6 @@ function render() {
   toggleVoidBtn.textContent = showVoid ? "Hide" : `Show (${voided.length})`;
 
   const money = (v) => (v == null ? "—" : formatCurrency(v));
-  const btn = (action, id, label) => `<button type="button" class="small inv-act-btn" data-action="${action}" data-id="${esc(id)}">${label}</button>`;
 
   // Ready to Invoice: no date or # yet. Review opens the project.
   nextBody.innerHTML = next.length ? gridTable(next.map((row) => {
@@ -447,36 +450,40 @@ function render() {
         num(fmtHrs(sumHours(waiting ? row.pending : row.entries))),
         waiting ? blank("num") : num(`<strong>${formatCurrency(row.amount)}</strong>`),
         waiting ? blank("num") : num(money(staffPayOf(row))),
-        `<td>${statusHtml(row)}</td>`,
-        num(`<span class="inv-review ${open ? "open" : ""}">${open ? "Close" : "Review"}</span>`)],
+        num(statusHtml(row)),
+        chevCell(open)],
     };
   }), totalCells(next.filter((r) => r.entries.length || r.exps.length).map((r) => ({ hours: sumHours(r.entries), amount: r.amount, pay: staffPayOf(r) }))))
     : '<div class="empty">Nothing to invoice.</div>';
 
-  pastBody.innerHTML = sent.length ? invTable(sent, (row) => btn("mark-paid", row.inv.id, "Mark Client Paid"))
+  pastBody.innerHTML = sent.length ? invTable(sent)
     : `<div class="empty">${past.length ? "Nothing outstanding." : "No invoices yet."}</div>`;
 
-  paidBody.innerHTML = toPay.length ? invTable(toPay, (row) => btn("staff-paid", row.inv.id, "Mark Staff Paid"))
+  paidBody.innerHTML = toPay.length ? invTable(toPay)
     : `<div class="empty">${staffPaid.length ? "Staff are paid for every paid invoice." : "No paid invoices yet."}</div>`;
 
   // Staff Paid only grows, so it stays closed unless asked for.
   staffPaidBody.innerHTML = !staffPaid.length ? '<div class="empty">None yet.</div>'
     : showPaid ? invTable(staffPaid) : "";
 
-  voidBody.innerHTML = showVoid && voided.length ? invTable(voided, null, false) : "";
+  voidBody.innerHTML = showVoid && voided.length ? invTable(voided, false) : "";
 }
 
 // ---------- Shared table grid ----------
 // Every panel uses the same eight columns at the same widths, so Date,
 // Invoice #, Project, Hours, Amount, Staff Pay, Status and the action button
-// line up all the way down the page.
-const GRID = `<colgroup><col class="g-date" /><col class="g-num" /><col class="g-proj" /><col class="g-hrs" /><col class="g-amt" /><col class="g-pay" /><col class="g-status" /><col class="g-act" /></colgroup>`;
-const GRID_HEAD = `<thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th class="num">Staff Pay</th><th>Status</th><th></th></tr></thead>`;
+// line up all the way down the page. Projects use their short names.
+const GRID = `<colgroup><col class="g-date" /><col class="g-num" /><col class="g-proj" /><col class="g-hrs" /><col class="g-amt" /><col class="g-pay" /><col class="g-status" /><col class="g-chev" /></colgroup>`;
+const GRID_HEAD = `<thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th class="num">Staff Pay</th><th class="num">Status</th><th></th></tr></thead>`;
+// Rows open with this arrow; the buttons (Generate, Mark Paid…) are inside,
+// so nothing gets clicked by accident.
+const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
 const blank = (cls = "") => `<td class="blank ${cls}">—</td>`;
 const num = (html) => `<td class="num">${html}</td>`;
 function projectCell(row, extra = "") {
   const name = row.project ? row.project.name : (row.inv && row.inv.projectName) || "Project";
-  return `<td class="proj"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(name)}${extra}</td>`;
+  const short = row.project ? projectShortName(row.project) : name;
+  return `<td class="proj" title="${esc(name)}"><span class="pay-dot" style="--c:${row.project ? projectColor(row.project.id) : "#c9c2cf"};"></span>${esc(short)}${extra}</td>`;
 }
 // Total row from [{ hours, amount, pay }]; Hours/Staff Pay left blank when
 // none of the rows have them.
@@ -499,8 +506,8 @@ function gridTable(rows, total = "") {
   </table></div>`;
 }
 
-// Sent, Client Paid, Staff Paid and Void. action(row) → the row's button.
-function invTable(rows, action = null, withTotal = true) {
+// Sent, Client Paid, Staff Paid and Void.
+function invTable(rows, withTotal = true) {
   return gridTable(rows.map((row) => {
     const open = openRow === row.key;
     return {
@@ -510,8 +517,8 @@ function invTable(rows, action = null, withTotal = true) {
         num(fmtHrs(row.hours)),
         num(`<strong>${formatCurrency(row.amount)}</strong>`),
         num(staffPayOf(row) == null ? "—" : formatCurrency(staffPayOf(row))),
-        `<td>${statusHtml(row)}</td>`,
-        num(action ? action(row) : "")],
+        num(statusHtml(row)),
+        chevCell(open)],
     };
   }), withTotal ? totalCells(rows.map((r) => ({ hours: r.hours, amount: r.amount, pay: staffPayOf(r) }))) : "");
 }
@@ -550,17 +557,22 @@ function renderSubInvoices() {
         : e.invoiced
           ? '<span class="pay-status invoiced">Outstanding</span>'
           : '<span class="pay-status ready">Not invoiced</span>';
-    const what = [sub ? sub.name : "", e.description].filter(Boolean).map(esc).join(" · ")
-      + (e.invoiced ? "" : ` · <button type="button" class="link-btn" data-action="edit-sub" data-id="${e.id}">Edit</button>`);
+    const what = [sub ? sub.name : "", e.description].filter(Boolean).map(esc).join(" · ");
+    const key = `sub:${e.id}`;
+    const open = openRow === key;
+    // Undo on the left, next step on the right (like the invoices).
+    const detail = `<div class="inv-actions">
+        ${e.subPaid ? `<button type="button" class="btn-undo" data-action="sub-unpaid" data-id="${e.id}">Undo Sub Paid</button>` : ""}
+        ${e.invoiced ? "" : `<button type="button" class="secondary" data-action="edit-sub" data-id="${e.id}">Edit</button>`}
+        ${e.subPaid ? "" : `<button type="button" data-action="sub-paid" data-id="${e.id}">Mark Sub Paid</button>`}
+      </div>`;
     return {
-      cls: "inv-row inv-subrow",
+      cls: `inv-row inv-subrow ${open ? "open" : ""}`, key, open, detail: open ? detail : "",
       cells: [`<td>${shortDate(e.date)}</td>`, inv ? `<td>${esc(inv.invoiceNumber)}</td>` : blank(),
         projectCell({ project, inv: { projectName: "Project" } }, what ? `<span class="inv-sub-what">${what}</span>` : ""),
         "<td></td>", num(`<strong>${formatCurrency(e.amount)}</strong>`), "<td></td>",
-        `<td>${status}</td>`,
-        num(e.subPaid
-          ? `<button type="button" class="link-btn" data-action="sub-unpaid" data-id="${e.id}">Undo</button>`
-          : `<button type="button" class="small inv-act-btn" data-action="sub-paid" data-id="${e.id}">Mark Sub Paid</button>`)],
+        num(status),
+        chevCell(open)],
     };
   }), totalCells(subs.map((e) => ({ amount: Number(e.amount || 0) }))));
 }

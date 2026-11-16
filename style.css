@@ -1910,8 +1910,8 @@ main:has(#invoiceBody) > h1 { margin-bottom: 22px; }
 .inv-grid col.g-hrs { width: 66px; }
 .inv-grid col.g-amt { width: 100px; }
 .inv-grid col.g-pay { width: 96px; }
-.inv-grid col.g-status { width: 132px; }
-.inv-grid col.g-act { width: 122px; }
+.inv-grid col.g-status { width: 150px; }
+.inv-grid col.g-chev { width: 34px; }
 .inv-grid th, .inv-grid td { padding: 8px 10px; overflow: hidden; text-overflow: ellipsis; }
 .inv-grid > thead > tr > th + th,
 .inv-grid > tbody > tr:not(.inv-detail) > td + td { border-left: 1px solid #efeaf2; }
@@ -1919,8 +1919,8 @@ main:has(#invoiceBody) > h1 { margin-bottom: 22px; }
 .inv-grid td.proj { width: auto; }
 .inv-grid .inv-sub-what { display: block; margin-left: 15px; font-size: 12px; color: var(--text-muted); }
 .inv-table button.inv-act-btn { padding: 4px 8px; font-size: 11.5px; white-space: nowrap; }
-.inv-grid > tbody > tr > td:nth-child(7), .inv-grid > tbody > tr > td:nth-child(8) { padding-left: 6px; padding-right: 6px; }
-.inv-grid > tbody > tr > td:nth-child(8) { text-align: center; }
+.inv-grid > tbody > tr > td:nth-child(7) { padding-left: 6px; }
+.inv-grid > tbody > tr > td:nth-child(8) { padding: 8px 6px; text-align: center; }
 .inv-grid .pay-status { display: inline-block; white-space: normal; line-height: 1.3; }
 
 /* Dashboard (admins): client paid, staff not paid yet. */
@@ -2831,6 +2831,15 @@ button.btn-void {
 button.btn-void:hover {
   background: #fbe7e5;
 }
+
+/* Undo a step (Undo Client Paid…): on the left with Void, quieter. */
+button.btn-undo {
+  background: #fff;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  margin-right: auto;
+}
+button.btn-undo:hover { background: #f6f3f8; color: var(--text); }
 
 .inv-table tr.void-row td {
   color: var(--text-muted);
