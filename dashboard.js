@@ -371,11 +371,8 @@ function renderStaffPayStrip(person) {
   const ids = new Set(due.map((i) => i.id));
   const pay = paidAmount(timeEntries.filter((e) => ids.has(e.invoiceId)), { projects, people })
     + expenses.filter((e) => ids.has(e.invoiceId) && e.kind !== "sub" && e.personId).reduce((t, e) => t + Number(e.amount || 0), 0);
-  // Who's waiting on pay, so it's clear at a glance.
-  const names = [...new Set(timeEntries.filter((e) => ids.has(e.invoiceId)).map((e) => people.find((p) => p.id === e.personId)?.name).filter(Boolean))].sort();
   strip.innerHTML = `<span class="sps-icon" aria-hidden="true">$</span>
-    <span class="sps-text"><strong>Pay staff: ${formatCurrency(pay)}</strong>
-      ${due.length} invoice${due.length === 1 ? "" : "s"} client paid, staff not paid yet${names.length ? ` · ${esc(names.join(", "))}` : ""}</span>
+    <span class="sps-text"><strong>Pay staff: ${formatCurrency(pay)}</strong> · ${due.length} invoice${due.length === 1 ? "" : "s"}</span>
     <span class="sps-go">Review &rsaquo;</span>`;
 }
 

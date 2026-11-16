@@ -1950,7 +1950,7 @@ main:has(#invoiceBody) > h1 { margin-bottom: 22px; }
   place-items: center;
 }
 .staff-pay-strip .sps-text { flex: 1; min-width: 0; }
-.staff-pay-strip .sps-text strong { display: block; color: #4f3c06; }
+.staff-pay-strip .sps-text strong { color: #4f3c06; }
 .staff-pay-strip .sps-go { font-weight: 700; white-space: nowrap; }
 
 button.link-btn.pay-more {
