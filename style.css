@@ -2439,18 +2439,18 @@ table.inv-people {
    apart under their own headings. */
 table.inv-labor { table-layout: fixed; }
 .inv-labor col.c-hours { width: 70px; }
-.inv-labor col.c-rate { width: 80px; }
-.inv-labor col.c-amt { width: 96px; }
-.inv-labor col.c-notes { width: 100px; }
+.inv-labor col.c-rate { width: 92px; }
+.inv-labor col.c-amt { width: 104px; }
+.inv-labor col.c-notes { width: 112px; }
 .inv-labor td, .inv-labor th { height: 34px; padding-top: 0; padding-bottom: 0; vertical-align: middle; }
 .inv-labor tr.inv-col-groups th { height: 26px; padding-top: 8px; font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; text-align: center; }
 .inv-labor tr.inv-col-groups th.g-bill { color: var(--navy); }
 .inv-labor tr.inv-col-groups th.g-pay { color: #2e6b39; }
 .inv-labor .g-bill { background: rgba(110, 50, 140, 0.05) !important; }
 .inv-labor .g-pay { background: rgba(46, 125, 50, 0.06) !important; }
-/* Staff Pay Total: what each person gets (hours + expenses paid back). */
-.inv-labor td.g-total { background: rgba(46, 125, 50, 0.13) !important; font-weight: 700; }
-.inv-expenses th.c-paidby { width: 150px; }
+/* A person's pay includes expenses paid back to them, noted under it. */
+.inv-labor tr.has-exp td { height: auto; padding-top: 6px; padding-bottom: 6px; }
+.inv-pay-note { display: block; white-space: normal; font-size: 11px; font-weight: 400; color: var(--text-muted); line-height: 1.3; }
 .inv-labor th.g-bill:nth-child(3), .inv-labor td.g-bill:nth-child(3),
 .inv-labor tr.inv-col-groups th.g-bill,
 .inv-labor tr.inv-col-groups th.g-pay,
@@ -2729,6 +2729,8 @@ button.btn-tint-purple:hover {
 table.inv-expenses {
   margin-top: 10px;
 }
+/* Long descriptions wrap instead of pushing Amount off the edge. */
+.inv-expenses td:nth-child(3) { white-space: normal; }
 
 /* Pay box: one line each, amounts lined up on the right. */
 .stat-split.stat-lines {
