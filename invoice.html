@@ -31,31 +31,34 @@
 <main>
   <h1>Invoices</h1>
 
+  <!-- The steps every invoice goes through, left to right; click one to jump to its list. -->
+  <div id="invSteps" class="inv-steps"></div>
+
   <div id="invoiceBody">
-    <div class="card inv-card">
+    <div class="card inv-card" data-step="ready" id="readyCard">
       <div class="inv-head">
         <h2>Ready to Invoice</h2>
       </div>
       <div id="nextBody"></div>
     </div>
 
-    <div class="card inv-card">
+    <div class="card inv-card" data-step="outstanding" id="sentCard">
       <div class="inv-head">
-        <h2>Sent Invoices <span class="inv-total" id="pastTotal"></span></h2>
+        <h2>Sent Invoices</h2>
       </div>
       <div id="pastBody"></div>
     </div>
 
-    <div class="card inv-card" id="paid">
+    <div class="card inv-card" data-step="clientpaid" id="paid">
       <div class="inv-head">
-        <h2>Paid Invoices <span class="inv-total" id="paidTotal"></span></h2>
+        <h2>Paid Invoices</h2>
         <button type="button" id="markAllStaffPaid" class="small secondary" hidden>Mark All Staff Paid</button>
       </div>
       <div id="paidBody"></div>
       <button type="button" id="togglePaid" class="link-btn pay-more" style="display:none;"></button>
     </div>
 
-    <div class="card inv-card">
+    <div class="card inv-card inv-compact" data-step="sub">
       <div class="inv-head">
         <h2>Subconsultant Expenses <span class="inv-total" id="subTotal"></span></h2>
         <button type="button" id="recordSubInvoice" class="small secondary">+ Add Sub Expense</button>
@@ -63,9 +66,9 @@
       <div id="subBody"></div>
     </div>
 
-    <div class="card inv-card inv-void-card" id="voidCard" hidden>
+    <div class="card inv-card inv-compact inv-void-card" data-step="void" id="voidCard" hidden>
       <div class="inv-head">
-        <h2>Void Invoices <span class="inv-total" id="voidCount"></span></h2>
+        <h2>Void Invoices</h2>
         <button type="button" id="toggleVoid" class="link-btn"></button>
       </div>
       <div id="voidBody"></div>

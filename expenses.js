@@ -99,8 +99,8 @@ export function expenseStatus(e, invoices = [], project = null) {
     if (!project.payable && !e.paid) return ["Not paid back", "unsynced"];
     if (e.paid) return [e.paidDate ? `Paid ${new Date(e.paidDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "Paid", "paid"];
   }
-  if (e.kind !== "sub" && expenseStaffPaid(e, invoices)) return ["Paid back", "paid"];
-  if (expenseClientPaid(e, invoices)) return e.kind === "sub" ? ["Client paid", "paid"] : ["Client paid · pay coming", "due"];
+  if (e.kind !== "sub" && expenseStaffPaid(e, invoices)) return ["Staff paid", "paid"];
+  if (expenseClientPaid(e, invoices)) return ["Client paid", e.kind === "sub" ? "paid" : "due"];
   if (e.invoiced) return ["Invoiced", "invoiced"];
   if (e.approved) return ["Approved", "paid"];
   if (e.declined) return ["Declined", "unsynced"];

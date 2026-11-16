@@ -37,13 +37,11 @@ const nextBody = document.getElementById("nextBody");
 const pastBody = document.getElementById("pastBody");
 const subBody = document.getElementById("subBody");
 const subTotal = document.getElementById("subTotal");
-const pastTotal = document.getElementById("pastTotal");
+const stepsEl = document.getElementById("invSteps");
 const togglePaidBtn = document.getElementById("togglePaid");
 const paidBody = document.getElementById("paidBody");
-const paidTotal = document.getElementById("paidTotal");
 const voidCard = document.getElementById("voidCard");
 const voidBody = document.getElementById("voidBody");
-const voidCountEl = document.getElementById("voidCount");
 const toggleVoidBtn = document.getElementById("toggleVoid");
 const markAllStaffPaidBtn = document.getElementById("markAllStaffPaid");
 
@@ -271,7 +269,7 @@ function invoiceRows() {
 function statusHtml(row) {
   if (row.kind === "next") {
     return row.entries.length || row.exps.length
-      ? '<span class="pay-status paid">Ready</span>'
+      ? '<span class="pay-status ready">Ready to invoice</span>'
       : '<span class="pay-status pending">Waiting on approval</span>';
   }
   const inv = row.inv;
@@ -280,7 +278,7 @@ function statusHtml(row) {
     ? '<span class="pay-status invoiced">Outstanding</span>'
     : inv.staffPaid
       ? `<span class="pay-status paid">Staff paid${inv.staffPaidDate ? " " + shortDate(inv.staffPaidDate) : ""}</span>`
-      : '<span class="pay-status due">Pay staff</span>') +
+      : `<span class="pay-status due">Client paid${inv.paidDate ? " " + shortDate(inv.paidDate) : ""}</span>`) +
     (sheetSyncEnabled() && !inv.sheetSynced ? ' <span class="pay-status unsynced" title="Not yet logged in the Google Sheet — Sync is on Admin">Not in sheet</span>' : "");
 }
 
@@ -434,15 +432,13 @@ function render() {
   const shownPaid = [...toPay, ...(showPaid ? staffPaid : [])];
 
   const outstanding = sent.reduce((s, r) => s + r.amount, 0);
-  pastTotal.textContent = outstanding ? `${formatCurrency(outstanding)} outstanding` : "";
-  const due = toPay.reduce((s, r) => s + (staffPayOf(r) || 0), 0);
-  paidTotal.textContent = toPay.length ? `${formatCurrency(due)} staff pay due` : "";
   markAllStaffPaidBtn.hidden = toPay.length < 2;
   togglePaidBtn.style.display = staffPaid.length ? "" : "none";
   togglePaidBtn.textContent = showPaid ? "Hide staff paid" : `Show staff paid (${staffPaid.length})`;
   voidCard.hidden = !voided.length;
-  voidCountEl.textContent = voided.length ? `${voided.length} · not counted` : "";
-  toggleVoidBtn.textContent = showVoid ? "Hide" : "Show";
+  toggleVoidBtn.textContent = showVoid ? "Hide" : `Show (${voided.length})`;
+
+  renderSteps(next, sent, toPay, staffPaid);
 
   const chevCell = (open) => `<td class="num"><span class="chev ${open ? "up" : ""}">&#9662;</span></td>`;
   // Ready to invoice: a clear button to open each project.
@@ -486,37 +482,73 @@ function render() {
   };
   const money = (v) => (v == null ? "—" : formatCurrency(v));
 
-  pastBody.innerHTML = sent.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
-    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${sent.map((row) => invRow(row, `
+  // Sent, Paid and Void share the same columns. Paid adds Mark Staff Paid.
+  const COLS = 9;
+  const invTable = (rows, { total = true, action = () => "" } = {}) => `<div class="pay-scroll"><table class="pay-table inv-table">
+    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Hours</th><th class="num">Amount</th><th class="num">Staff Pay</th><th>Status</th><th></th><th></th></tr></thead>
+    <tbody>${rows.map((row) => invRow(row, `
         <td class="num">${fmtHrs(row.hours)}</td>
         <td class="num"><strong>${formatCurrency(row.amount)}</strong></td>
-        <td>${statusHtml(row)}</td>`, 7)).join("")}
-    ${totalRow(`<td colspan="3">Total</td>
-        <td class="num">${fmtHrs(sent.reduce((s, r) => s + r.hours, 0))}</td>
-        <td class="num">${formatCurrency(outstanding)}</td><td colspan="2"></td>`)}</tbody>
-  </table></div>` : `<div class="empty">${past.length ? "Nothing outstanding." : "No invoices yet."}</div>`;
+        <td class="num">${money(staffPayOf(row))}</td>
+        <td>${statusHtml(row)}</td>
+        <td class="num">${action(row)}</td>`, COLS)).join("")}
+    ${total ? totalRow(`<td colspan="3">Total</td>
+        <td class="num">${fmtHrs(rows.reduce((s, r) => s + r.hours, 0))}</td>
+        <td class="num">${formatCurrency(rows.reduce((s, r) => s + r.amount, 0))}</td>
+        <td class="num">${formatCurrency(rows.reduce((s, r) => s + (staffPayOf(r) || 0), 0))}</td><td colspan="3"></td>`) : ""}</tbody>
+  </table></div>`;
 
-  // Paid: what the client paid, what staff are owed for it, and a quick
-  // Mark Staff Paid once payroll's done.
-  paidBody.innerHTML = shownPaid.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
-    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Amount</th><th>Client Paid</th><th class="num">Staff Pay</th><th>Staff</th><th></th></tr></thead>
-    <tbody>${shownPaid.map((row) => invRow(row, `
-        <td class="num">${formatCurrency(row.amount)}</td>
-        <td>${row.inv.paidDate ? shortDate(row.inv.paidDate) : "—"}</td>
-        <td class="num"><strong>${money(staffPayOf(row))}</strong></td>
-        <td>${row.inv.staffPaid ? statusHtml(row)
-          : `<button type="button" class="small inv-staff-btn" data-action="staff-paid" data-id="${esc(row.inv.id)}">Mark Staff Paid</button>`}</td>`, 8)).join("")}
-    </tbody>
-  </table></div>` : `<div class="empty">${staffPaid.length ? "Staff are paid for every paid invoice." : "No paid invoices yet."}</div>`;
+  pastBody.innerHTML = sent.length ? invTable(sent)
+    : `<div class="empty">${past.length ? "Nothing outstanding." : "No invoices yet."}</div>`;
 
-  voidBody.innerHTML = showVoid && voided.length ? `<div class="pay-scroll"><table class="pay-table inv-table">
-    <thead><tr><th>Date</th><th>Invoice #</th><th>Project</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-    <tbody>${voided.map((row) => invRow(row, `
-        <td class="num">${formatCurrency(row.amount)}</td>
-        <td>${statusHtml(row)}</td>`, 6)).join("")}</tbody>
-  </table></div>` : "";
+  // Paid: client paid ones need staff paid (button right on the row).
+  paidBody.innerHTML = shownPaid.length ? invTable(shownPaid, {
+    action: (row) => (row.inv.staffPaid ? ""
+      : `<button type="button" class="small inv-staff-btn" data-action="staff-paid" data-id="${esc(row.inv.id)}">Mark Staff Paid</button>`),
+  }) : `<div class="empty">${staffPaid.length ? "Staff are paid for every paid invoice." : "No paid invoices yet."}</div>`;
+
+  voidBody.innerHTML = showVoid && voided.length ? invTable(voided, { total: false }) : "";
 }
+
+// ---------- Steps ----------
+// Every invoice's path, left to right, each in its own color (matching the
+// status chips and the panels below). Click one to jump to its list.
+const STEPS = [
+  { key: "waiting", label: "Waiting on Approval", target: "readyCard" },
+  { key: "ready", label: "Ready to Invoice", target: "readyCard" },
+  { key: "outstanding", label: "Outstanding", target: "sentCard" },
+  { key: "clientpaid", label: "Client Paid", target: "paid" },
+  { key: "staffpaid", label: "Staff Paid", target: "paid" },
+];
+
+function renderSteps(next, sent, toPay, staffPaid) {
+  const waiting = next.filter((r) => r.pending.length || r.pendingExps.length);
+  const ready = next.filter((r) => r.entries.length || r.exps.length);
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const amt = (rows) => rows.reduce((s, r) => s + r.amount, 0);
+  const vals = {
+    waiting: [fmtHrs(waiting.reduce((s, r) => s + sumHours(r.pending), 0)) + " hrs", plural(waiting.length, "project")],
+    ready: [formatCurrency(amt(ready)), plural(ready.length, "project")],
+    outstanding: [formatCurrency(amt(sent)), plural(sent.length, "invoice")],
+    clientpaid: [formatCurrency(amt(toPay)), `${plural(toPay.length, "invoice")}${toPay.length ? ` · ${formatCurrency(toPay.reduce((s, r) => s + (staffPayOf(r) || 0), 0))} staff pay due` : ""}`],
+    staffpaid: [formatCurrency(amt(staffPaid)), plural(staffPaid.length, "invoice")],
+  };
+  stepsEl.innerHTML = STEPS.map((s) => `<button type="button" class="inv-step" data-step="${s.key}" data-target="${s.target}">
+      <span class="inv-step-label">${s.label}</span>
+      <span class="inv-step-value">${vals[s.key][0]}</span>
+      <span class="inv-step-sub">${vals[s.key][1]}</span>
+    </button>`).join("");
+}
+
+stepsEl.addEventListener("click", (e) => {
+  const btn = e.target.closest(".inv-step");
+  if (!btn) return;
+  if (btn.dataset.step === "staffpaid" && !showPaid) {
+    showPaid = true;
+    render();
+  }
+  document.getElementById(btn.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 // What staff are paid for an invoice: everyone's hours on it (no-charge
 // hours too) plus staff expenses paid back with it. null for old imported

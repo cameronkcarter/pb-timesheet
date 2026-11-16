@@ -105,7 +105,7 @@ function render() {
   document.getElementById("statRemaining").textContent = fmtHrs(remainingTotal);
 
   // Your pay not in your hands yet: not invoiced, invoiced (waiting on the
-  // client), and client paid but staff not paid yet (pay coming).
+  // client), and client paid but staff not paid yet.
   const payOf = (entries) => paidAmount(entries, { projects, people });
   const notInvoiced = payOf(myEntries.filter((e) => !e.invoiced && !e.paid && !e.declined));
   const invoicedUnpaid = payOf(myEntries.filter((e) => e.invoiced && !e.paid));
@@ -314,9 +314,9 @@ function renderPay(myEntries) {
       entries,
       exps,
       paid: staffPaid,
-      status: staffPaid ? [inv && inv.staffPaidDate ? `Paid ${shortDate(inv.staffPaidDate)}` : "Paid", "paid"]
-        : paid ? [paidDate ? `Client paid ${shortDate(paidDate)} · pay coming` : "Client paid · pay coming", "due"]
-        : ["Waiting on client", "invoiced"],
+      status: staffPaid ? [inv && inv.staffPaidDate ? `Staff paid ${shortDate(inv.staffPaidDate)}` : "Staff paid", "paid"]
+        : paid ? [paidDate ? `Client paid ${shortDate(paidDate)}` : "Client paid", "due"]
+        : ["Outstanding", "invoiced"],
     };
   }).concat(pursuitRows).sort((x, y) => (x.date < y.date ? 1 : -1));
 
@@ -324,7 +324,7 @@ function renderPay(myEntries) {
   const rows = [...upcoming, ...invoiced.filter((r) => showClientPaid || !r.paid)];
   const head = `<div class="pay-card-head">
     <h2>Your Invoices</h2>
-    ${paidCount ? `<button type="button" class="link-btn" data-action="toggle-paid">${showClientPaid ? "Hide paid" : `Show paid (${paidCount})`}</button>` : ""}
+    ${paidCount ? `<button type="button" class="link-btn" data-action="toggle-paid">${showClientPaid ? "Hide staff paid" : `Show staff paid (${paidCount})`}</button>` : ""}
     <button type="button" class="icon-btn" data-action="close-pay" aria-label="Close">&times;</button>
   </div>`;
   if (!rows.length) {
